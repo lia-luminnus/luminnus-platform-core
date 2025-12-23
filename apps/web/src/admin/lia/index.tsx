@@ -1,0 +1,1 @@
+export { LiaAdminPanel } from './panel';

@@ -1,0 +1,152 @@
+@import './styles/theme.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  /* LUMINNUS PALETTE - Light Mode (default) */
+  /* #8A2FFF (roxo principal) - hsl(265, 100%, 59%)
+     #C08BFF (roxo gradiente) - hsl(267, 100%, 77%)
+     #C7A4FF (suave) - hsl(263, 100%, 82%)
+     #F3EEFF (background claro) - hsl(263, 100%, 97%)
+     #0B0B0F (fundo escuro) - hsl(240, 15%, 5%)
+     #141418 (cards escuros) - hsl(240, 9%, 9%)
+     #FFFFFF (texto claro) - hsl(0, 0%, 100%)
+     #EDEDED (textos secundários) - hsl(0, 0%, 93%)
+  */
+
+  :root {
+    /* Light Mode - Luminnus */
+    --background: 263 100% 97%;
+    --foreground: 240 15% 5%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 15% 5%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 15% 5%;
+
+    --primary: 265 100% 59%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 267 100% 77%;
+    --secondary-foreground: 240 15% 5%;
+
+    --muted: 263 30% 92%;
+    --muted-foreground: 0 0% 50%;
+
+    --accent: 267 100% 77%;
+    --accent-foreground: 0 0% 100%;
+
+    --magenta: 326 90% 60%;
+    --magenta-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 89%;
+    --input: 263 30% 92%;
+    --ring: 265 100% 59%;
+
+    --radius: 1rem;
+
+    --gradient-primary: linear-gradient(135deg, hsl(265 100% 59%) 0%, hsl(267 100% 77%) 100%);
+    --gradient-hero: linear-gradient(180deg, hsl(263 100% 97%) 0%, hsl(0 0% 100%) 100%);
+    --gradient-neon: linear-gradient(90deg, hsl(265 100% 59%) 0%, hsl(326 90% 60%) 50%, hsl(267 100% 77%) 100%);
+    --shadow-soft: 0 4px 20px -2px hsl(265 100% 59% / 0.2);
+    --shadow-glow: 0 0 40px hsl(265 100% 59% / 0.3);
+    --shadow-neon: 0 0 60px hsl(267 100% 77% / 0.4);
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 240 19% 7%;
+    --sidebar-primary: 265 100% 59%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 263 100% 97%;
+    --sidebar-accent-foreground: 240 15% 5%;
+    --sidebar-border: 0 0% 89%;
+    --sidebar-ring: 265 100% 59%;
+  }
+
+  /* Dark Mode - Luminnus */
+  .dark {
+    --background: 240 15% 5%;
+    --foreground: 0 0% 100%;
+
+    --card: 240 9% 9%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 240 9% 9%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 265 100% 59%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 267 100% 77%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 240 9% 15%;
+    --muted-foreground: 0 0% 93%;
+
+    --accent: 267 100% 77%;
+    --accent-foreground: 240 15% 5%;
+
+    --magenta: 326 90% 60%;
+    --magenta-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 9% 15%;
+    --input: 240 9% 15%;
+    --ring: 265 100% 59%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(265 100% 59%) 0%, hsl(267 100% 77%) 100%);
+    --gradient-hero: linear-gradient(180deg, hsl(240 15% 5%) 0%, hsl(240 9% 12%) 100%);
+    --gradient-neon: linear-gradient(90deg, hsl(265 100% 59%) 0%, hsl(326 90% 60%) 50%, hsl(267 100% 77%) 100%);
+    --shadow-soft: 0 4px 20px -2px hsl(265 100% 59% / 0.3);
+    --shadow-glow: 0 0 40px hsl(265 100% 59% / 0.4);
+    --shadow-neon: 0 0 60px hsl(267 100% 77% / 0.5);
+
+    --sidebar-background: 240 9% 9%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 265 100% 59%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 9% 15%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 240 9% 15%;
+    --sidebar-ring: 265 100% 59%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Poppins', 'Inter', sans-serif;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold;
+  }
+
+  @keyframes particle-float {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(20px, -20px); }
+    50% { transform: translate(-15px, 15px); }
+    75% { transform: translate(15px, 10px); }
+  }
+
+  @keyframes energy-flow {
+    0% { stroke-dashoffset: 1000; }
+    100% { stroke-dashoffset: 0; }
+  }
+}

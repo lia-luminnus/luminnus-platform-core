@@ -1,0 +1,24 @@
+{
+  "name": "lia-chat-api",
+  "version": "2.0.0",
+  "description": "API da LIA - Assistente Virtual Inteligente com Sistema de Métricas",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": ["lia", "chat", "api", "openai", "metrics", "cartesia", "tts"],
+  "author": "Luminnus",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "node-fetch": "^3.3.2",
+    "node-cron": "^3.0.3",
+    "@supabase/supabase-js": "^2.46.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

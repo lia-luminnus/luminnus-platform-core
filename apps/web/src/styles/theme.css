@@ -1,0 +1,406 @@
+/* ================================================
+   LUMINNUS DESIGN SYSTEM - Theme Variables
+   ================================================ */
+
+:root {
+  /* ===== CORES PRINCIPAIS - PALETA OFICIAL LUMINNUS ===== */
+  --lum-purple: #8A2FFF;
+  --lum-purple-light: #C08BFF;
+  --lum-purple-soft: #C7A4FF;
+  --lum-purple-subtle: #E8DBFF;
+
+  /* ===== BACKGROUNDS ===== */
+  --lum-bg-light: #F3EEFF;
+  --lum-bg-white: #FFFFFF;
+  --lum-bg-dark: #0B0B0F;
+  --lum-card-dark: #141418;
+  --lum-card-darker: #141418;
+
+  /* ===== TEXTO ===== */
+  --lum-text-light: #FFFFFF;
+  --lum-text-dark: #0B0B0F;
+  --lum-text-muted: #6B7280;
+  --lum-text-muted-light: #EDEDED;
+
+  /* ===== BORDAS ===== */
+  --lum-border: #E2E2E2;
+  --lum-border-light: #F0F0F0;
+  --lum-border-dark: #2A2A35;
+
+  /* ===== ESTADOS ===== */
+  --lum-success: #22C55E;
+  --lum-warning: #F59E0B;
+  --lum-error: #EF4444;
+  --lum-info: #3B82F6;
+
+  /* ===== ESPAÇAMENTOS ===== */
+  --spacing-xs: 0.25rem;    /* 4px */
+  --spacing-sm: 0.5rem;     /* 8px */
+  --spacing-md: 1rem;       /* 16px */
+  --spacing-lg: 1.5rem;     /* 24px */
+  --spacing-xl: 2rem;       /* 32px */
+  --spacing-2xl: 3rem;      /* 48px */
+  --spacing-3xl: 4rem;      /* 64px */
+
+  /* ===== BORDAS ARREDONDADAS ===== */
+  --radius-sm: 6px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* ===== SOMBRAS ===== */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.16);
+  --shadow-purple: 0 4px 20px rgba(138, 47, 255, 0.25);
+  --shadow-purple-lg: 0 8px 32px rgba(138, 47, 255, 0.35);
+  --shadow-glow: 0 0 40px rgba(138, 47, 255, 0.3);
+  --shadow-card-hover: 0 10px 20px rgba(0, 0, 0, 0.15);
+
+  /* ===== TRANSIÇÕES ===== */
+  --transition-fast: 0.15s ease;
+  --transition: 0.25s ease;
+  --transition-slow: 0.35s ease;
+  --transition-smooth: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ===== TIPOGRAFIA ===== */
+  --font-family: 'Poppins', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --font-size-xs: 0.75rem;    /* 12px */
+  --font-size-sm: 0.875rem;   /* 14px */
+  --font-size-base: 1rem;     /* 16px */
+  --font-size-lg: 1.125rem;   /* 18px */
+  --font-size-xl: 1.25rem;    /* 20px */
+  --font-size-2xl: 1.5rem;    /* 24px */
+  --font-size-3xl: 1.875rem;  /* 30px */
+  --font-size-4xl: 2.25rem;   /* 36px */
+  --font-size-5xl: 3rem;      /* 48px */
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  --letter-spacing-tight: -0.025em;
+  --letter-spacing-normal: 0;
+  --letter-spacing-wide: 0.025em;
+
+  /* ===== GRADIENTES ===== */
+  --gradient-purple: linear-gradient(135deg, var(--lum-purple) 0%, var(--lum-purple-light) 100%);
+  --gradient-purple-soft: linear-gradient(135deg, var(--lum-purple-soft) 0%, var(--lum-bg-light) 100%);
+  --gradient-dark: linear-gradient(180deg, var(--lum-bg-dark) 0%, var(--lum-card-dark) 100%);
+
+  /* ===== Z-INDEX ===== */
+  --z-dropdown: 50;
+  --z-sticky: 100;
+  --z-fixed: 200;
+  --z-modal: 300;
+  --z-popover: 400;
+  --z-tooltip: 500;
+}
+
+/* ===== DARK MODE OVERRIDES ===== */
+.dark {
+  --lum-bg-light: #1A1A22;
+  --lum-bg-white: #0F0F14;
+  --lum-text-dark: #FFFFFF;
+  --lum-text-muted: #9CA3AF;
+  --lum-border: #2A2A35;
+  --lum-border-light: #3A3A45;
+
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-purple: 0 4px 20px rgba(138, 47, 255, 0.35);
+  --shadow-card-hover: 0 10px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* ================================================
+   GLOBAL UTILITIES
+   ================================================ */
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Focus outline for accessibility */
+*:focus-visible {
+  outline: 2px solid var(--lum-purple);
+  outline-offset: 2px;
+}
+
+/* Selection color */
+::selection {
+  background-color: var(--lum-purple-soft);
+  color: var(--lum-text-dark);
+}
+
+.dark ::selection {
+  background-color: var(--lum-purple);
+  color: var(--lum-text-light);
+}
+
+/* ================================================
+   BUTTON STYLES
+   ================================================ */
+
+.btn-luminnus {
+  background-color: var(--lum-purple);
+  color: var(--lum-text-light);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius);
+  font-weight: var(--font-weight-medium);
+  transition: var(--transition-smooth);
+  box-shadow: var(--shadow-purple);
+}
+
+.btn-luminnus:hover {
+  background-color: var(--lum-purple-light);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-purple-lg);
+}
+
+.btn-luminnus:active {
+  transform: translateY(0);
+}
+
+/* ================================================
+   CARD STYLES
+   ================================================ */
+
+.card-luminnus {
+  background-color: var(--lum-bg-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--lum-border);
+  transition: var(--transition-smooth);
+}
+
+.card-luminnus:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-4px);
+}
+
+.dark .card-luminnus {
+  background-color: var(--lum-card-dark);
+  border-color: var(--lum-border-dark);
+}
+
+/* ================================================
+   INPUT STYLES
+   ================================================ */
+
+.input-luminnus {
+  border: 1px solid var(--lum-border);
+  border-radius: var(--radius);
+  padding: var(--spacing-sm) var(--spacing-md);
+  transition: var(--transition);
+  background-color: var(--lum-bg-white);
+}
+
+.input-luminnus:focus {
+  border-color: var(--lum-purple);
+  box-shadow: 0 0 0 3px rgba(138, 47, 255, 0.2);
+  outline: none;
+}
+
+.dark .input-luminnus {
+  background-color: var(--lum-card-dark);
+  border-color: var(--lum-border-dark);
+  color: var(--lum-text-light);
+}
+
+/* ================================================
+   SIDEBAR STYLES
+   ================================================ */
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius);
+  transition: var(--transition-smooth);
+  position: relative;
+}
+
+.sidebar-link:hover {
+  background-color: rgba(138, 47, 255, 0.08);
+  color: var(--lum-purple);
+}
+
+.sidebar-link.active {
+  border-left: 4px solid var(--lum-purple);
+  background-color: rgba(138, 47, 255, 0.1);
+  color: var(--lum-purple);
+  font-weight: var(--font-weight-medium);
+}
+
+/* ================================================
+   NAVIGATION STYLES
+   ================================================ */
+
+.nav-link {
+  position: relative;
+  transition: var(--transition);
+}
+
+.nav-link:hover {
+  opacity: 0.8;
+}
+
+.nav-link.active::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: var(--lum-purple);
+  border-radius: var(--radius-full);
+}
+
+/* ================================================
+   ANIMATION UTILITIES
+   ================================================ */
+
+.animate-fade-in {
+  animation: fadeIn var(--transition) ease-out;
+}
+
+.animate-slide-up {
+  animation: slideUp var(--transition) ease-out;
+}
+
+.animate-scale-in {
+  animation: scaleIn var(--transition-fast) ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ================================================
+   IMOVEL CARD HOVER EFFECT
+   ================================================ */
+
+.card-imovel {
+  transition: var(--transition-smooth);
+}
+
+.card-imovel:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* ================================================
+   LOADING PULSE
+   ================================================ */
+
+.loading-pulse {
+  animation: loadingPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes loadingPulse {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ================================================
+   TOOLTIP STYLES
+   ================================================ */
+
+.tooltip-luminnus {
+  background-color: var(--lum-bg-dark);
+  color: var(--lum-text-light);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ================================================
+   CALENDAR/AGENDA STYLES
+   ================================================ */
+
+.agenda-day-current {
+  background-color: var(--lum-purple-soft);
+  color: var(--lum-purple);
+  border-radius: var(--radius);
+}
+
+.agenda-event {
+  background-color: var(--lum-purple);
+  color: var(--lum-text-light);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+/* ================================================
+   SCROLLBAR STYLES
+   ================================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--lum-border);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--lum-purple-soft);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background-color: var(--lum-border-dark);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--lum-purple);
+}

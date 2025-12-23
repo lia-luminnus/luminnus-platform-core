@@ -1,0 +1,9 @@
+{
+    "name": "@luminnus/database",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Supabase schema and migrations for Luminnus Platform",
+    "scripts": {
+        "lint": "echo 'No linting for SQL files'"
+    }
+}

@@ -1,0 +1,64 @@
+name: Force Rebuild Admin Dashboard
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'src/components/admin/**'
+      - 'src/pages/Admin*.tsx'
+      - 'src/pages/admin/**'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'src/components/admin/**'
+      - 'src/pages/Admin*.tsx'
+      - 'src/pages/admin/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --force
+
+      - name: Force rebuild with cache clearing
+        run: |
+          chmod +x scripts/force-rebuild.sh
+          ./scripts/force-rebuild.sh build
+        env:
+          NODE_ENV: production
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Verify build output
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "❌ Build falhou - diretório dist não foi criado"
+            exit 1
+          fi
+          echo "✅ Build concluído com sucesso!"
+          echo "📦 Conteúdo do dist:"
+          ls -lah dist/
+          echo "📁 Arquivos JavaScript gerados:"
+          find dist -name "*.js" -type f | head -10
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-dashboard-build
+          path: dist/
+          retention-days: 7

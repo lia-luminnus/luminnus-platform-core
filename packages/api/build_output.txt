@@ -1,0 +1,8 @@
+
+> @luminnus/api@0.1.0 build D:\luminnus-platform-core\packages\api
+> tsc
+
+src/routes/health.ts(4,14): error TS2742: The inferred type of 'healthRouter' cannot be named without a reference to '.pnpm/@types+express-serve-static-core@4.19.7/node_modules/@types/express-serve-static-core'. This is likely not portable. A type annotation is necessary.
+src/routes/me.ts(5,14): error TS2742: The inferred type of 'meRouter' cannot be named without a reference to '.pnpm/@types+express-serve-static-core@4.19.7/node_modules/@types/express-serve-static-core'. This is likely not portable. A type annotation is necessary.
+src/routes/version.ts(5,14): error TS2742: The inferred type of 'versionRouter' cannot be named without a reference to '.pnpm/@types+express-serve-static-core@4.19.7/node_modules/@types/express-serve-static-core'. This is likely not portable. A type annotation is necessary.
+ÔÇëELIFECYCLEÔÇë Command failed with exit code 1.

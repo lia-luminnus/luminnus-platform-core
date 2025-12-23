@@ -1,0 +1,31 @@
+{
+  "name": "@luminnus/dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@luminnus/shared": "workspace:*",
+    "@luminnus/core": "workspace:*",
+    "@supabase/supabase-js": "^2.75.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.22.3",
+    "@google/genai": "^1.30.0",
+    "recharts": "^2.15.4",
+    "zustand": "^5.0.8",
+    "react-hot-toast": "^2.4.1",
+    "framer-motion": "^12.23.24",
+    "lucide-react": "^0.462.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.16.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.8.3",
+    "vite": "^5.4.19"
+  }
+}
