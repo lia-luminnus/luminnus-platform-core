@@ -8,6 +8,7 @@ import { EditPlanModal } from '../EditPlanModal';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, Save, Sparkles } from 'lucide-react';
 import { Plan, PlanFromDB } from '@/hooks/usePlans';
+import { plans as fallbackPlans } from '@/data/plansData';
 
 // Função para converter plano do banco para formato do frontend
 function convertPlanFromDB(dbPlan: PlanFromDB): Plan {
@@ -49,10 +50,12 @@ function convertPlanFromDB(dbPlan: PlanFromDB): Plan {
 }
 
 export const PlansEditor = () => {
-  const [plans, setPlans] = useState<Plan[]>([]);
+  const [plans, setPlans] = useState<Plan[]>(fallbackPlans);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [usingFallback, setUsingFallback] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     loadPlans();
@@ -61,16 +64,29 @@ export const PlansEditor = () => {
   const loadPlans = async () => {
     try {
       setLoading(true);
+      setUsingFallback(false);
+      setErrorMessage(null);
       const { data } = await supabase
         .from('plan_configs')
         .select('*')
         .order('created_at', { ascending: true });
 
-      // Converter dados do banco para formato do frontend
-      const convertedPlans = data ? data.map(convertPlanFromDB) : [];
-      setPlans(convertedPlans);
+      if (data && data.length > 0) {
+        // Converter dados do banco para formato do frontend
+        const convertedPlans = data.map(convertPlanFromDB);
+        setPlans(convertedPlans);
+      } else {
+        // Nenhum dado do Supabase - usar dados locais como fallback
+        setPlans(fallbackPlans);
+        setUsingFallback(true);
+        setErrorMessage('Nenhum plano encontrado no Supabase. Exibindo dados padrão.');
+      }
     } catch (error) {
       console.error('Error loading plans:', error);
+      // Exibir dados locais se o Supabase falhar
+      setPlans(fallbackPlans);
+      setUsingFallback(true);
+      setErrorMessage('Não foi possível carregar os planos do Supabase. Usando dados padrão.');
     } finally {
       setLoading(false);
     }
@@ -115,6 +131,16 @@ export const PlansEditor = () => {
           </CardDescription>
         </CardHeader>
       </Card>
+
+      {usingFallback && (
+        <Card className="border-amber-200 bg-amber-50/70 dark:bg-amber-900/20">
+          <CardContent className="py-4">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-100">
+              {errorMessage || 'Usando dados padrão enquanto o Supabase não retorna resultados.'}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid md:grid-cols-3 gap-6">
         {plans.map((plan) => (
