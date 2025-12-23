@@ -30,13 +30,13 @@ const AlertBadge = ({ alert, onResolve, showDetails = true }: AlertBadgeProps) =
   const getAlertStyles = (nivel: AlertNivel) => {
     switch (nivel) {
       case 'critical':
-        return 'bg-red-50 border-red-200 text-red-800';
+        return 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400';
       case 'warning':
-        return 'bg-yellow-50 border-yellow-200 text-yellow-800';
+        return 'bg-yellow-500/10 border-yellow-500/20 text-yellow-600 dark:text-yellow-400';
       case 'info':
-        return 'bg-blue-50 border-blue-200 text-blue-800';
+        return 'bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400';
       default:
-        return 'bg-gray-50 border-gray-200 text-gray-800';
+        return 'bg-muted border-border text-muted-foreground';
     }
   };
 

@@ -71,7 +71,7 @@ const MetricsTable = ({
             <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
           </div>
         ) : !data || data.length === 0 ? (
-          <div className="h-48 flex items-center justify-center text-gray-500">
+          <div className="h-48 flex items-center justify-center text-muted-foreground">
             Nenhum dado disponível
           </div>
         ) : (
@@ -97,8 +97,8 @@ const MetricsTable = ({
                       {type === 'company' && isCompanyData(item)
                         ? item.empresa_nome
                         : isUserData(item)
-                        ? item.usuario_nome
-                        : '-'}
+                          ? item.usuario_nome
+                          : '-'}
                     </TableCell>
                     {type === 'user' && isUserData(item) && (
                       <TableCell>
@@ -110,7 +110,7 @@ const MetricsTable = ({
                     <TableCell className="text-right font-mono">
                       {(formatValue || defaultFormatValue)(item.total)}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-green-600">
+                    <TableCell className="text-right font-mono text-green-600 dark:text-green-400">
                       {(formatCost || defaultFormatCost)(item.custo)}
                     </TableCell>
                     {type === 'company' && isCompanyData(item) && (
@@ -120,7 +120,7 @@ const MetricsTable = ({
                             value={item.percentual}
                             className="h-2 flex-1"
                           />
-                          <span className="text-xs text-gray-500 w-12 text-right">
+                          <span className="text-xs text-muted-foreground w-12 text-right">
                             {item.percentual.toFixed(1)}%
                           </span>
                         </div>

@@ -39,26 +39,26 @@ export interface MetricsOpenAIInsert {
 }
 
 // =====================================================
-// CARTESIA METRICS (TTS)
+// GEMINI METRICS
 // =====================================================
 
-export interface MetricsCartesia extends BaseMetric {
+export interface MetricsGemini extends BaseMetric {
   empresa_id: string | null;
   usuario_id: string | null;
-  caracteres_enviados: number;
-  creditos_usados: number;
-  creditos_restantes: number;
-  minutos_fala: number;
+  tokens_input: number;
+  tokens_output: number;
+  tokens_total: number;
   custo_estimado: number;
+  modelo: string;
 }
 
-export interface MetricsCartesiaInsert {
+export interface MetricsGeminiInsert {
   empresa_id?: string | null;
   usuario_id?: string | null;
-  caracteres_enviados: number;
-  creditos_usados?: number;
-  creditos_restantes?: number;
+  tokens_input: number;
+  tokens_output: number;
   custo_estimado?: number;
+  modelo?: string;
   data?: string;
 }
 
@@ -181,7 +181,7 @@ export interface MetricsSupabaseInsert {
 // METRICS SUMMARY
 // =====================================================
 
-export type MetricsFonte = 'openai' | 'cartesia' | 'render' | 'cloudflare' | 'supabase';
+export type MetricsFonte = 'openai' | 'gemini' | 'render' | 'cloudflare' | 'supabase';
 export type MetricsPeriodo = 'diario' | 'semanal' | 'mensal';
 
 export interface MetricsSummary extends BaseMetric {
@@ -291,10 +291,9 @@ export interface DashboardMetricsSummary {
     custo_mes: number;
     variacao_percentual: number;
   };
-  cartesia: {
-    creditos_usados: number;
-    creditos_restantes: number;
-    minutos_fala: number;
+  gemini: {
+    tokens_input: number;
+    tokens_output: number;
     custo_mes: number;
   };
   render: {
@@ -329,7 +328,12 @@ export const OPENAI_PRICES = {
   },
 } as const;
 
-export const CARTESIA_CHARS_PER_MINUTE = 850;
+export const GEMINI_PRICES = {
+  'gemini-1.5-flash': {
+    input: 0.075 / 1_000_000,
+    output: 0.30 / 1_000_000,
+  },
+} as const;
 
 export const RENDER_INSTANCE_PRICES: Record<string, number> = {
   'Starter': 0,
@@ -360,10 +364,9 @@ export const ALERT_THRESHOLDS = {
     monthly_90_percent: 0.90,
     monthly_100_percent: 1.00,
   },
-  cartesia: {
-    credits_20_percent: 0.20,
-    credits_10_percent: 0.10,
-    abnormal_consumption: 2.0, // 2x média diária
+  gemini: {
+    monthly_70_percent: 0.70,
+    monthly_90_percent: 0.90,
   },
   render: {
     instability_24h: 3, // 3+ eventos em 24h

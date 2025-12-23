@@ -5,14 +5,14 @@ import supabase from "./supabaseClient.js";
 // CONSTANTES E CONFIGURAÇÕES
 // =====================================================
 
-const PROVIDERS = ["openai", "cartesia", "render", "cloudflare", "supabase"];
+const PROVIDERS = ["openai", "gemini", "render", "cloudflare", "supabase"];
 
 const TIMEOUT_MS = 3000; // 3 segundos de timeout para health checks
 
 // Armazena tokens acumulados da sessão atual
 const sessionMetrics = {
   openai: { tokens_input: 0, tokens_output: 0 },
-  cartesia: { characters: 0, audio_minutes: 0 },
+  gemini: { tokens_input: 0, tokens_output: 0 },
   render: { requests: 0 },
   cloudflare: { requests: 0 },
   supabase: { reads: 0, writes: 0, storage_mb: 0 },
@@ -41,17 +41,49 @@ async function fetchWithTimeout(url, options, timeout = TIMEOUT_MS) {
 
 async function getProviderConfig(provider) {
   try {
+    // 1. Tentar buscar em lia_configurations (configurações globais LIA)
+    const { data: liaConfig, error: liaError } = await supabase
+      .from("lia_configurations")
+      .select("metrics_settings")
+      .limit(1)
+      .maybeSingle();
+
+    if (!liaError && liaConfig?.metrics_settings) {
+      const settings = typeof liaConfig.metrics_settings === 'string'
+        ? JSON.parse(liaConfig.metrics_settings)
+        : liaConfig.metrics_settings;
+
+      if (provider === "openai") {
+        return {
+          input_price_per_million: parseFloat(settings.openaiInputPrice) || 0.15,
+          output_price_per_million: parseFloat(settings.openaiOutputPrice) || 0.60
+        };
+      }
+      if (provider === "gemini") {
+        return {
+          input_price_per_million: parseFloat(settings.geminiInputPrice) || 0.075,
+          output_price_per_million: parseFloat(settings.geminiOutputPrice) || 0.30
+        };
+      }
+      if (provider === "cloudflare") {
+        return {
+          price_per_million_requests: parseFloat(settings.cloudflarePricePerRequest) || 0.50
+        };
+      }
+    }
+
+    // 2. Fallback para provider_config (antigo padrão)
     const { data, error } = await supabase
       .from("provider_config")
       .select("config")
       .eq("provider", provider)
       .single();
 
-    if (error) {
-      console.warn(`[Metrics] Erro ao buscar config ${provider}:`, error.message);
-      return null;
+    if (!error && data?.config) {
+      return data.config;
     }
-    return data?.config || null;
+
+    return null;
   } catch (err) {
     console.error(`[Metrics] Erro getProviderConfig ${provider}:`, err);
     return null;
@@ -69,8 +101,8 @@ export async function fetchProviderStatus() {
   // OpenAI - Test com chat/completions
   results.push(await checkOpenAI());
 
-  // Cartesia - Test TTS endpoint
-  results.push(await checkCartesia());
+  // Gemini - Test with models list or simple generation
+  results.push(await checkGemini());
 
   // Render - Health check do backend da LIA
   results.push(await checkRender());
@@ -95,7 +127,15 @@ async function checkOpenAI() {
   const startTime = Date.now();
 
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
+    // Tentar pegar do banco primeiro
+    const { data: config } = await supabase.from('lia_configurations').select('openai_api_key, metrics_settings').maybeSingle();
+    let apiKey = process.env.OPENAI_API_KEY;
+
+    if (config) {
+      const settings = typeof config.metrics_settings === 'string' ? JSON.parse(config.metrics_settings) : config.metrics_settings;
+      apiKey = settings?.openaiApiKey || config.openai_api_key || apiKey;
+    }
+
     if (!apiKey) {
       return { provider, online: false, latency_ms: 0, error_message: "API key não configurada" };
     }
@@ -135,26 +175,28 @@ async function checkOpenAI() {
   }
 }
 
-async function checkCartesia() {
-  const provider = "cartesia";
+async function checkGemini() {
+  const provider = "gemini";
   const startTime = Date.now();
 
   try {
-    const apiKey = process.env.CARTESIA_API_KEY;
+    // Tentar pegar do banco primeiro
+    const { data: config } = await supabase.from('lia_configurations').select('metrics_settings').maybeSingle();
+    let apiKey = process.env.GEMINI_API_KEY;
+
+    if (config?.metrics_settings) {
+      const settings = typeof config.metrics_settings === 'string' ? JSON.parse(config.metrics_settings) : config.metrics_settings;
+      apiKey = settings?.geminiApiKey || apiKey;
+    }
+
     if (!apiKey) {
       return { provider, online: false, latency_ms: 0, error_message: "API key não configurada" };
     }
 
-    // Cartesia TTS test - usando endpoint voices que é mais leve
+    // Gemini simplicity test - list models
     const response = await fetchWithTimeout(
-      "https://api.cartesia.ai/voices",
-      {
-        method: "GET",
-        headers: {
-          "X-API-Key": apiKey,
-          "Cartesia-Version": "2024-06-10",
-        },
-      }
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
+      { method: "GET" }
     );
 
     const latency = Date.now() - startTime;
@@ -317,7 +359,7 @@ export async function fetchProviderUsage() {
 
   const usage = {
     openai: await fetchOpenAIUsage(),
-    cartesia: await fetchCartesiaUsage(),
+    gemini: await fetchGeminiUsage(),
     render: await fetchRenderUsage(),
     cloudflare: await fetchCloudflareUsage(),
     supabase: await fetchSupabaseUsage(),
@@ -336,12 +378,10 @@ async function fetchOpenAIUsage() {
   };
 }
 
-async function fetchCartesiaUsage() {
-  // Retorna os caracteres acumulados na sessão
-  // Os caracteres são adicionados via trackCartesiaUsage() após cada chamada
+async function fetchGeminiUsage() {
   return {
-    characters: sessionMetrics.cartesia.characters,
-    audio_minutes: sessionMetrics.cartesia.characters / 850,
+    tokens_input: sessionMetrics.gemini.tokens_input,
+    tokens_output: sessionMetrics.gemini.tokens_output,
   };
 }
 
@@ -457,11 +497,14 @@ export async function calculateCosts(usage) {
     (usage.openai.tokens_input / 1_000_000) * openaiConfig.input_price_per_million +
     (usage.openai.tokens_output / 1_000_000) * openaiConfig.output_price_per_million;
 
-  // Cartesia
-  const cartesiaConfig = (await getProviderConfig("cartesia")) || {
-    price_per_minute: 0.042,
+  // Gemini
+  const geminiConfig = (await getProviderConfig("gemini")) || {
+    input_price_per_million: 0.075,
+    output_price_per_million: 0.3,
   };
-  costs.cartesia = usage.cartesia.audio_minutes * cartesiaConfig.price_per_minute;
+  costs.gemini =
+    (usage.gemini.tokens_input / 1_000_000) * geminiConfig.input_price_per_million +
+    (usage.gemini.tokens_output / 1_000_000) * geminiConfig.output_price_per_million;
 
   // Render (custo fixo mensal / 30 dias)
   const renderConfig = (await getProviderConfig("render")) || {
@@ -508,10 +551,11 @@ export async function saveMetrics(usage, costs) {
       cost: costs.openai,
     },
     {
-      provider: "cartesia",
+      provider: "gemini",
       date: today,
-      audio_minutes: usage.cartesia.audio_minutes,
-      cost: costs.cartesia,
+      tokens_input: usage.gemini.tokens_input,
+      tokens_output: usage.gemini.tokens_output,
+      cost: costs.gemini,
     },
     {
       provider: "render",
@@ -603,7 +647,7 @@ async function upsertProviderMetric(metric) {
 
 function resetSessionMetrics() {
   sessionMetrics.openai = { tokens_input: 0, tokens_output: 0 };
-  sessionMetrics.cartesia = { characters: 0, audio_minutes: 0 };
+  sessionMetrics.gemini = { tokens_input: 0, tokens_output: 0 };
   sessionMetrics.render = { requests: 0 };
   sessionMetrics.cloudflare = { requests: 0 };
   sessionMetrics.supabase = { reads: 0, writes: 0, storage_mb: 0 };
@@ -627,13 +671,15 @@ export function trackOpenAIUsage(tokensInput, tokensOutput) {
   });
 }
 
-export function trackCartesiaUsage(characters) {
-  sessionMetrics.cartesia.characters += characters;
+export function trackGeminiUsage(tokensInput, tokensOutput) {
+  sessionMetrics.gemini.tokens_input += tokensInput;
+  sessionMetrics.gemini.tokens_output += tokensOutput;
 
-  console.log(`[Track] Cartesia: +${characters} caracteres`);
+  console.log(`[Track] Gemini: +${tokensInput} input, +${tokensOutput} output`);
 
-  logProviderUsage("cartesia", "characters", characters, {
-    audio_minutes: characters / 850,
+  logProviderUsage("gemini", "tokens", tokensInput + tokensOutput, {
+    tokens_input: tokensInput,
+    tokens_output: tokensOutput,
   });
 }
 
@@ -817,4 +863,13 @@ export async function getTodaySummary() {
   }
 }
 
-export { sessionMetrics };
+// Exportações atualizadas
+export {
+  runMetricsCollection,
+  trackOpenAIUsage,
+  trackGeminiUsage,
+  trackRenderRequest, // Corrigido nome para coincidir com a declaração
+  trackSupabaseOperation,
+  getProviderStatus,
+  sessionMetrics
+};

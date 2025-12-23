@@ -162,11 +162,11 @@ const OpenAIMetricsTab = () => {
       </div>
 
       {/* Informação de Preços */}
-      <Card className="bg-purple-50 border-purple-200">
+      <Card className="bg-purple-500/10 border-purple-500/20">
         <CardContent className="py-3">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-purple-700 font-medium">Preços GPT-4o-mini:</span>
-            <div className="flex gap-4 text-purple-600">
+            <span className="text-purple-600 dark:text-purple-400 font-medium">Preços GPT-4o-mini:</span>
+            <div className="flex gap-4 text-muted-foreground">
               <span>Input: $0.15 / 1M tokens</span>
               <span>Output: $0.60 / 1M tokens</span>
             </div>
@@ -183,20 +183,20 @@ const OpenAIMetricsTab = () => {
           <CardContent>
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Consumo atual:</span>
-                <span className="font-bold text-lg">
+                <span className="text-muted-foreground">Consumo atual:</span>
+                <span className="font-bold text-lg text-foreground">
                   {formatTokens(aggregatedMetrics.tokensTotal)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Previsão fim do mês:</span>
-                <span className="font-bold text-lg text-purple-600">
+                <span className="text-muted-foreground">Previsão fim do mês:</span>
+                <span className="font-bold text-lg text-purple-600 dark:text-purple-400">
                   {formatTokens(aggregatedMetrics.previsaoMensal)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Custo previsto:</span>
-                <span className="font-bold text-lg text-green-600">
+                <span className="text-muted-foreground">Custo previsto:</span>
+                <span className="font-bold text-lg text-green-600 dark:text-green-400">
                   {formatCost(calcularCustoOpenAI(
                     aggregatedMetrics.previsaoMensal * 0.3, // Estimativa input
                     aggregatedMetrics.previsaoMensal * 0.7  // Estimativa output
@@ -210,13 +210,12 @@ const OpenAIMetricsTab = () => {
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div
-                    className={`h-2 rounded-full transition-all ${
-                      aggregatedMetrics.percentualMensal >= 90
+                    className={`h-2 rounded-full transition-all ${aggregatedMetrics.percentualMensal >= 90
                         ? 'bg-red-500'
                         : aggregatedMetrics.percentualMensal >= 70
-                        ? 'bg-yellow-500'
-                        : 'bg-green-500'
-                    }`}
+                          ? 'bg-yellow-500'
+                          : 'bg-green-500'
+                      }`}
                     style={{ width: `${Math.min(aggregatedMetrics.percentualMensal, 100)}%` }}
                   />
                 </div>
@@ -231,27 +230,24 @@ const OpenAIMetricsTab = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-2 rounded-lg bg-green-50">
-                <span className="text-sm">70% da previsão mensal</span>
-                <span className={`text-sm font-medium ${
-                  aggregatedMetrics.percentualMensal >= 70 ? 'text-green-600' : 'text-gray-400'
-                }`}>
+              <div className="flex items-center justify-between p-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                <span className="text-sm text-foreground">70% da previsão mensal</span>
+                <span className={`text-sm font-medium ${aggregatedMetrics.percentualMensal >= 70 ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground/40'
+                  }`}>
                   {aggregatedMetrics.percentualMensal >= 70 ? 'Atingido' : 'Pendente'}
                 </span>
               </div>
-              <div className="flex items-center justify-between p-2 rounded-lg bg-yellow-50">
-                <span className="text-sm">90% da previsão mensal</span>
-                <span className={`text-sm font-medium ${
-                  aggregatedMetrics.percentualMensal >= 90 ? 'text-yellow-600' : 'text-gray-400'
-                }`}>
+              <div className="flex items-center justify-between p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                <span className="text-sm text-foreground">90% da previsão mensal</span>
+                <span className={`text-sm font-medium ${aggregatedMetrics.percentualMensal >= 90 ? 'text-yellow-600 dark:text-yellow-400' : 'text-muted-foreground/40'
+                  }`}>
                   {aggregatedMetrics.percentualMensal >= 90 ? 'Atingido' : 'Pendente'}
                 </span>
               </div>
-              <div className="flex items-center justify-between p-2 rounded-lg bg-red-50">
-                <span className="text-sm">Ultrapassou limite</span>
-                <span className={`text-sm font-medium ${
-                  aggregatedMetrics.percentualMensal >= 100 ? 'text-red-600' : 'text-gray-400'
-                }`}>
+              <div className="flex items-center justify-between p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                <span className="text-sm text-foreground">Ultrapassou limite</span>
+                <span className={`text-sm font-medium ${aggregatedMetrics.percentualMensal >= 100 ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground/40'
+                  }`}>
                   {aggregatedMetrics.percentualMensal >= 100 ? 'Atingido' : 'Pendente'}
                 </span>
               </div>

@@ -58,22 +58,22 @@ const MetricCard = ({
   return (
     <Card className={cn(getStatusColor(), className)}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-gray-600">{title}</CardTitle>
+        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
         {icon}
       </CardHeader>
       <CardContent>
-        <p className="text-3xl font-bold text-gray-900">{value}</p>
+        <p className="text-3xl font-bold text-foreground">{value}</p>
         {(subtitle || trend) && (
           <div className="flex items-center gap-2 mt-1">
             {trend && (
               <span className={cn("text-xs flex items-center gap-1", getTrendColor())}>
                 {getTrendIcon()}
                 {trend.value > 0 ? '+' : ''}{trend.value.toFixed(1)}%
-                {trend.label && <span className="text-gray-500 ml-1">{trend.label}</span>}
+                {trend.label && <span className="text-muted-foreground opacity-70 ml-1">{trend.label}</span>}
               </span>
             )}
             {subtitle && !trend && (
-              <span className="text-xs text-gray-500">{subtitle}</span>
+              <span className="text-xs text-muted-foreground opacity-80">{subtitle}</span>
             )}
           </div>
         )}

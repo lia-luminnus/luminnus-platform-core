@@ -5,7 +5,7 @@ import cron from "node-cron";
 import {
   runMetricsCollection,
   trackOpenAIUsage,
-  trackCartesiaUsage,
+  trackGeminiUsage,
   trackRenderRequest,
   trackSupabaseOperation,
   getProviderMetrics,
@@ -248,68 +248,9 @@ app.post("/proxy-realtime", async (req, res) => {
   }
 });
 
-// =====================================================
-// ROTAS DE TTS (Cartesia)
-// =====================================================
-
+// Rota de TTS desativada (Cartesia removida)
 app.post("/tts", async (req, res) => {
-  try {
-    const { text, voice_id } = req.body;
-
-    if (!text) {
-      return res.status(400).json({ error: "Texto não fornecido" });
-    }
-
-    const cartesiaApiKey = process.env.CARTESIA_API_KEY;
-    if (!cartesiaApiKey) {
-      return res.status(500).json({ error: "Cartesia API key não configurada" });
-    }
-
-    const response = await fetch("https://api.cartesia.ai/tts/bytes", {
-      method: "POST",
-      headers: {
-        "X-API-Key": cartesiaApiKey,
-        "Cartesia-Version": "2024-06-10",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model_id: "sonic-3",
-        transcript: text,
-        voice: {
-          mode: "id",
-          id: voice_id || process.env.CARTESIA_VOICE_ID || "a0e99841-438c-4a64-b679-ae501e7d6091",
-        },
-        output_format: {
-          container: "mp3",
-          bit_rate: 128000,
-          sample_rate: 44100,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("[TTS] Erro Cartesia:", response.status, errorText);
-      return res.status(response.status).json({
-        error: "Erro ao gerar áudio",
-        details: errorText
-      });
-    }
-
-    // Track caracteres enviados
-    trackCartesiaUsage(text.length);
-
-    const audioBuffer = await response.buffer();
-
-    res.setHeader("Content-Type", "audio/mpeg");
-    res.send(audioBuffer);
-  } catch (error) {
-    console.error("[TTS] Erro:", error);
-    res.status(500).json({
-      error: "Erro ao processar TTS",
-      details: error instanceof Error ? error.message : String(error)
-    });
-  }
+  res.status(410).json({ error: "Serviço de TTS da Cartesia desativado. Use OpenAI ou Gemini." });
 });
 
 // =====================================================
@@ -460,7 +401,7 @@ app.get("/api/metrics/history", requireAdmin, async (req, res) => {
         byDate[row.date] = {
           date: row.date,
           openai: { tokens: 0, cost: 0 },
-          cartesia: { minutes: 0, cost: 0 },
+          gemini: { tokens: 0, cost: 0 },
           render: { requests: 0, cost: 0 },
           cloudflare: { requests: 0, cost: 0 },
           supabase: { storage_mb: 0, reads: 0, writes: 0, cost: 0 },
@@ -476,9 +417,9 @@ app.get("/api/metrics/history", requireAdmin, async (req, res) => {
           d.openai.tokens = (parseFloat(row.tokens_input) || 0) + (parseFloat(row.tokens_output) || 0);
           d.openai.cost = cost;
           break;
-        case "cartesia":
-          d.cartesia.minutes = parseFloat(row.audio_minutes) || 0;
-          d.cartesia.cost = cost;
+        case "gemini":
+          d.gemini.tokens = (parseFloat(row.tokens_input) || 0) + (parseFloat(row.tokens_output) || 0);
+          d.gemini.cost = cost;
           break;
         case "render":
           d.render.requests = parseFloat(row.requests) || 0;

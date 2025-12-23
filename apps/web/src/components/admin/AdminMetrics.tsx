@@ -4,7 +4,7 @@
  * Painel completo para visualização de métricas e analytics
  * Integração com provedores:
  * - OpenAI (GPT-4o-mini)
- * - Cartesia (TTS)
+ * - Gemini (Multimodal IA)
  * - Render (Servidor)
  * - Cloudflare (Workers)
  * - Supabase (Database)
@@ -22,7 +22,7 @@ import { useState } from "react";
 import {
   BarChart3,
   Zap,
-  Mic,
+  Sparkles,
   Server,
   Cloud,
   Database,
@@ -32,13 +32,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   MetricsDashboard,
   OpenAIMetricsTab,
-  CartesiaMetricsTab,
+  GeminiMetricsTab,
   RenderMetricsTab,
   CloudflareMetricsTab,
   SupabaseMetricsTab,
 } from "./metrics";
 
-type MetricsTab = 'dashboard' | 'openai' | 'cartesia' | 'render' | 'cloudflare' | 'supabase';
+type MetricsTab = 'dashboard' | 'openai' | 'gemini' | 'render' | 'cloudflare' | 'supabase';
 
 const AdminMetrics = () => {
   const [activeTab, setActiveTab] = useState<MetricsTab>('dashboard');
@@ -57,10 +57,10 @@ const AdminMetrics = () => {
       color: 'text-purple-600 dark:text-purple-400',
     },
     {
-      id: 'cartesia' as const,
-      label: 'Cartesia',
-      icon: Mic,
-      color: 'text-cyan-600 dark:text-cyan-400',
+      id: 'gemini' as const,
+      label: 'Gemini',
+      icon: Sparkles,
+      color: 'text-indigo-600 dark:text-indigo-400',
     },
     {
       id: 'render' as const,
@@ -120,8 +120,8 @@ const AdminMetrics = () => {
             <OpenAIMetricsTab />
           </TabsContent>
 
-          <TabsContent value="cartesia" className="m-0">
-            <CartesiaMetricsTab />
+          <TabsContent value="gemini" className="m-0">
+            <GeminiMetricsTab />
           </TabsContent>
 
           <TabsContent value="render" className="m-0">
@@ -144,7 +144,7 @@ const AdminMetrics = () => {
           Métricas atualizadas em tempo real. Dados dos últimos 30 dias.
         </p>
         <p className="mt-1">
-          Preços baseados em: OpenAI (GPT-4o-mini), Cartesia TTS, Render, Cloudflare Workers, Supabase
+          Preços baseados em: OpenAI (GPT-4o-mini), Gemini Flash, Render, Cloudflare Workers, Supabase
         </p>
       </div>
     </div>

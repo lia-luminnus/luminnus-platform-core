@@ -15,7 +15,7 @@ export { default as MetricsDashboard } from './MetricsDashboard';
 
 // Abas por provedor
 export { default as OpenAIMetricsTab } from './tabs/OpenAIMetricsTab';
-export { default as CartesiaMetricsTab } from './tabs/CartesiaMetricsTab';
+export { default as GeminiMetricsTab } from './tabs/GeminiMetricsTab';
 export { default as RenderMetricsTab } from './tabs/RenderMetricsTab';
 export { default as CloudflareMetricsTab } from './tabs/CloudflareMetricsTab';
 export { default as SupabaseMetricsTab } from './tabs/SupabaseMetricsTab';

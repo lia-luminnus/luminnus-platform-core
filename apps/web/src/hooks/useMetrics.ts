@@ -6,8 +6,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  MetricsOpenAI,
-  MetricsCartesia,
+  MetricsGemini,
   MetricsRender,
   MetricsCloudflare,
   MetricsSupabase,
@@ -18,9 +17,9 @@ import {
   MetricsByUser,
   DailyMetric,
   OPENAI_PRICES,
-  CARTESIA_CHARS_PER_MINUTE,
+  GEMINI_PRICES,
   MetricsOpenAIInsert,
-  MetricsCartesiaInsert,
+  MetricsGeminiInsert,
   MetricsRenderInsert,
   MetricsCloudflareInsert,
   MetricsSupabaseInsert,
@@ -40,18 +39,7 @@ export const calcularCustoOpenAI = (tokensInput: number, tokensOutput: number): 
   return custoInput + custoOutput;
 };
 
-export const calcularMinutosCartesia = (caracteres: number): number => {
-  return caracteres / CARTESIA_CHARS_PER_MINUTE;
-};
-
-export const calcularCustoCartesia = (
-  creditosUsados: number,
-  creditosTotais: number,
-  custoPlano: number
-): number => {
-  if (creditosTotais === 0) return 0;
-  return (creditosUsados / creditosTotais) * custoPlano;
-};
+// Cartesia removida
 
 // =====================================================
 // HOOK: MÉTRICAS OPENAI
@@ -180,24 +168,37 @@ export const useMetricsOpenAIByUser = () => {
 };
 
 // =====================================================
-// HOOK: MÉTRICAS CARTESIA
+// HOOK: MÉTRICAS GEMINI
 // =====================================================
 
-export const useMetricsCartesia = (days: number = 30) => {
+export const useMetricsGemini = (days: number = 30) => {
   return useQuery({
-    queryKey: ["metrics_cartesia", days],
+    queryKey: ["metrics_gemini", days],
     queryFn: async () => {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
 
+      // Usar a tabela unificada provider_metrics
       const { data, error } = await supabase
-        .from("metrics_cartesia")
+        .from("provider_metrics")
         .select("*")
-        .gte("data", startDate.toISOString().split("T")[0])
-        .order("data", { ascending: false });
+        .eq("provider", "gemini")
+        .gte("date", startDate.toISOString().split("T")[0])
+        .order("date", { ascending: false });
 
       if (error) throw error;
-      return (data || []) as MetricsCartesia[];
+      return (data || []) as MetricsGemini[];
+    },
+  });
+};
+
+export const useMetricsGeminiByCompany = () => {
+  return useQuery({
+    queryKey: ["metrics_gemini_by_company"],
+    queryFn: async () => {
+      // Por enquanto, Gemini não tem quebra por empresa no backend unificado
+      // Retornar lista vazia ou implementar agregação se necessário
+      return [] as MetricsByCompany[];
     },
   });
 };
@@ -495,9 +496,10 @@ export const useDashboardMetrics = () => {
           .select("tokens_input, tokens_output, custo_estimado")
           .gte("data", startDateStr),
         supabase
-          .from("metrics_cartesia")
-          .select("creditos_usados, creditos_restantes, caracteres_enviados, custo_estimado")
-          .gte("data", startDateStr),
+          .from("provider_metrics")
+          .select("tokens_input, tokens_output, cost")
+          .eq("provider", "gemini")
+          .gte("date", startDateStr),
         supabase
           .from("metrics_render")
           .select("status, chamadas_dia, custo_mensal")
@@ -524,18 +526,11 @@ export const useDashboardMetrics = () => {
       );
       const openaiCusto = openaiMetrics.reduce((acc, m) => acc + (m.custo_estimado || 0), 0);
 
-      // Calcular totais Cartesia
-      const cartesiaMetrics = cartesiaRes.data || [];
-      const cartesiaCreditosUsados = cartesiaMetrics.reduce(
-        (acc, m) => acc + (m.creditos_usados || 0),
-        0
-      );
-      const cartesiaCreditosRestantes = cartesiaMetrics[0]?.creditos_restantes || 0;
-      const cartesiaMinutos = cartesiaMetrics.reduce(
-        (acc, m) => acc + calcularMinutosCartesia(m.caracteres_enviados || 0),
-        0
-      );
-      const cartesiaCusto = cartesiaMetrics.reduce((acc, m) => acc + (m.custo_estimado || 0), 0);
+      // Calcular totais Gemini
+      const geminiMetrics = (geminiRes.data || []) as any[];
+      const geminiTokensInput = geminiMetrics.reduce((acc, m) => acc + (m.tokens_input || 0), 0);
+      const geminiTokensOutput = geminiMetrics.reduce((acc, m) => acc + (m.tokens_output || 0), 0);
+      const geminiCusto = geminiMetrics.reduce((acc, m) => acc + (m.cost || 0), 0);
 
       // Render status
       const renderLatest = renderRes.data?.[0];
@@ -565,7 +560,7 @@ export const useDashboardMetrics = () => {
       // Calcular custo total
       const custoTotal =
         openaiCusto +
-        cartesiaCusto +
+        geminiCusto +
         (renderLatest?.custo_mensal || 0) +
         cloudflareCusto +
         (supabaseLatest?.custo_estimado || 0);
@@ -582,11 +577,10 @@ export const useDashboardMetrics = () => {
           custo_mes: openaiCusto,
           variacao_percentual: 0, // Calcular comparando com mês anterior
         },
-        cartesia: {
-          creditos_usados: cartesiaCreditosUsados,
-          creditos_restantes: cartesiaCreditosRestantes,
-          minutos_fala: cartesiaMinutos,
-          custo_mes: cartesiaCusto,
+        gemini: {
+          tokens_input: geminiTokensInput,
+          tokens_output: geminiTokensOutput,
+          custo_mes: geminiCusto,
         },
         render: {
           status: (renderLatest?.status as 'online' | 'offline' | 'degraded') || 'online',
@@ -619,7 +613,7 @@ export const useDashboardMetrics = () => {
 // HOOK: DADOS PARA GRÁFICOS (30 DIAS)
 // =====================================================
 
-export const useChartData = (source: 'openai' | 'cartesia' | 'cloudflare' | 'render' | 'supabase') => {
+export const useChartData = (source: 'openai' | 'gemini' | 'cloudflare' | 'render' | 'supabase') => {
   return useQuery({
     queryKey: ["chart_data", source],
     queryFn: async (): Promise<DailyMetric[]> => {
@@ -635,12 +629,13 @@ export const useChartData = (source: 'openai' | 'cartesia' | 'cloudflare' | 'ren
             .gte("data", startDate.toISOString().split("T")[0])
             .order("data", { ascending: true });
           break;
-        case 'cartesia':
+        case 'gemini':
           query = supabase
-            .from("metrics_cartesia")
-            .select("data, creditos_usados, custo_estimado")
-            .gte("data", startDate.toISOString().split("T")[0])
-            .order("data", { ascending: true });
+            .from("provider_metrics")
+            .select("date, tokens_input, tokens_output, cost")
+            .eq("provider", "gemini")
+            .gte("date", startDate.toISOString().split("T")[0])
+            .order("date", { ascending: true });
           break;
         case 'cloudflare':
           query = supabase
@@ -672,7 +667,7 @@ export const useChartData = (source: 'openai' | 'cartesia' | 'cloudflare' | 'ren
       const dailyMap = new Map<string, { valor: number; custo: number }>();
 
       data?.forEach((item: Record<string, unknown>) => {
-        const dateStr = item.data as string;
+        const dateStr = (item.data || item.date) as string;
         if (!dailyMap.has(dateStr)) {
           dailyMap.set(dateStr, { valor: 0, custo: 0 });
         }
@@ -683,9 +678,9 @@ export const useChartData = (source: 'openai' | 'cartesia' | 'cloudflare' | 'ren
             current.valor += ((item.tokens_input as number) || 0) + ((item.tokens_output as number) || 0);
             current.custo += (item.custo_estimado as number) || 0;
             break;
-          case 'cartesia':
-            current.valor += (item.creditos_usados as number) || 0;
-            current.custo += (item.custo_estimado as number) || 0;
+          case 'gemini':
+            current.valor += ((item.tokens_input as number) || 0) + ((item.tokens_output as number) || 0);
+            current.custo += (item.cost as number) || 0;
             break;
           case 'cloudflare':
             current.valor += (item.requests_dia as number) || 0;
@@ -734,16 +729,23 @@ export const useInsertMetricsOpenAI = () => {
   });
 };
 
-export const useInsertMetricsCartesia = () => {
+export const useInsertMetricsGemini = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: MetricsCartesiaInsert) => {
-      const { error } = await supabase.from("metrics_cartesia").insert(data);
+    mutationFn: async (data: MetricsGeminiInsert) => {
+      const { error } = await supabase.from("provider_metrics").insert({
+        provider: "gemini",
+        date: data.data || new Date().toISOString().split('T')[0],
+        tokens_input: data.tokens_input,
+        tokens_output: data.tokens_output,
+        cost: data.custo_estimado || 0,
+        metadata: { model: data.modelo || "gemini-1.5-flash" }
+      });
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["metrics_cartesia"] });
+      queryClient.invalidateQueries({ queryKey: ["metrics_gemini"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_metrics"] });
     },
   });

@@ -22,6 +22,8 @@ import {
   FileText,
   BarChart3,
   Loader2,
+  Trash2,
+  Settings,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -33,6 +35,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface LiaConfigData {
   openaiApiKey: string;
+  geminiApiKey: string;
   supabaseUrl: string;
   supabaseAnonKey: string;
   supabaseServiceKey: string;
@@ -44,9 +47,11 @@ interface LiaConfigData {
 interface MetricsSettings {
   openaiInputPrice: string;
   openaiOutputPrice: string;
-  cartesiaPricePerMinute: string;
-  cartesiaTotalCredits: string;
+  geminiInputPrice: string;
+  geminiOutputPrice: string;
   cloudflarePricePerRequest: string;
+  geminiApiKey?: string; // Armazenar aqui para evitar erro de coluna no banco
+  customKeys: Record<string, string>;
 }
 
 // ============================================================================
@@ -62,6 +67,7 @@ export const AdminLiaConfig = () => {
   // Estados das configurações
   const [liaConfig, setLiaConfig] = useState<LiaConfigData>({
     openaiApiKey: "",
+    geminiApiKey: "",
     supabaseUrl: "",
     supabaseAnonKey: "",
     supabaseServiceKey: "",
@@ -73,10 +79,15 @@ export const AdminLiaConfig = () => {
   const [metricsSettings, setMetricsSettings] = useState<MetricsSettings>({
     openaiInputPrice: "0.15",
     openaiOutputPrice: "0.60",
-    cartesiaPricePerMinute: "0.042",
-    cartesiaTotalCredits: "100",
+    geminiInputPrice: "0.075",
+    geminiOutputPrice: "0.30",
     cloudflarePricePerRequest: "0.50",
+    customKeys: {},
   });
+
+  // Estado para novas chaves personalizadas
+  const [newKeyName, setNewKeyName] = useState("");
+  const [newKeyValue, setNewKeyValue] = useState("");
 
   // ============================================================================
   // CARREGAR CONFIGURAÇÕES DO SUPABASE
@@ -103,6 +114,7 @@ export const AdminLiaConfig = () => {
       if (data) {
         setLiaConfig({
           openaiApiKey: data.openai_api_key || '',
+          geminiApiKey: (data as any).gemini_api_key || '',
           supabaseUrl: data.supabase_url || '',
           supabaseAnonKey: data.supabase_anon_key || '',
           supabaseServiceKey: data.supabase_service_role_key || '',
@@ -115,7 +127,18 @@ export const AdminLiaConfig = () => {
           const metrics = typeof data.metrics_settings === 'string'
             ? JSON.parse(data.metrics_settings)
             : data.metrics_settings;
-          setMetricsSettings((prev) => ({ ...prev, ...metrics }));
+
+          setMetricsSettings((prev) => ({
+            ...prev,
+            ...metrics,
+            // Garantir que customKeys exista no objeto carregado
+            customKeys: metrics.customKeys || prev.customKeys || {}
+          }));
+
+          // Carregar Gemini Key do settings se existir (fallback do JSON)
+          if (metrics.geminiApiKey) {
+            setLiaConfig(prev => ({ ...prev, geminiApiKey: metrics.geminiApiKey }));
+          }
         }
       }
     } catch (error) {
@@ -175,6 +198,48 @@ export const AdminLiaConfig = () => {
   };
 
   // ============================================================================
+  // MANIPULAÇÃO DE CHAVES PERSONALIZADAS
+  // ============================================================================
+
+  const handleAddCustomKey = () => {
+    if (!newKeyName.trim() || !newKeyValue.trim()) {
+      toast({
+        title: "⚠️ Campos vazios",
+        description: "Preencha o nome e o valor da chave.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setMetricsSettings((prev) => ({
+      ...prev,
+      customKeys: {
+        ...prev.customKeys,
+        [newKeyName.trim()]: newKeyValue.trim(),
+      },
+    }));
+
+    setNewKeyName("");
+    setNewKeyValue("");
+    toast({
+      title: "✅ Chave adicionada",
+      description: `A chave ${newKeyName} foi adicionada à lista.`,
+    });
+  };
+
+  const handleRemoveCustomKey = (key: string) => {
+    setMetricsSettings((prev) => {
+      const newKeys = { ...prev.customKeys };
+      delete newKeys[key];
+      return { ...prev, customKeys: newKeys };
+    });
+    toast({
+      title: "ℹ️ Chave removida",
+      description: `A chave ${key} foi removida.`,
+    });
+  };
+
+  // ============================================================================
   // SALVAR CONFIGURAÇÕES NO SUPABASE
   // ============================================================================
 
@@ -183,14 +248,17 @@ export const AdminLiaConfig = () => {
 
     setIsSaving(true);
     try {
-      // Verificar se já existe um registro
-      const { data: existing } = await supabase
+      // 1. Verificar se já existe um registro
+      const { data: existing, error: fetchError } = await supabase
         .from('lia_configurations')
         .select('id')
         .limit(1)
         .maybeSingle();
 
-      const payload = {
+      if (fetchError) throw fetchError;
+
+      // 2. Preparar payload (apenas campos que EXISTEM no banco)
+      const payload: any = {
         openai_api_key: liaConfig.openaiApiKey,
         supabase_url: liaConfig.supabaseUrl,
         supabase_anon_key: liaConfig.supabaseAnonKey,
@@ -198,36 +266,50 @@ export const AdminLiaConfig = () => {
         render_api_url: liaConfig.renderApiUrl,
         webhook_url: liaConfig.webhookUrl,
         system_prompt: liaConfig.systemPrompt,
-        metrics_settings: JSON.parse(JSON.stringify(metricsSettings)),
+        metrics_settings: {
+          ...metricsSettings,
+          geminiApiKey: liaConfig.geminiApiKey
+        },
         updated_at: new Date().toISOString(),
       };
 
+      console.log('[AdminConfig] Salvando payload:', payload);
+
+      let saveError;
       if (existing) {
         // UPDATE
         const { error } = await supabase
           .from('lia_configurations')
           .update(payload)
           .eq('id', existing.id);
-
-        if (error) throw error;
+        saveError = error;
       } else {
         // INSERT
         const { error } = await supabase
           .from('lia_configurations')
           .insert(payload);
-
-        if (error) throw error;
+        saveError = error;
       }
+
+      if (saveError) throw saveError;
 
       toast({
         title: "✅ Configurações salvas!",
-        description: "Todas as alterações foram salvas com sucesso.",
+        description: "Todas as alterações foram salvas com sucesso no banco de dados.",
       });
-    } catch (error) {
-      console.error('Erro ao salvar:', error);
+
+      // Recarregar para garantir sincronia
+      loadConfig();
+
+    } catch (error: any) {
+      console.error('Erro crítico ao salvar:', error);
+
+      // Extrair mensagem detalhada
+      const detailedError = error.message || error.details || (typeof error === 'string' ? error : JSON.stringify(error));
+
       toast({
         title: "❌ Erro ao salvar",
-        description: "Não foi possível salvar as configurações.",
+        description: `Detalhes: ${detailedError}`,
         variant: "destructive",
       });
     } finally {
@@ -323,6 +405,26 @@ export const AdminLiaConfig = () => {
             </div>
           </div>
 
+          {/* Gemini API Key */}
+          <div className="space-y-2 pt-4 border-t border-border">
+            <Label htmlFor="gemini-key" className="text-foreground">
+              Gemini API Key
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                id="gemini-key"
+                type={showKeys ? "text" : "password"}
+                value={liaConfig.geminiApiKey}
+                onChange={(e) => setLiaConfig({ ...liaConfig, geminiApiKey: e.target.value })}
+                placeholder="AIza..."
+                className="border-border focus:border-purple-500 focus:ring-purple-500"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Utilizada para integrações de longa duração e multimodais.
+            </p>
+          </div>
+
           {/* Supabase */}
           <div className="space-y-4 pt-4 border-t border-border">
             <div className="flex items-center gap-2">
@@ -398,6 +500,58 @@ export const AdminLiaConfig = () => {
               className="border-border focus:border-purple-500 focus:ring-purple-500"
             />
           </div>
+
+          {/* CHAVES PERSONALIZADAS */}
+          <div className="space-y-4 pt-6 border-t border-border mt-4">
+            <div className="flex items-center gap-2">
+              <Settings className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
+              <h3 className="text-foreground font-semibold">Chaves Personalizadas</h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <Input
+                placeholder="Nome (ex: STRIPE_KEY)"
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value.toUpperCase())}
+                className="md:col-span-1"
+              />
+              <Input
+                type={showKeys ? "text" : "password"}
+                placeholder="Valor da Chave"
+                value={newKeyValue}
+                onChange={(e) => setNewKeyValue(e.target.value)}
+                className="md:col-span-1"
+              />
+              <Button
+                onClick={handleAddCustomKey}
+                variant="secondary"
+                className="bg-cyan-600/10 text-cyan-700 hover:bg-cyan-600/20 dark:text-cyan-400"
+              >
+                Adicionar
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {Object.entries(metricsSettings.customKeys || {}).map(([key, value]) => (
+                <div key={key} className="flex items-center justify-between p-2 rounded-lg bg-muted/50 border border-border">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold font-mono">{key}</span>
+                    <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                      {showKeys ? value : "••••••••••••••••"}
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemoveCustomKey(key)}
+                    className="text-red-500 hover:text-red-700 hover:bg-red-500/10"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -467,32 +621,33 @@ export const AdminLiaConfig = () => {
               />
             </div>
 
-            {/* Cartesia */}
-            <div className="space-y-2">
-              <Label htmlFor="cartesia-price" className="text-foreground">Cartesia Price ($/min)</Label>
+            {/* Gemini */}
+            <div className="space-y-2 pt-2">
+              <Label htmlFor="gemini-input" className="text-foreground">Gemini Input Price ($/1M tokens)</Label>
               <Input
-                id="cartesia-price"
+                id="gemini-input"
                 type="number"
-                step="0.001"
-                value={metricsSettings.cartesiaPricePerMinute}
-                onChange={(e) => setMetricsSettings({ ...metricsSettings, cartesiaPricePerMinute: e.target.value })}
+                step="0.01"
+                value={metricsSettings.geminiInputPrice}
+                onChange={(e) => setMetricsSettings({ ...metricsSettings, geminiInputPrice: e.target.value })}
                 className="border-border focus:border-purple-500 focus:ring-purple-500"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="cartesia-credits" className="text-foreground">Cartesia Total Credits</Label>
+            <div className="space-y-2 pt-2">
+              <Label htmlFor="gemini-output" className="text-foreground">Gemini Output Price ($/1M tokens)</Label>
               <Input
-                id="cartesia-credits"
+                id="gemini-output"
                 type="number"
-                value={metricsSettings.cartesiaTotalCredits}
-                onChange={(e) => setMetricsSettings({ ...metricsSettings, cartesiaTotalCredits: e.target.value })}
+                step="0.01"
+                value={metricsSettings.geminiOutputPrice}
+                onChange={(e) => setMetricsSettings({ ...metricsSettings, geminiOutputPrice: e.target.value })}
                 className="border-border focus:border-purple-500 focus:ring-purple-500"
               />
             </div>
 
             {/* Cloudflare */}
-            <div className="space-y-2">
+            <div className="space-y-2 pt-2">
               <Label htmlFor="cloudflare-price" className="text-foreground">Cloudflare Price ($/1M requests)</Label>
               <Input
                 id="cloudflare-price"

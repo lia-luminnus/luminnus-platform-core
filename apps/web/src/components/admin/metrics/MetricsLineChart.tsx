@@ -88,11 +88,11 @@ const MetricsLineChart = ({
     if (!active || !payload || !payload.length) return null;
 
     return (
-      <div className="bg-white p-3 rounded-lg shadow-lg border">
-        <p className="font-medium text-sm mb-2">{label}</p>
+      <div className="bg-popover p-3 rounded-lg shadow-lg border border-border">
+        <p className="font-bold text-sm mb-2 text-popover-foreground">{label}</p>
         {payload.map((entry: any, index: number) => (
           <p key={index} className="text-sm" style={{ color: entry.color }}>
-            {entry.name}:{' '}
+            <span className="font-medium">{entry.name}:</span>{' '}
             {entry.dataKey === 'valor'
               ? (formatValue || defaultFormatValue)(entry.value)
               : (formatCost || defaultFormatCost)(entry.value)}
@@ -114,14 +114,14 @@ const MetricsLineChart = ({
             <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
           </div>
         ) : chartData.length === 0 ? (
-          <div className="h-64 flex items-center justify-center text-gray-500">
+          <div className="h-64 flex items-center justify-center text-muted-foreground">
             Nenhum dado disponível
           </div>
         ) : (
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" opacity={0.3} />
                 <XAxis
                   dataKey="dataFormatted"
                   tick={{ fontSize: 12 }}

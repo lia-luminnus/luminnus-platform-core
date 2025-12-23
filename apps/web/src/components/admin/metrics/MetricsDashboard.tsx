@@ -23,6 +23,7 @@ import {
   Clock,
   Wifi,
   WifiOff,
+  Sparkles,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -115,7 +116,7 @@ const MetricsDashboard = () => {
         <div className="flex items-center gap-3">
           <Badge
             variant={allOnline ? "default" : "destructive"}
-            className={allOnline ? "bg-green-100 text-green-700" : ""}
+            className={allOnline ? "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/20" : ""}
           >
             {allOnline ? (
               <><Wifi className="w-3 h-3 mr-1" /> {onlineCount}/{totalProviders} Online</>
@@ -182,7 +183,7 @@ const MetricsDashboard = () => {
             <p className="text-4xl font-bold">
               {formatCost(metrics?.custo_total_mes || 0)}
             </p>
-            <p className="text-purple-200 text-sm mt-2">
+            <p className="opacity-80 text-sm mt-2 font-medium">
               {daysInfo.diasPassados} de {daysInfo.diasNoMes} dias ({formatPercent(daysInfo.percentualMes)})
             </p>
           </CardContent>
@@ -209,7 +210,7 @@ const MetricsDashboard = () => {
       {/* Progresso do Mês */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-gray-600">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
             Progresso do Mês
           </CardTitle>
         </CardHeader>
@@ -286,24 +287,24 @@ const MetricsDashboard = () => {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-cyan-100">
-                  <Mic className="w-5 h-5 text-cyan-600" />
+                <div className="p-2 rounded-lg bg-indigo-100">
+                  <Sparkles className="w-5 h-5 text-indigo-600" />
                 </div>
-                Cartesia (TTS)
+                Gemini
               </CardTitle>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger>
                     <StatusIndicator
-                      status={getProviderStatus('cartesia')}
-                      showPulse={statusByProvider['cartesia']?.online}
+                      status={getProviderStatus('gemini')}
+                      showPulse={statusByProvider['gemini']?.online}
                       size="sm"
                     />
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>
-                      {statusByProvider['cartesia']?.online ? 'Online' : 'Offline'}
-                      {getProviderLatency('cartesia') > 0 && ` - ${formatLatency(getProviderLatency('cartesia'))}`}
+                      {statusByProvider['gemini']?.online ? 'Online' : 'Offline'}
+                      {getProviderLatency('gemini') > 0 && ` - ${formatLatency(getProviderLatency('gemini'))}`}
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -313,15 +314,15 @@ const MetricsDashboard = () => {
           <CardContent>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Créditos Usados</span>
+                <span className="text-sm text-foreground/70">Tokens Usados</span>
                 <span className="font-bold text-lg">
-                  {formatNumber(metrics?.cartesia.creditos_usados || 0)}
+                  {formatNumber((metrics?.gemini?.tokens_input || 0) + (metrics?.gemini?.tokens_output || 0))}
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Restantes</span>
-                <span className="font-bold text-cyan-600">
-                  {formatNumber(metrics?.cartesia.creditos_restantes || 0)}
+                <span className="text-sm text-foreground/70">Custo (Mês)</span>
+                <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                  {formatCost(metrics?.gemini?.custo_mes || 0)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -466,8 +467,8 @@ const MetricsDashboard = () => {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-emerald-100">
-                  <Database className="w-5 h-5 text-emerald-600" />
+                <div className="p-2 rounded-lg bg-emerald-500/10">
+                  <Database className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                 </div>
                 Supabase
               </CardTitle>
@@ -493,29 +494,29 @@ const MetricsDashboard = () => {
           <CardContent>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Leituras</span>
-                <span className="font-medium">
+                <span className="text-sm text-muted-foreground">Leituras</span>
+                <span className="font-bold text-lg text-foreground">
                   {formatNumber(metrics?.supabase.leituras_total || 0)}/s
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Escritas</span>
-                <span className="font-medium">
+                <span className="text-sm text-muted-foreground">Escritas</span>
+                <span className="font-bold text-lg text-foreground">
                   {formatNumber(metrics?.supabase.escritas_total || 0)}/s
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Storage</span>
-                <span className="font-medium">
+                <span className="text-sm text-muted-foreground">Storage</span>
+                <span className="font-medium text-foreground">
                   {formatPercent(metrics?.supabase.storage_usado_percent || 0)}
                 </span>
               </div>
               <div className="pt-2 border-t flex justify-between items-center">
-                <span className="font-bold text-green-600">
+                <span className="font-bold text-green-600 dark:text-green-400">
                   {formatCost(metrics?.supabase.custo_mes || 0)}
                 </span>
                 {getProviderLatency('supabase') > 0 && (
-                  <p className="text-xs text-gray-400">{formatLatency(getProviderLatency('supabase'))}</p>
+                  <p className="text-xs text-muted-foreground">{formatLatency(getProviderLatency('supabase'))}</p>
                 )}
               </div>
             </div>
@@ -523,11 +524,11 @@ const MetricsDashboard = () => {
         </Card>
 
         {/* Card de Status Geral */}
-        <Card className="hover:shadow-md transition-shadow bg-gradient-to-br from-gray-50 to-gray-100">
+        <Card className="hover:shadow-md transition-shadow bg-muted/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-green-100">
-                <CheckCircle className="w-5 h-5 text-green-600" />
+              <div className="p-2 rounded-lg bg-green-500/10">
+                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
               </div>
               Status Geral
             </CardTitle>
@@ -576,7 +577,7 @@ const MetricsDashboard = () => {
           <div className="space-y-4">
             {[
               { name: 'OpenAI', value: metrics?.openai.custo_mes || 0, color: 'bg-purple-500', projection: projection?.byProvider?.openai || 0 },
-              { name: 'Cartesia', value: metrics?.cartesia.custo_mes || 0, color: 'bg-cyan-500', projection: projection?.byProvider?.cartesia || 0 },
+              { name: 'Gemini', value: metrics?.gemini?.custo_mes || 0, color: 'bg-indigo-500', projection: projection?.byProvider?.gemini || 0 },
               { name: 'Render', value: metrics?.render.custo_mes || 0, color: 'bg-blue-500', projection: projection?.byProvider?.render || 0 },
               { name: 'Cloudflare', value: metrics?.cloudflare.custo_mes || 0, color: 'bg-orange-500', projection: projection?.byProvider?.cloudflare || 0 },
               { name: 'Supabase', value: metrics?.supabase.custo_mes || 0, color: 'bg-emerald-500', projection: projection?.byProvider?.supabase || 0 },
@@ -587,19 +588,19 @@ const MetricsDashboard = () => {
               return (
                 <div key={provider.name} className="space-y-1">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">{provider.name}</span>
+                    <span className="text-muted-foreground">{provider.name}</span>
                     <div className="flex gap-3">
-                      <span className="font-medium">
+                      <span className="font-medium text-foreground">
                         {formatCost(provider.value)} ({formatPercent(percent)})
                       </span>
                       {provider.projection > 0 && (
-                        <span className="text-gray-400 text-xs">
+                        <span className="text-muted-foreground opacity-50 text-xs">
                           Proj: {formatCost(provider.projection)}
                         </span>
                       )}
                     </div>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-secondary rounded-full h-2">
                     <div
                       className={`h-2 rounded-full transition-all ${provider.color}`}
                       style={{ width: `${Math.min(percent, 100)}%` }}
