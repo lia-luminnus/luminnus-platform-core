@@ -50,7 +50,6 @@ interface MetricsSettings {
   geminiInputPrice: string;
   geminiOutputPrice: string;
   cloudflarePricePerRequest: string;
-  geminiApiKey?: string; // Armazenar aqui para evitar erro de coluna no banco
   customKeys: Record<string, string>;
 }
 
@@ -134,11 +133,6 @@ export const AdminLiaConfig = () => {
             // Garantir que customKeys exista no objeto carregado
             customKeys: metrics.customKeys || prev.customKeys || {}
           }));
-
-          // Carregar Gemini Key do settings se existir (fallback do JSON)
-          if (metrics.geminiApiKey) {
-            setLiaConfig(prev => ({ ...prev, geminiApiKey: metrics.geminiApiKey }));
-          }
         }
       }
     } catch (error) {
@@ -257,19 +251,17 @@ export const AdminLiaConfig = () => {
 
       if (fetchError) throw fetchError;
 
-      // 2. Preparar payload (apenas campos que EXISTEM no banco)
+      // 2. Preparar payload (agora com a coluna nativa gemini_api_key)
       const payload: any = {
         openai_api_key: liaConfig.openaiApiKey,
+        gemini_api_key: liaConfig.geminiApiKey,
         supabase_url: liaConfig.supabaseUrl,
         supabase_anon_key: liaConfig.supabaseAnonKey,
         supabase_service_role_key: liaConfig.supabaseServiceKey,
         render_api_url: liaConfig.renderApiUrl,
         webhook_url: liaConfig.webhookUrl,
         system_prompt: liaConfig.systemPrompt,
-        metrics_settings: {
-          ...metricsSettings,
-          geminiApiKey: liaConfig.geminiApiKey
-        },
+        metrics_settings: metricsSettings,
         updated_at: new Date().toISOString(),
       };
 

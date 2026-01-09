@@ -9,12 +9,17 @@ interface AppState {
   businessDescription: string | null;
   isSidebarCollapsed: boolean;
   isFirstVisit: boolean;
+  onboarding_completed: boolean;
+  integrations_completed: boolean;
+  planType: 'Start' | 'Plus' | 'Pro';
   activeModules: ModuleId[];
-  
+
   // Actions
   setBusinessInfo: (type: string, description: string) => void;
+  setPlanType: (plan: 'Start' | 'Plus' | 'Pro') => void;
   toggleSidebar: () => void;
   completeOnboarding: () => void;
+  completeIntegrations: () => void;
   resetOnboarding: () => void;
   setModules: (modules: ModuleId[]) => void;
   toggleModule: (moduleId: ModuleId) => void;
@@ -27,25 +32,40 @@ export const useAppStore = create<AppState>()(
       businessDescription: null,
       isSidebarCollapsed: false,
       isFirstVisit: true,
-      activeModules: ['dashboard', 'settings', 'plan', 'support'], // Fallback default
+      onboarding_completed: false,
+      integrations_completed: false,
+      activeModules: ['dashboard', 'integrations', 'settings', 'plan', 'support'], // Fallback default
+      planType: 'Start',
 
       setBusinessInfo: (type, description) => {
         // When business info is set, we also load the default presets
         const defaultModules = CATEGORY_PRESETS[type] || CATEGORY_PRESETS['other'];
-        set({ 
-          businessType: type, 
+        // Ensure integrations is ALWAYS present
+        if (!defaultModules.includes('integrations')) {
+          defaultModules.push('integrations');
+        }
+        set({
+          businessType: type,
           businessDescription: description,
           activeModules: defaultModules
         });
       },
 
       toggleSidebar: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
-      
-      completeOnboarding: () => set({ isFirstVisit: false }),
-      
-      resetOnboarding: () => set({ isFirstVisit: true, businessType: null, activeModules: [] }),
+
+      completeOnboarding: () => set({ onboarding_completed: true, isFirstVisit: false }),
+      completeIntegrations: () => set({ integrations_completed: true }),
+
+      resetOnboarding: () => set({
+        isFirstVisit: true,
+        onboarding_completed: false,
+        integrations_completed: false,
+        businessType: null,
+        activeModules: []
+      }),
 
       setModules: (modules) => set({ activeModules: modules }),
+      setPlanType: (plan) => set({ planType: plan }),
 
       toggleModule: (moduleId) => set((state) => {
         const isActive = state.activeModules.includes(moduleId);

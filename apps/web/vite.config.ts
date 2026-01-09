@@ -1,7 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
-import path from "path";
+import path from "node:path";
+import { fileURLToPath } from 'node:url';
 import { componentTagger } from "lovable-tagger";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Gera timestamp único para cache busting
 const timestamp = Date.now();
@@ -12,6 +16,7 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    strictPort: true,
     // Desabilita cache no servidor de desenvolvimento
     headers: {
       'Cache-Control': 'no-store, no-cache, must-revalidate',

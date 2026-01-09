@@ -1,0 +1,60 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "JSON Fix Output Schema",
+    "description": "Schema para validação de outputs de correção de JSON",
+    "type": "object",
+    "additionalProperties": true,
+    "patternProperties": {
+        ".*_env_ref$": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Referência a variável de ambiente"
+        }
+    },
+    "definitions": {
+        "pricing": {
+            "type": "object",
+            "properties": {
+                "input_per_1M": {
+                    "type": "number",
+                    "description": "Custo por 1M de tokens de input"
+                },
+                "output_per_1M": {
+                    "type": "number",
+                    "description": "Custo por 1M de tokens de output"
+                }
+            },
+            "additionalProperties": true
+        },
+        "provider": {
+            "type": "object",
+            "properties": {
+                "model": {
+                    "type": "string"
+                },
+                "api_key_env_ref": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "pricing": {
+                    "$ref": "#/definitions/pricing"
+                }
+            }
+        },
+        "integration": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "url": {
+                    "type": "string",
+                    "format": "uri"
+                }
+            }
+        }
+    }
+}

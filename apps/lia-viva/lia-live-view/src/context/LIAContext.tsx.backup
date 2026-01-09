@@ -1,0 +1,1429 @@
+// ======================================================================
+// 🧠 LIA Context - MENTE ÚNICA CENTRALIZADA
+// ======================================================================
+// A LIA existe UMA ÚNICA VEZ para todos os painéis
+// Os painéis são apenas interfaces diferentes para a mesma mente
+// ======================================================================
+
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
+import { socketService } from '../services/socketService';
+import { backendService, Memory } from '../services/backendService';
+import { geminiLiveService, GeminiLiveSession, GeminiLiveEvent } from '../services/geminiLiveService';
+import { dynamicContentManager, DynamicContainer } from '../services/dynamicContentManager';
+
+// ======================================================================
+// TYPES
+// ======================================================================
+
+export interface Message {
+  id: string;
+  type: 'user' | 'lia';
+  content: string;
+  timestamp: number;
+  attachments?: {
+    name: string;
+    type: 'image' | 'document' | 'video' | 'audio' | 'other';
+    url?: string;
+  }[];
+}
+
+// ======================================================================
+// CONVERSATION - Cada conversa tem seu próprio contexto isolado
+// ======================================================================
+
+export interface Conversation {
+  id: string;
+  mode: 'chat' | 'multimodal' | 'live';
+  title: string;
+  messages: Message[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+// Tipos para conteúdo dinâmico (gráficos, tabelas, imagens, JSON)
+export type DynamicContentType = 'chart' | 'table' | 'image' | 'json' | 'text' | 'analysis' | 'none';
+
+export interface ChartData {
+  chartType: 'line' | 'bar' | 'pie' | 'area';
+  labels: string[];
+  datasets: {
+    label: string;
+    data: number[];
+    color?: string;
+  }[];
+}
+
+export interface TableData {
+  headers: string[];
+  rows: (string | number)[][];
+}
+
+export interface ImageData {
+  url: string;
+  caption?: string;
+  alt?: string;
+}
+
+export interface AnalysisData {
+  title: string;
+  summary: string;
+  details: string[];
+  insights?: string[];
+}
+
+export interface DynamicContent {
+  type: DynamicContentType;
+  title?: string;
+  data: ChartData | TableData | ImageData | AnalysisData | string | any;
+  timestamp?: number;
+}
+
+export interface LIAState {
+  // Conexão
+  isConnected: boolean;
+  conversationId: string | null;
+
+  // ======================================================================
+  // SISTEMA DE CONVERSAS ISOLADAS
+  // ======================================================================
+  conversations: { [id: string]: Conversation };
+  currentConversationId: string | null;
+
+  // Funções de Conversa
+  createConversation: (mode: 'chat' | 'multimodal' | 'live') => Conversation;
+  switchConversation: (id: string) => void;
+  renameConversation: (id: string, title: string) => void;
+  deleteConversation: (id: string) => void;
+  getCurrentMessages: () => Message[];
+
+  // Mensagens (da conversa ativa)
+  messages: Message[];
+  isTyping: boolean;
+
+  // Voz e Estados
+  voicePersonality: 'clara' | 'viva' | 'firme';
+  isSpeaking: boolean;
+  isListening: boolean;
+  isLiveActive: boolean; // Gemini Live ativo
+
+  // Memórias
+  memories: Memory[];
+
+  // Conteúdo Dinâmico (gráficos, tabelas, etc)
+  dynamicContent: DynamicContent | null;
+  setDynamicContent: (content: DynamicContent | null) => void;
+  isProcessingUpload: boolean;
+  setIsProcessingUpload: (processing: boolean) => void;
+
+  // Múltiplos Containers Dinâmicos
+  dynamicContainers: DynamicContainer[];
+  addDynamicContainer: (type: any, data: any) => string;
+  removeDynamicContainer: (id: string) => void;
+  clearDynamicContainers: () => void;
+
+  // Métodos de Mensagem
+  addMessage: (message: Message) => void;
+  sendTextMessage: (text: string) => Promise<void>;
+  sendMessageWithFiles: (text: string, files: { file: File; preview?: string }[]) => Promise<void>;
+  sendAudioMessage: (audioBlob: Blob) => Promise<void>;
+  transcribeAndFillInput: (audioBlob: Blob) => Promise<string | null>;
+  analyzeFile: (file: File) => Promise<void>;
+
+  // Métodos de Voz
+  setVoicePersonality: (personality: 'clara' | 'viva' | 'firme') => void;
+  startListening: () => void;
+  stopListening: () => void;
+
+  // Métodos Live (Gemini Live)
+  startLiveMode: () => Promise<void>;
+  stopLiveMode: () => Promise<void>;
+
+  // Métodos de Memória
+  loadMemories: () => Promise<void>;
+  saveMemory: (content: string, category?: string) => Promise<void>;
+  deleteMemory: (id: string) => Promise<void>;
+
+  // Outros
+  clearMessages: () => void;
+}
+
+// ======================================================================
+// CONTEXT
+// ======================================================================
+
+const LIAContext = createContext<LIAState | null>(null);
+
+// ======================================================================
+// PROVIDER
+// ======================================================================
+
+interface LIAProviderProps {
+  children: ReactNode;
+}
+
+export function LIAProvider({ children }: LIAProviderProps) {
+  // Estado básico
+  const [isConnected, setIsConnected] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [voicePersonality, setVoicePersonalityState] = useState<'clara' | 'viva' | 'firme'>('viva');
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isLiveActive, setIsLiveActive] = useState(false);
+  const [memories, setMemories] = useState<Memory[]>([]);
+  const [dynamicContent, setDynamicContent] = useState<DynamicContent | null>(null);
+  const [isProcessingUpload, setIsProcessingUpload] = useState(false);
+  const [dynamicContainers, setDynamicContainers] = useState<DynamicContainer[]>([]);
+
+  // ======================================================================
+  // SISTEMA DE CONVERSAS ISOLADAS - CORRIGIDO
+  // ======================================================================
+  const [conversations, setConversations] = useState<{ [id: string]: Conversation }>({});
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+
+  // Refs para evitar closures desatualizadas
+  const messagesRef = useRef<Message[]>([]);
+  const conversationsRef = useRef<{ [id: string]: Conversation }>({});
+  const currentIdRef = useRef<string | null>(null);
+
+  // Manter refs sincronizadas
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
+  useEffect(() => {
+    currentIdRef.current = currentConversationId;
+  }, [currentConversationId]);
+
+  // Carregar conversas do localStorage (apenas uma vez)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('lia_conversations_v3');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const loadedConvs = parsed.conversations || {};
+        const loadedCurrentId = parsed.currentId || null;
+
+        setConversations(loadedConvs);
+        setCurrentConversationId(loadedCurrentId);
+        conversationsRef.current = loadedConvs;
+        currentIdRef.current = loadedCurrentId;
+
+        // Carregar mensagens da conversa ativa
+        if (loadedCurrentId && loadedConvs[loadedCurrentId]) {
+          const msgs = loadedConvs[loadedCurrentId].messages || [];
+          setMessages(msgs);
+          messagesRef.current = msgs;
+        }
+        console.log(`📋 ${Object.keys(loadedConvs).length} conversas carregadas`);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar conversas:', error);
+    }
+  }, []);
+
+  // Função para salvar no localStorage (chamada manualmente, não em useEffect)
+  const saveToStorage = useCallback((convs: { [id: string]: Conversation }, currentId: string | null) => {
+    try {
+      localStorage.setItem('lia_conversations_v3', JSON.stringify({
+        conversations: convs,
+        currentId: currentId
+      }));
+    } catch (error) {
+      console.error('Erro ao salvar:', error);
+    }
+  }, []);
+
+  // Salvar conversa atual (atualiza mensagens no objeto)
+  const saveCurrentConversation = useCallback(() => {
+    const currentId = currentIdRef.current;
+    const currentMsgs = messagesRef.current;
+    const currentConvs = conversationsRef.current;
+
+    if (currentId && currentConvs[currentId]) {
+      const updatedConvs = {
+        ...currentConvs,
+        [currentId]: {
+          ...currentConvs[currentId],
+          messages: currentMsgs,
+          updatedAt: Date.now()
+        }
+      };
+      setConversations(updatedConvs);
+      conversationsRef.current = updatedConvs;
+      saveToStorage(updatedConvs, currentId);
+      console.log(`💾 Conversa salva: ${currentConvs[currentId].title} (${currentMsgs.length} msgs)`);
+    }
+  }, [saveToStorage]);
+
+  // Salvar ao desmontar ou mudar de aba
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      saveCurrentConversation();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      saveCurrentConversation();
+    };
+  }, [saveCurrentConversation]);
+
+  // Criar nova conversa
+  const createConversation = useCallback((mode: 'chat' | 'multimodal' | 'live'): Conversation => {
+    // PRIMEIRO: Salvar conversa atual
+    saveCurrentConversation();
+
+    const now = Date.now();
+    const newConv: Conversation = {
+      id: `conv_${now}_${Math.random().toString(36).substr(2, 9)}`,
+      mode,
+      title: `Conversa ${new Date(now).toLocaleDateString('pt-BR')} ${new Date(now).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
+      messages: [],
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const updatedConvs = { ...conversationsRef.current, [newConv.id]: newConv };
+    setConversations(updatedConvs);
+    conversationsRef.current = updatedConvs;
+
+    setCurrentConversationId(newConv.id);
+    currentIdRef.current = newConv.id;
+
+    setMessages([]);
+    messagesRef.current = [];
+
+    saveToStorage(updatedConvs, newConv.id);
+    console.log(`✅ Nova conversa criada: ${newConv.title} (${mode})`);
+
+    return newConv;
+  }, [saveCurrentConversation, saveToStorage]);
+
+  // Trocar de conversa
+  const switchConversation = useCallback((id: string) => {
+    const currentId = currentIdRef.current;
+
+    // Não fazer nada se já está na mesma conversa
+    if (currentId === id) return;
+
+    // PRIMEIRO: Salvar conversa atual
+    saveCurrentConversation();
+
+    // Usar ref para pegar estado mais recente
+    const conv = conversationsRef.current[id];
+    if (conv) {
+      setCurrentConversationId(id);
+      currentIdRef.current = id;
+
+      const msgs = conv.messages || [];
+      setMessages(msgs);
+      messagesRef.current = msgs;
+
+      saveToStorage(conversationsRef.current, id);
+      console.log(`📖 Conversa trocada: ${conv.title} (${msgs.length} msgs)`);
+    }
+  }, [saveCurrentConversation, saveToStorage]);
+
+  // Renomear conversa
+  const renameConversation = useCallback((id: string, title: string) => {
+    const updatedConvs = {
+      ...conversationsRef.current,
+      [id]: { ...conversationsRef.current[id], title }
+    };
+    setConversations(updatedConvs);
+    conversationsRef.current = updatedConvs;
+    saveToStorage(updatedConvs, currentIdRef.current);
+    console.log(`✏️ Conversa renomeada: ${title}`);
+  }, [saveToStorage]);
+
+  // Deletar conversa
+  const deleteConversation = useCallback((id: string) => {
+    const { [id]: deleted, ...rest } = conversationsRef.current;
+    setConversations(rest);
+    conversationsRef.current = rest;
+
+    // Se era a conversa ativa, limpar
+    if (currentIdRef.current === id) {
+      setCurrentConversationId(null);
+      currentIdRef.current = null;
+      setMessages([]);
+      messagesRef.current = [];
+    }
+
+    saveToStorage(rest, currentIdRef.current);
+    console.log(`🗑️ Conversa excluída: ${id}`);
+  }, [saveToStorage]);
+
+  // Obter mensagens da conversa atual
+  const getCurrentMessages = useCallback((): Message[] => {
+    return messagesRef.current;
+  }, [messages]);
+
+  // ========================================
+  // ENSURE CONVERSATION EXISTS - Cria automaticamente se não existir
+  // Deve ser chamado ANTES de adicionar qualquer mensagem
+  // ========================================
+  const ensureConversationExists = useCallback((mode: 'chat' | 'multimodal' | 'live') => {
+    if (!currentIdRef.current) {
+      console.log(`📝 AUTO-CREATE: Criando conversa para ${mode}...`);
+      const now = Date.now();
+      const newConv: Conversation = {
+        id: `conv_${now}_${Math.random().toString(36).substr(2, 9)}`,
+        mode,
+        title: `Conversa ${new Date(now).toLocaleDateString('pt-BR')} ${new Date(now).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
+        messages: [],
+        createdAt: now,
+        updatedAt: now
+      };
+
+      const updatedConvs = { ...conversationsRef.current, [newConv.id]: newConv };
+      setConversations(updatedConvs);
+      conversationsRef.current = updatedConvs;
+
+      setCurrentConversationId(newConv.id);
+      currentIdRef.current = newConv.id;
+
+      saveToStorage(updatedConvs, newConv.id);
+      console.log(`✅ Conversa AUTO-CRIADA: ${newConv.title}`);
+      return newConv.id;
+    }
+    return currentIdRef.current;
+  }, [saveToStorage]);
+
+  // Refs
+  const audioPlayingRef = useRef<HTMLAudioElement | null>(null);
+  const geminiSessionRef = useRef<GeminiLiveSession | null>(null);
+
+  // ======================================================================
+
+  // ======================================================================
+  // DYNAMIC CONTAINERS - Múltiplos containers gerenciados
+  // ======================================================================
+
+  // Sincronizar com o dynamicContentManager
+  useEffect(() => {
+    const handleContainersChange = (containers: DynamicContainer[]) => {
+      setDynamicContainers(containers);
+    };
+
+    // Adicionar listener
+    dynamicContentManager.addListener(handleContainersChange);
+
+    // Carregar estado inicial
+    setDynamicContainers(dynamicContentManager.getAllContainers());
+
+    // Cleanup
+    return () => {
+      dynamicContentManager.removeListener(handleContainersChange);
+    };
+  }, []);
+
+  // Adicionar container dinâmico
+  const addDynamicContainer = useCallback((type: any, data: any): string => {
+    const containerId = dynamicContentManager.addDynamicContent(type, data);
+    console.log(`📦 Container adicionado via LIAContext: ${containerId}`);
+    return containerId;
+  }, []);
+
+  // Remover container
+  const removeDynamicContainer = useCallback((id: string) => {
+    dynamicContentManager.removeContainer(id);
+    console.log(`🗑️ Container removido via LIAContext: ${id}`);
+  }, []);
+
+  // Limpar todos os containers
+  const clearDynamicContainers = useCallback(() => {
+    dynamicContentManager.clearAll();
+    console.log('🧹 Todos os containers limpos');
+  }, []);
+
+  // FUNÇÃO AUXILIAR: Detectar conteúdo estruturado (JSON) nas respostas
+  // ======================================================================
+
+  const tryParseStructuredContent = (text: string): DynamicContent | null => {
+    try {
+      // Padrões de JSON estruturado
+      const patterns = [
+        /```json\s*([\s\S]*?)\s*```/,  // JSON em bloco de código
+        /```\s*([\s\S]*?)\s*```/,       // Bloco de código genérico
+        /\{[\s\S]*"type"\s*:\s*"(chart|table|analysis|image)"[\s\S]*\}/,  // JSON inline
+      ];
+
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match) {
+          const jsonStr = match[1] || match[0];
+          const parsed = JSON.parse(jsonStr.trim());
+
+          // Verificar se é um formato válido de conteúdo dinâmico
+          if (parsed.type && ['chart', 'table', 'analysis', 'image', 'json'].includes(parsed.type)) {
+            return {
+              type: parsed.type,
+              title: parsed.title || 'Conteúdo Gerado',
+              data: parsed.data || parsed,
+              timestamp: Date.now(),
+            };
+          }
+
+          // Se tiver chartType, é um gráfico
+          if (parsed.chartType || parsed.datasets) {
+            return {
+              type: 'chart',
+              title: parsed.title || 'Gráfico',
+              data: {
+                chartType: parsed.chartType || 'line',
+                labels: parsed.labels || [],
+                datasets: parsed.datasets || [],
+              },
+              timestamp: Date.now(),
+            };
+          }
+
+          // Se tiver headers e rows, é uma tabela
+          if (parsed.headers && parsed.rows) {
+            return {
+              type: 'table',
+              title: parsed.title || 'Tabela',
+              data: {
+                headers: parsed.headers,
+                rows: parsed.rows,
+              },
+              timestamp: Date.now(),
+            };
+          }
+
+          // Se tiver summary e details, é uma análise
+          if (parsed.summary || parsed.details) {
+            return {
+              type: 'analysis',
+              title: parsed.title || 'Análise',
+              data: {
+                title: parsed.title || 'Análise',
+                summary: parsed.summary || '',
+                details: parsed.details || [],
+                insights: parsed.insights || [],
+              },
+              timestamp: Date.now(),
+            };
+          }
+        }
+      }
+    } catch (e) {
+      // Não é JSON válido, retornar null
+    }
+
+    return null;
+  };
+
+  // ======================================================================
+  // SETUP SOCKET.IO (apenas uma vez)
+  // ======================================================================
+
+  useEffect(() => {
+    const socket = socketService.getSocket();
+
+    // Eventos de conexão
+    const handleConnect = () => {
+      console.log('✅ LIAContext: Socket conectado');
+      setIsConnected(true);
+      const convId = socketService.getConversationId();
+      setConversationId(convId);
+
+      // Capturar localização ao conectar
+      backendService.captureAndSendLocation().catch(console.error);
+
+      // Carregar memórias ao conectar
+      loadMemories();
+    };
+
+    const handleDisconnect = () => {
+      console.log('❌ LIAContext: Socket desconectado');
+      setIsConnected(false);
+    };
+
+    // Eventos da LIA via Socket.IO
+    const handleLIATyping = () => {
+      setIsTyping(true);
+    };
+
+    const handleLIAStopTyping = () => {
+      setIsTyping(false);
+    };
+
+    const handleLIAMessage = (text: string) => {
+      setIsTyping(false);
+      setIsSpeaking(false);
+
+      // Tentar detectar JSON estruturado na resposta
+      const parsedContent = tryParseStructuredContent(text);
+
+      if (parsedContent) {
+        // Exibir no Dynamic Content Area
+        setDynamicContent(parsedContent);
+
+        // Criar mensagem com attachments se for imagem
+        let attachments: Message['attachments'] = undefined;
+        let summaryText = '';
+
+        if (parsedContent.type === 'image') {
+          const imageData = parsedContent.data as any;
+          summaryText = '🖼️ Imagem gerada! Clique para ver em tamanho completo.';
+          attachments = [{
+            name: imageData.prompt || 'Imagem gerada',
+            type: 'image',
+            url: imageData.url
+          }];
+        } else {
+          summaryText = parsedContent.title ||
+            (parsedContent.type === 'chart' ? '📊 Gráfico gerado! Veja na área de conteúdo dinâmico.' :
+              parsedContent.type === 'table' ? '📋 Tabela gerada! Veja na área de conteúdo dinâmico.' :
+                parsedContent.type === 'analysis' ? '📝 Análise concluída!' :
+                  '✅ Conteúdo gerado! Veja na área de conteúdo dinâmico.');
+        }
+
+        const newMessage: Message = {
+          id: `lia_${Date.now()}`,
+          type: 'lia',
+          content: summaryText,
+          timestamp: Date.now(),
+          attachments,
+        };
+        setMessages((prev) => [...prev, newMessage]);
+      } else {
+        // Mensagem normal de texto
+        const newMessage: Message = {
+          id: `lia_${Date.now()}`,
+          type: 'lia',
+          content: text,
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, newMessage]);
+      }
+    };
+
+    const handleAudioResponse = ({ audio, text }: { audio: number[]; text: string }) => {
+      setIsTyping(false);
+
+      // Adicionar mensagem de texto
+      const newMessage: Message = {
+        id: `lia_${Date.now()}`,
+        type: 'lia',
+        content: text,
+        timestamp: Date.now(),
+      };
+
+      setMessages((prev) => [...prev, newMessage]);
+
+      // Tocar áudio
+      if (audio && audio.length > 0) {
+        playAudio(audio);
+      }
+    };
+
+    const handleAudioAck = () => {
+      console.log('✅ Áudio recebido pelo servidor');
+    };
+
+    // Registrar eventos
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+    socket.on('lia-typing', handleLIATyping);
+    socket.on('lia-stop-typing', handleLIAStopTyping);
+    socket.on('lia-message', handleLIAMessage);
+    socket.on('audio-response', handleAudioResponse);
+    socket.on('audio-ack', handleAudioAck);
+
+    // Cleanup
+    return () => {
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+      socket.off('lia-typing', handleLIATyping);
+      socket.off('lia-stop-typing', handleLIAStopTyping);
+      socket.off('lia-message', handleLIAMessage);
+      socket.off('audio-response', handleAudioResponse);
+      socket.off('audio-ack', handleAudioAck);
+    };
+  }, []);
+
+  // ======================================================================
+  // MÉTODOS DE MENSAGEM
+  // ======================================================================
+
+  /**
+   * Detecta se o usuário está pedindo geração de conteúdo visual
+   */
+  const detectVisualRequest = (text: string): { type: string; prompt: string } | null => {
+    const lowerText = text.toLowerCase();
+
+    // Padrões para gráficos
+    const chartPatterns = [
+      /gera?\w* (?:um |o )?gr[aá]fico/i,
+      /cria?\w* (?:um |o )?gr[aá]fico/i,
+      /fa[zç]a?\w* (?:um |o )?gr[aá]fico/i,
+      /mostr[ae]\w* (?:um |o )?gr[aá]fico/i,
+      /gr[aá]fico de/i,
+      /generate (?:a )?chart/i,
+      /create (?:a )?chart/i,
+      /show (?:a )?chart/i,
+    ];
+
+    // Padrões para tabelas
+    const tablePatterns = [
+      /gera?\w* (?:uma |a )?tabela/i,
+      /cria?\w* (?:uma |a )?tabela/i,
+      /fa[zç]a?\w* (?:uma |a )?tabela/i,
+      /mostr[ae]\w* (?:uma |a )?tabela/i,
+      /generate (?:a )?table/i,
+      /create (?:a )?table/i,
+    ];
+
+    for (const pattern of chartPatterns) {
+      if (pattern.test(text)) {
+        return { type: 'chart', prompt: text };
+      }
+    }
+
+    for (const pattern of tablePatterns) {
+      if (pattern.test(text)) {
+        return { type: 'table', prompt: text };
+      }
+    }
+
+    return null;
+  };
+
+  /**
+   * Gera conteúdo visual via API
+   */
+  const generateVisualContent = useCallback(async (type: string, prompt: string) => {
+    try {
+      console.log(`🎨 Gerando ${type} via API...`);
+      setIsProcessingUpload(true);
+
+      const response = await fetch('/api/vision/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, prompt }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Falha ao gerar conteúdo visual');
+      }
+
+      const result = await response.json();
+      console.log('✅ Conteúdo visual gerado:', result);
+
+      // Atualizar Dynamic Content
+      if (result.content) {
+        setDynamicContent({
+          type: result.content.type || type,
+          title: result.content.title || `${type === 'chart' ? 'Gráfico' : 'Tabela'} gerado`,
+          data: result.content,
+          timestamp: Date.now(),
+        });
+
+        // Adicionar mensagem de confirmação
+        const confirmMessage: Message = {
+          id: `lia_${Date.now()}`,
+          type: 'lia',
+          content: result.content.type === 'chart'
+            ? '📊 Gráfico gerado! Veja na área de conteúdo dinâmico.'
+            : '📋 Tabela gerada! Veja na área de conteúdo dinâmico.',
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, confirmMessage]);
+      }
+
+    } catch (error: any) {
+      console.error('❌ Erro ao gerar conteúdo visual:', error);
+
+      const errorMessage: Message = {
+        id: `lia_${Date.now()}`,
+        type: 'lia',
+        content: 'Desculpe, não consegui gerar o conteúdo visual. Tente novamente.',
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsProcessingUpload(false);
+    }
+  }, []);
+
+  /**
+   * Envia mensagem de texto para o backend
+   */
+  const sendTextMessage = useCallback(async (text: string) => {
+    if (!text.trim()) return;
+
+    // AUTO-CREATE: Garantir que conversa exista antes de adicionar mensagem
+    ensureConversationExists('multimodal');
+
+    // Adicionar mensagem do usuário
+    const userMessage: Message = {
+      id: `user_${Date.now()}`,
+      type: 'user',
+      content: text,
+      timestamp: Date.now(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+
+    // Detectar se é pedido de geração visual
+    const visualRequest = detectVisualRequest(text);
+    if (visualRequest) {
+      // Chamar API de geração visual diretamente
+      await generateVisualContent(visualRequest.type, visualRequest.prompt);
+      return;
+    }
+
+    // Mensagem normal - enviar via Socket.IO
+    setIsTyping(true);
+
+    try {
+      // Enviar via Socket.IO
+      socketService.sendTextMessage(text);
+    } catch (error) {
+      console.error('❌ Erro ao enviar mensagem:', error);
+      setIsTyping(false);
+    }
+  }, [generateVisualContent, ensureConversationExists]);
+
+  /**
+   * Adiciona uma mensagem diretamente ao chat
+   */
+  const addMessage = useCallback((message: Message) => {
+    setMessages(prev => [...prev, message]);
+  }, []);
+
+  /**
+   * Envia mensagem COM arquivos para análise multimodal
+   */
+  const sendMessageWithFiles = useCallback(async (
+    text: string,
+    files: { file: File; preview?: string }[]
+  ) => {
+    if (files.length === 0) {
+      // Sem arquivos, envia como texto normal
+      return sendTextMessage(text);
+    }
+
+    // Garantir que conversa exista
+    ensureConversationExists('multimodal');
+
+    const file = files[0]; // Por enquanto, processar primeiro arquivo
+    const isImage = file.file.type.startsWith('image/');
+    const prompt = text.trim() || 'Analise este arquivo em detalhes.';
+
+    // 1. Adicionar mensagem do usuário COM attachment ao chat
+    const userMessage: Message = {
+      id: `user_${Date.now()}`,
+      type: 'user',
+      content: prompt,
+      timestamp: Date.now(),
+      attachments: [{
+        name: file.file.name,
+        type: isImage ? 'image' : 'document',
+        url: file.preview
+      }]
+    };
+    setMessages(prev => [...prev, userMessage]);
+    console.log('📎 Mensagem com attachment adicionada:', file.file.name);
+
+    // 2. Ativar loading
+    setIsTyping(true);
+    setIsProcessingUpload(true);
+
+    try {
+      // 3. Converter arquivo para base64
+      const arrayBuffer = await file.file.arrayBuffer();
+      const base64 = btoa(
+        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+      const dataUrl = `data:${file.file.type};base64,${base64}`;
+
+      console.log('📤 Enviando arquivo para análise:', file.file.name);
+
+      // 4. Enviar para API de análise
+      const formData = new FormData();
+      formData.append('file', file.file);
+      formData.append('prompt', prompt);
+
+      const response = await fetch('/api/vision/analyze', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro na API: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Análise concluída:', result);
+
+      // 5. Adicionar resposta da LIA ao chat
+      const analysisText = result.analysis?.text ||
+        result.analysis?.summary ||
+        result.text ||
+        result.message ||
+        'Análise concluída! Veja os detalhes acima.';
+
+      const liaMessage: Message = {
+        id: `lia_${Date.now()}`,
+        type: 'lia',
+        content: analysisText,
+        timestamp: Date.now()
+      };
+      setMessages(prev => [...prev, liaMessage]);
+
+      // 6. Se tiver dados estruturados, mostrar no DynamicContent
+      if (result.analysis) {
+        setDynamicContent({
+          type: result.analysis.type || 'analysis',
+          title: result.analysis.title || `Análise: ${file.file.name}`,
+          data: result.analysis,
+          timestamp: Date.now()
+        });
+      }
+
+    } catch (error: any) {
+      console.error('❌ Erro ao analisar arquivo:', error);
+
+      // Adicionar mensagem de erro
+      const errorMessage: Message = {
+        id: `lia_error_${Date.now()}`,
+        type: 'lia',
+        content: `❌ Não consegui analisar o arquivo. ${error.message || 'Tente novamente.'}`,
+        timestamp: Date.now()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsTyping(false);
+      setIsProcessingUpload(false);
+    }
+  }, [ensureConversationExists, sendTextMessage]);
+
+  /**
+   * Envia áudio gravado para o backend (transcrição + resposta)
+   */
+  const sendAudioMessage = useCallback(async (audioBlob: Blob) => {
+    try {
+      // AUTO-CREATE: Garantir que conversa exista antes de adicionar mensagem
+      ensureConversationExists('multimodal');
+
+      // Adicionar indicador visual
+      const userMessage: Message = {
+        id: `user_${Date.now()}`,
+        type: 'user',
+        content: '🎤 Mensagem de voz...',
+        timestamp: Date.now(),
+        attachments: [
+          {
+            name: 'audio.webm',
+            type: 'audio',
+          },
+        ],
+      };
+
+      setMessages((prev) => [...prev, userMessage]);
+      setIsTyping(true);
+
+      // Converter para array buffer
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+
+      // Enviar chunks via Socket.IO
+      socketService.sendAudioChunk(uint8Array);
+      socketService.sendAudioEnd();
+
+      console.log('✅ Áudio enviado:', uint8Array.length, 'bytes');
+    } catch (err) {
+      console.error('❌ Erro ao enviar áudio:', err);
+      setIsTyping(false);
+    }
+  }, [ensureConversationExists]);
+
+  /**
+   * Transcreve áudio e retorna texto (para preencher input)
+   * Usado em Chat Mode e Multi-Modal Mode (botão microfone comum)
+   */
+  const transcribeAndFillInput = useCallback(async (audioBlob: Blob): Promise<string | null> => {
+    try {
+      console.log('🎤 Transcrevendo áudio via backend...');
+
+      // Converter para FormData
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'audio.webm');
+
+      // Enviar para backend (que tem a chave OpenAI)
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Transcription error: ${response.status} - ${error}`);
+      }
+
+      const data = await response.json();
+      const transcription = data.text?.trim() || '';
+
+      console.log('✅ Transcrição:', transcription);
+
+      return transcription;
+    } catch (error) {
+      console.error('❌ Erro ao transcrever:', error);
+      return null;
+    }
+  }, []);
+
+  // ======================================================================
+  // MÉTODOS DE VOZ
+  // ======================================================================
+
+  const setVoicePersonality = useCallback((personality: 'clara' | 'viva' | 'firme') => {
+    setVoicePersonalityState(personality);
+    socketService.setVoicePersonality(personality);
+  }, []);
+
+  const startListening = useCallback(() => {
+    setIsListening(true);
+  }, []);
+
+  const stopListening = useCallback(() => {
+    setIsListening(false);
+  }, []);
+
+  /**
+   * Toca áudio recebido do backend
+   */
+  const playAudio = useCallback((audioData: number[]) => {
+    try {
+      setIsSpeaking(true);
+
+      const uint8Array = new Uint8Array(audioData);
+      const blob = new Blob([uint8Array], { type: 'audio/mp3' });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+
+      audioPlayingRef.current = audio;
+
+      audio.onended = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(url);
+        audioPlayingRef.current = null;
+      };
+
+      audio.onerror = (err) => {
+        console.error('❌ Erro ao tocar áudio:', err);
+        setIsSpeaking(false);
+        URL.revokeObjectURL(url);
+        audioPlayingRef.current = null;
+      };
+
+      audio.play().catch((err) => {
+        console.error('❌ Erro ao executar áudio:', err);
+        setIsSpeaking(false);
+      });
+    } catch (err) {
+      console.error('❌ Erro ao processar áudio:', err);
+      setIsSpeaking(false);
+    }
+  }, []);
+
+  // ======================================================================
+  // MÉTODOS LIVE (GEMINI LIVE API REAL)
+  // ======================================================================
+  // Streaming bidirecional contínuo com Gemini 2.0
+  // Hands-free: fale naturalmente, LIA responde em tempo real
+
+  /**
+   * Handler de eventos do Gemini Live
+   * VERSÃO LIMPA - apenas atualiza estados, sem salvamento automático
+   */
+  const handleGeminiLiveEvent = useCallback((event: GeminiLiveEvent) => {
+    switch (event.type) {
+      case 'connected':
+        console.log('✅ Conectado ao Gemini Live');
+        break;
+
+      case 'listening':
+        setIsListening(true);
+        setIsSpeaking(false);
+        break;
+
+      case 'speaking':
+        setIsSpeaking(true);
+        setIsListening(false);
+        break;
+
+      // NOTA: Transcrições desabilitadas pois causam loops no Gemini Live
+      // Os handlers permanecem aqui para quando houver solução alternativa
+      case 'user-transcript':
+        // REATIVADO: Usando Whisper para transcrição (não causa loops)
+        if (event.data) {
+          // AUTO-CREATE: Garantir que conversa exista antes de adicionar mensagem
+          ensureConversationExists('live');
+
+          const userMsg: Message = {
+            id: `user_live_${Date.now()}`,
+            type: 'user',
+            content: event.data,
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, userMsg]);
+          console.log('📝 Mensagem do usuário adicionada ao histórico');
+        }
+        break;
+
+      case 'lia-transcript':
+        // REATIVADO: Usando Whisper para transcrição (não causa loops)
+        if (event.data) {
+          // AUTO-CREATE: Garantir que conversa exista antes de adicionar mensagem
+          ensureConversationExists('live');
+
+          const liaMsg: Message = {
+            id: `lia_live_${Date.now()}`,
+            type: 'lia',
+            content: event.data,
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, liaMsg]);
+          console.log('📝 Mensagem da LIA adicionada ao histórico');
+        }
+        break;
+
+      // GERANDO CONTEÚDO (imagem, gráfico, etc)
+      case 'generating-start':
+        console.log('🔄 Iniciando geração de conteúdo:', event.data?.action);
+        setIsTyping(true); // Ativa o estado de "pensando" que mostra o LuminnusLoading
+        break;
+
+      case 'generating-end':
+        console.log('✅ Geração concluída:', event.data?.action, event.data?.success);
+        setIsTyping(false);
+        break;
+
+      case 'message':
+        // Processar tipos específicos de mensagens
+        if (event.data?.type === 'image-generated') {
+          console.log('🖼️ Imagem gerada recebida, exibindo no painel dinâmico e chat');
+
+          const imageUrl = event.data.content?.url;
+          const imagePrompt = event.data.content?.prompt;
+          const imageCaption = event.data.content?.caption;
+
+          // 1. Exibir no painel dinâmico
+          setDynamicContent({
+            type: 'image',
+            data: {
+              url: imageUrl,
+              alt: imagePrompt,
+              caption: imageCaption
+            }
+          });
+
+          // 2. Adicionar mensagem com attachment ao chat (para thumbnail)
+          const liaImgMsg: Message = {
+            id: `lia_img_${Date.now()}`,
+            type: 'lia',
+            content: imageCaption || `🖼️ Imagem gerada: "${imagePrompt?.substring(0, 50)}..."`,
+            timestamp: Date.now(),
+            attachments: [{
+              name: imageCaption || 'Imagem gerada',
+              type: 'image',
+              url: imageUrl
+            }]
+          };
+          setMessages(prev => [...prev, liaImgMsg]);
+
+        } else if (event.data?.type === 'chart-generated') {
+          console.log('📊 Gráfico gerado recebido, exibindo no painel dinâmico');
+          setDynamicContent({
+            type: 'chart',
+            data: event.data.content
+          });
+
+          // Adicionar mensagem informativa ao chat
+          const liaChartMsg: Message = {
+            id: `lia_chart_${Date.now()}`,
+            type: 'lia',
+            content: '📊 Gráfico gerado! Veja no painel de conteúdo dinâmico.',
+            timestamp: Date.now()
+          };
+          setMessages(prev => [...prev, liaChartMsg]);
+
+        } else if (event.data?.type === 'table-generated') {
+          console.log('📋 Tabela gerada recebida, exibindo no painel dinâmico');
+          setDynamicContent({
+            type: 'table',
+            data: event.data.content
+          });
+
+          // Adicionar mensagem informativa ao chat
+          const liaTableMsg: Message = {
+            id: `lia_table_${Date.now()}`,
+            type: 'lia',
+            content: '📋 Tabela gerada! Veja no painel de conteúdo dinâmico.',
+            timestamp: Date.now()
+          };
+          setMessages(prev => [...prev, liaTableMsg]);
+        }
+        break;
+
+      case 'error':
+        console.error('❌ Erro Gemini Live:', event.data);
+        setIsLiveActive(false);
+        setIsListening(false);
+        setIsSpeaking(false);
+        break;
+
+      case 'end':
+        console.log('🔌 Sessão Gemini Live encerrada');
+        setIsLiveActive(false);
+        setIsListening(false);
+        setIsSpeaking(false);
+        break;
+    }
+  }, []);
+
+  /**
+   * Inicia modo live REAL com Gemini Live API
+   * Streaming bidirecional contínuo - hands-free
+   */
+  const startLiveMode = useCallback(async () => {
+    try {
+      console.log('🚀 Iniciando Gemini Live REAL...');
+
+      // ========================================
+      // AUTO-CREATE: Se não há conversa ativa, criar automaticamente
+      // ========================================
+      if (!currentIdRef.current) {
+        console.log('📝 Nenhuma conversa ativa - criando automaticamente para Live Mode...');
+        const autoConv = createConversation('live');
+        console.log(`✅ Conversa auto-criada: ${autoConv.title}`);
+      }
+
+      // Registrar handler de eventos
+      geminiLiveService.addEventListener(handleGeminiLiveEvent);
+
+      // Iniciar sessão
+      await geminiLiveService.startSession();
+
+      setIsLiveActive(true);
+      setIsListening(true);
+
+      console.log('✅ Gemini Live REAL ativado');
+      console.log('💡 Fale naturalmente - LIA responde em tempo real');
+
+    } catch (error: any) {
+      console.error('❌ Erro ao iniciar Gemini Live:', error);
+      setIsLiveActive(false);
+      geminiLiveService.removeEventListener(handleGeminiLiveEvent);
+      alert(`Erro ao iniciar Live Mode: ${error.message}`);
+    }
+  }, [handleGeminiLiveEvent]);
+
+  /**
+   * Para modo live
+   */
+  const stopLiveMode = useCallback(async () => {
+    try {
+      console.log('🛑 Parando Gemini Live...');
+
+      // Remover handler e parar sessão
+      geminiLiveService.removeEventListener(handleGeminiLiveEvent);
+      await geminiLiveService.stopSession();
+
+      setIsLiveActive(false);
+      setIsListening(false);
+      setIsSpeaking(false);
+
+      console.log('✅ Gemini Live encerrado');
+    } catch (error) {
+      console.error('❌ Erro ao parar Gemini Live:', error);
+    }
+  }, [handleGeminiLiveEvent]);
+
+  // ======================================================================
+  // MÉTODOS DE MEMÓRIA
+  // ======================================================================
+
+  const loadMemories = useCallback(async () => {
+    try {
+      const loadedMemories = await backendService.getMemories();
+      setMemories(loadedMemories);
+      console.log(`💾 ${loadedMemories.length} memórias carregadas`);
+    } catch (error) {
+      console.error('❌ Erro ao carregar memórias:', error);
+    }
+  }, []);
+
+  const saveMemory = useCallback(async (content: string, category: string = 'general') => {
+    try {
+      const success = await backendService.saveMemory(content, category);
+      if (success) {
+        // Recarregar memórias
+        await loadMemories();
+      }
+    } catch (error) {
+      console.error('❌ Erro ao salvar memória:', error);
+    }
+  }, [loadMemories]);
+
+  const deleteMemory = useCallback(async (id: string) => {
+    try {
+      const success = await backendService.deleteMemory(id);
+      if (success) {
+        setMemories((prev) => prev.filter((m) => m.id !== id));
+      }
+    } catch (error) {
+      console.error('❌ Erro ao deletar memória:', error);
+    }
+  }, []);
+
+  // ======================================================================
+  // MÉTODOS DE UPLOAD / VISION
+  // ======================================================================
+
+  /**
+   * Analisa arquivo (imagem/PDF) com Gemini Vision
+   */
+  const analyzeFile = useCallback(async (file: File) => {
+    try {
+      console.log('📤 Analisando arquivo:', file.name);
+      setIsProcessingUpload(true);
+
+      // Criar FormData
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('prompt', `Analise esta imagem/documento detalhadamente.
+        Se contiver gráficos ou dados numéricos, extraia-os.
+        Se contiver tabelas, transcreva-as.
+        Forneça insights úteis.`);
+
+      // Enviar para API
+      const response = await fetch('/api/vision/analyze', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Falha ao analisar arquivo');
+      }
+
+      const result = await response.json();
+      console.log('✅ Análise concluída:', result);
+
+      // Atualizar Dynamic Content
+      if (result.analysis) {
+        const content: DynamicContent = {
+          type: result.analysis.type || 'analysis',
+          title: result.analysis.title || `Análise: ${file.name}`,
+          data: result.analysis,
+          timestamp: Date.now(),
+        };
+        setDynamicContent(content);
+
+        // Adicionar mensagem no chat
+        const message: Message = {
+          id: `lia_${Date.now()}`,
+          type: 'lia',
+          content: result.analysis.summary || 'Análise concluída. Veja os detalhes na área de conteúdo dinâmico.',
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, message]);
+      }
+
+    } catch (error: any) {
+      console.error('❌ Erro ao analisar arquivo:', error);
+
+      const errorMessage: Message = {
+        id: `lia_${Date.now()}`,
+        type: 'lia',
+        content: `Erro ao analisar arquivo: ${error.message}`,
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+
+    } finally {
+      setIsProcessingUpload(false);
+    }
+  }, []);
+
+  // ======================================================================
+  // OUTROS MÉTODOS
+  // ======================================================================
+
+  const clearMessages = useCallback(() => {
+    setMessages([]);
+  }, []);
+
+  // ======================================================================
+  // PROVIDER VALUE
+  // ======================================================================
+
+  const value: LIAState = {
+    isConnected,
+    conversationId,
+
+    // Sistema de Conversas Isoladas
+    conversations,
+    currentConversationId,
+    createConversation,
+    switchConversation,
+    renameConversation,
+    deleteConversation,
+    getCurrentMessages,
+
+    messages,
+    isTyping,
+    voicePersonality,
+    isSpeaking,
+    isListening,
+    isLiveActive,
+    memories,
+    dynamicContent,
+    setDynamicContent,
+    isProcessingUpload,
+    setIsProcessingUpload,
+    dynamicContainers,
+    addDynamicContainer,
+    removeDynamicContainer,
+    clearDynamicContainers,
+    sendTextMessage,
+    addMessage,
+    sendMessageWithFiles,
+    sendAudioMessage,
+    transcribeAndFillInput,
+    analyzeFile,
+    setVoicePersonality,
+    startListening,
+    stopListening,
+    startLiveMode,
+    stopLiveMode,
+    loadMemories,
+    saveMemory,
+    deleteMemory,
+    clearMessages,
+  };
+
+  return <LIAContext.Provider value={value}>{children}</LIAContext.Provider>;
+}
+
+// ======================================================================
+// HOOK
+// ======================================================================
+
+export function useLIA(): LIAState {
+  const context = useContext(LIAContext);
+  if (!context) {
+    throw new Error('useLIA deve ser usado dentro de LIAProvider');
+  }
+  return context;
+}

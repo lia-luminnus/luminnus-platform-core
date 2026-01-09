@@ -1,0 +1,65 @@
+name: LIA Runtime Guard
+
+on:
+  push:
+    paths:
+      - 'packages/lia-runtime/**'
+  pull_request:
+    paths:
+      - 'packages/lia-runtime/**'
+
+jobs:
+  build-runtime:
+    name: Build @luminnus/lia-runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @luminnus/lia-runtime build
+      - run: pnpm --filter @luminnus/lia-runtime typecheck
+
+  build-admin:
+    name: Build Admin (lia-live-view)
+    needs: build-runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter lia-live-view build
+
+  build-client:
+    name: Build Dashboard-client
+    needs: build-runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter dashboard-client build
+
+  parity-check:
+    name: Parity Guard
+    needs: [build-admin, build-client]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "✅ Parity verified - both apps build successfully with shared runtime"

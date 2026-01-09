@@ -1,0 +1,237 @@
+// =====================================================
+// EMOTION ENGINE v3.0 - Decodificador de Emoções
+// =====================================================
+// SEM aleatoriedade. SEM timers. SEM rotação automática.
+// Só muda expressão quando:
+// 1. processMessage() é chamado (nova conversa)
+// 2. setEmotion() é chamado diretamente (teste)
+// =====================================================
+
+import { AvatarEngine, type ExpressionName } from './AvatarEngine'
+
+// =====================================================
+// TIPOS
+// =====================================================
+
+export interface EmotionDecision {
+    expression: ExpressionName
+    intensity: number
+    reason: string
+}
+
+export interface EmotionRequest {
+    userMessage: string
+    assistantReply: string
+    emotionTemperature: number
+}
+
+// =====================================================
+// MAPEAMENTO DE KEYWORDS → EMOÇÕES
+// =====================================================
+
+const EMOTION_KEYWORDS: Record<ExpressionName, string[]> = {
+    happy: [
+        'ótimo', 'excelente', 'maravilhoso', 'incrível', 'parabéns',
+        'legal', 'adorei', 'perfeito', 'sensacional', 'top', 'demais',
+        'feliz', 'alegria', 'sucesso', 'conseguiu', 'fantástico',
+        'haha', '😊', '😄', '🎉', 'amo', 'adoro', 'rsrs', 'kkk',
+        'obrigado', 'valeu', 'show'
+    ],
+    sad: [
+        'triste', 'infelizmente', 'sinto muito', 'pena',
+        'problema grave', 'ruim', 'mal', 'faleceu', 'morreu', 'perda',
+        'lamento', '😢', '😔', 'chorar', 'difícil demais'
+    ],
+    surprised: [
+        'uau', 'nossa', 'sério?', 'verdade?', 'não acredito',
+        'chocante', 'impressionante', 'inesperado', 'surpresa', '😮', '😲',
+        'caramba', 'puts', 'meu deus', 'inacreditável'
+    ],
+    confused: [
+        'não entendi', 'como assim', 'o que?', 'confuso', 'estranho',
+        'dúvida', 'pode explicar', 'não sei', 'incerto', '🤔', '❓',
+        'não faz sentido', 'hein'
+    ],
+    curious: [
+        'como funciona', 'por que', 'o que é', 'me conta', 'explica',
+        'interessante', 'quero saber', 'curioso', 'será que', 'conta mais',
+        'detalhes', 'e aí', 'como assim'
+    ],
+    frustrated: [
+        'não funciona', 'erro', 'bug', 'problema', 'travou', 'droga',
+        'frustrado', 'irritado', '😤', 'que saco', 'de novo não'
+    ],
+    proud: [
+        'consegui', 'fiz isso', 'orgulho', 'realizei', 'completei',
+        'terminei', 'vitória', 'conquista', 'alcancei', '💪', '🏆'
+    ],
+    focused: [
+        'deixa eu ver', 'analisando', 'processando',
+        'calculando', 'verificando', 'aguarde', 'um momento',
+        'vou verificar', 'deixa eu pensar'
+    ],
+    bored: [
+        'chato', 'entediante', 'meh', 'tanto faz', 'sei lá', 'preguiça',
+        'blá blá'
+    ],
+    fearful: [
+        'medo', 'preocupado', 'ansioso', 'nervoso', 'assustado',
+        'perigoso', 'cuidado', 'alerta', '😰', '😨'
+    ],
+    contempt: [
+        'ridículo', 'absurdo', 'patético', 'péssimo', 'vergonha'
+    ],
+    envious: [
+        'inveja', 'queria ter', 'gostaria de ter', 'sorte sua'
+    ],
+    neutral: []
+}
+
+// =====================================================
+// CLASSE
+// =====================================================
+
+class EmotionEngineClass {
+    constructor() {
+        console.log('🧠 EmotionEngine v3.0 inicializado (Sem aleatoriedade)')
+    }
+
+    // =====================================================
+    // DEFINIR EMOÇÃO DIRETAMENTE (para testes)
+    // =====================================================
+
+    setEmotion(expression: ExpressionName) {
+        console.log(`🧠 EmotionEngine: Definindo ${expression}`)
+        AvatarEngine.applyEmotion(expression)
+    }
+
+    // =====================================================
+    // PROCESSAR MENSAGEM (chamado após resposta da LIA)
+    // =====================================================
+
+    async processMessage(
+        userMessage: string,
+        assistantReply: string,
+        temperature: number = 5
+    ): Promise<EmotionDecision> {
+        // Primeiro, tentar backend GPT
+        try {
+            const backendResult = await this.callBackend({
+                userMessage,
+                assistantReply,
+                emotionTemperature: temperature
+            })
+
+            if (backendResult) {
+                AvatarEngine.setEmotionTemperature(temperature)
+                AvatarEngine.applyEmotion(backendResult.expression)
+                return backendResult
+            }
+        } catch (error) {
+            console.warn('🧠 Backend indisponível, usando fallback local')
+        }
+
+        // Fallback: análise local por keywords
+        const decision = this.analyzeLocally(userMessage, assistantReply, temperature)
+
+        AvatarEngine.setEmotionTemperature(temperature)
+        AvatarEngine.applyEmotion(decision.expression)
+
+        return decision
+    }
+
+    // =====================================================
+    // ANÁLISE LOCAL (fallback sem GPT)
+    // =====================================================
+
+    private analyzeLocally(
+        userMessage: string,
+        assistantReply: string,
+        temperature: number
+    ): EmotionDecision {
+        const text = `${userMessage} ${assistantReply}`.toLowerCase()
+
+        // Pontuar cada expressão
+        let bestExpr: ExpressionName = 'neutral'
+        let bestScore = 0
+
+        for (const [expr, keywords] of Object.entries(EMOTION_KEYWORDS)) {
+            if (expr === 'neutral') continue
+
+            let score = 0
+            for (const kw of keywords) {
+                if (text.includes(kw.toLowerCase())) {
+                    score += 1
+                }
+            }
+
+            if (score > bestScore) {
+                bestScore = score
+                bestExpr = expr as ExpressionName
+            }
+        }
+
+        // Se nenhuma keyword, usar padrão baseado na temperatura
+        if (bestScore === 0) {
+            if (temperature >= 7) bestExpr = 'happy'
+            else if (temperature >= 5) bestExpr = 'curious'
+            else if (temperature >= 3) bestExpr = 'focused'
+            else bestExpr = 'neutral'
+        }
+
+        console.log(`🧠 EmotionEngine (local): ${bestExpr} (score: ${bestScore})`)
+
+        return {
+            expression: bestExpr,
+            intensity: Math.min(1, bestScore / 3),
+            reason: `keywords (score: ${bestScore})`
+        }
+    }
+
+    // =====================================================
+    // CHAMAR BACKEND /api/emotion-decode
+    // =====================================================
+
+    private async callBackend(request: EmotionRequest): Promise<EmotionDecision | null> {
+        try {
+            const response = await fetch('/api/emotion-decode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(request)
+            })
+
+            if (!response.ok) return null
+
+            const data = await response.json()
+
+            console.log(`🧠 EmotionEngine (GPT): ${data.expression}`)
+
+            return {
+                expression: data.expression || 'neutral',
+                intensity: data.intensity || 0.5,
+                reason: 'GPT'
+            }
+        } catch {
+            return null
+        }
+    }
+
+    // =====================================================
+    // MÉTODOS RÁPIDOS PARA TESTES
+    // =====================================================
+
+    testHappy() { this.setEmotion('happy') }
+    testSad() { this.setEmotion('sad') }
+    testSurprised() { this.setEmotion('surprised') }
+    testConfused() { this.setEmotion('confused') }
+    testCurious() { this.setEmotion('curious') }
+    testFocused() { this.setEmotion('focused') }
+    testNeutral() { this.setEmotion('neutral') }
+}
+
+// =====================================================
+// SINGLETON
+// =====================================================
+
+export const EmotionEngine = new EmotionEngineClass()
+export default EmotionEngine

@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+
+/* LIA Live View - Custom Styles */
+
+/* ========================================
+   AVATAR ANIMATIONS - Cross-fade System
+   ======================================== */
+
+/* Fade In Animation */
+@keyframes avatarFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Fade Out Animation */
+@keyframes avatarFadeOut {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+}
+
+/* CSS Classes for Avatar Transitions */
+.avatar-fade-in {
+  animation: avatarFadeIn 300ms ease-out forwards;
+}
+
+.avatar-fade-out {
+  animation: avatarFadeOut 300ms ease-out forwards;
+}
+
+/* Smooth Image Loading */
+.avatar-image-container img {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* ========================================
+   RESPONSIVE AVATAR SIZING
+   ======================================== */
+
+@media (max-width: 768px) {
+  .avatar-container {
+    width: 180px !important;
+    height: 180px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .avatar-container {
+    width: 140px !important;
+    height: 140px !important;
+  }
+}
+
+/* ========================================
+   PERFORMANCE OPTIMIZATIONS
+   ======================================== */
+
+/* GPU Acceleration for Smooth Animations */
+.avatar-accelerated {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* Prevent Layout Shift During Image Load */
+.avatar-placeholder {
+  background: linear-gradient(135deg, #0ff0fc 0%, #000000 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

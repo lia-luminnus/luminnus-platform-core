@@ -9,17 +9,26 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/genai": "1.31.0",
+    "@google/generative-ai": "0.24.1",
+    "@supabase/supabase-js": "^2.89.0",
+    "framer-motion": "10.16.4",
+    "lucide-react": "^0.556.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "react-router-dom": "6.22.3",
-    "@google/genai": "^1.30.0",
-    "recharts": "2.12.3",
-    "zustand": "^5.0.8",
     "react-hot-toast": "2.4.1",
-    "framer-motion": "10.16.4"
+    "react-router-dom": "6.22.3",
+    "recharts": "2.12.3",
+    "socket.io-client": "^4.8.1",
+    "zustand": "^5.0.8",
+    "@luminnus/lia-runtime": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/react-router-dom": "^5.3.3",
+    "@types/recharts": "^1.8.29",
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"

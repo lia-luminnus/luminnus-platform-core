@@ -94,24 +94,25 @@ export interface BusinessCategory {
 
 // --- Modular System Types ---
 
-export type ModuleId = 
-  | 'dashboard' 
-  | 'crm' 
-  | 'lia' 
-  | 'calendar' 
-  | 'files' 
-  | 'automations' 
-  | 'financial' 
-  | 'team' 
-  | 'stock' 
-  | 'projects' 
-  | 'logistics' 
-  | 'properties' 
-  | 'medical_records' 
+export type ModuleId =
+  | 'dashboard'
+  | 'crm'
+  | 'lia'
+  | 'integrations'
+  | 'calendar'
+  | 'files'
+  | 'automations'
+  | 'financial'
+  | 'team'
+  | 'stock'
+  | 'projects'
+  | 'logistics'
+  | 'properties'
+  | 'medical_records'
   | 'sales'
   | 'reports'
-  | 'settings' 
-  | 'plan' 
+  | 'settings'
+  | 'plan'
   | 'support';
 
 export interface ModuleDefinition {

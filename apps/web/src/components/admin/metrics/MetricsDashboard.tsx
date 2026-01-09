@@ -325,18 +325,10 @@ const MetricsDashboard = () => {
                   {formatCost(metrics?.gemini?.custo_mes || 0)}
                 </span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Minutos</span>
-                <span className="font-medium">
-                  {(metrics?.cartesia.minutos_fala || 0).toFixed(1)}min
-                </span>
-              </div>
               <div className="pt-2 border-t flex justify-between items-center">
-                <span className="font-bold text-green-600">
-                  {formatCost(metrics?.cartesia.custo_mes || 0)}
-                </span>
-                {getProviderLatency('cartesia') > 0 && (
-                  <p className="text-xs text-gray-400">{formatLatency(getProviderLatency('cartesia'))}</p>
+                <p className="text-xs text-gray-500">Modelo: Gemini 1.5 Flash</p>
+                {getProviderLatency('gemini') > 0 && (
+                  <p className="text-xs text-gray-400">{formatLatency(getProviderLatency('gemini'))}</p>
                 )}
               </div>
             </div>

@@ -30,6 +30,22 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:site" content="@Luminnus" />
   <meta name="twitter:image" content="/favicon.png" />
+
+  <!-- OAuth Callback Redirect Script -->
+  <!-- Detecta se o Google redirecionou para a raiz em vez de /oauth-callback -->
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var code = params.get('code');
+      var error = params.get('error');
+      var isAtRoot = window.location.pathname === '/' || window.location.pathname === '/index.html';
+
+      if ((code || error) && isAtRoot) {
+        console.log('[OAuth Redirect] Detectado callback na raiz, redirecionando...');
+        window.location.href = window.location.origin + '/oauth-callback' + window.location.search;
+      }
+    })();
+  </script>
 </head>
 
 <body>

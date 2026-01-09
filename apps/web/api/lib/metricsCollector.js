@@ -181,12 +181,13 @@ async function checkGemini() {
 
   try {
     // Tentar pegar do banco primeiro
-    const { data: config } = await supabase.from('lia_configurations').select('metrics_settings').maybeSingle();
+    const { data: config } = await supabase.from('lia_configurations').select('gemini_api_key, metrics_settings').maybeSingle();
     let apiKey = process.env.GEMINI_API_KEY;
 
-    if (config?.metrics_settings) {
+    if (config) {
       const settings = typeof config.metrics_settings === 'string' ? JSON.parse(config.metrics_settings) : config.metrics_settings;
-      apiKey = settings?.geminiApiKey || apiKey;
+      // Prioridade: Coluna nativa -> JSON -> Env
+      apiKey = config.gemini_api_key || settings?.geminiApiKey || apiKey;
     }
 
     if (!apiKey) {

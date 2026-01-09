@@ -6,24 +6,25 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  MetricsOpenAI,
+  MetricsOpenAIInsert,
   MetricsGemini,
+  MetricsGeminiInsert,
   MetricsRender,
+  MetricsRenderInsert,
   MetricsCloudflare,
+  MetricsCloudflareInsert,
   MetricsSupabase,
+  MetricsSupabaseInsert,
   MetricsSummary,
   MetricsAlert,
+  MetricsAlertInsert,
   DashboardMetricsSummary,
   MetricsByCompany,
   MetricsByUser,
   DailyMetric,
   OPENAI_PRICES,
   GEMINI_PRICES,
-  MetricsOpenAIInsert,
-  MetricsGeminiInsert,
-  MetricsRenderInsert,
-  MetricsCloudflareInsert,
-  MetricsSupabaseInsert,
-  MetricsAlertInsert,
   RenderErrorLog,
   TrafegoRota,
   ConsumoTabela,
@@ -53,13 +54,20 @@ export const useMetricsOpenAI = (days: number = 30) => {
       startDate.setDate(startDate.getDate() - days);
 
       const { data, error } = await supabase
-        .from("metrics_openai")
+        .from("provider_metrics")
         .select("*")
-        .gte("data", startDate.toISOString().split("T")[0])
-        .order("data", { ascending: false });
+        .eq("provider", "openai")
+        .gte("date", startDate.toISOString().split("T")[0])
+        .order("date", { ascending: false });
 
       if (error) throw error;
-      return (data || []) as MetricsOpenAI[];
+      return (data || []).map(item => ({
+        ...item,
+        data: item.date,
+        tokens_total: (item.tokens_input || 0) + (item.tokens_output || 0),
+        custo_estimado: item.cost || 0,
+        modelo: 'gpt-4o-mini'
+      })) as unknown as MetricsOpenAI[];
     },
   });
 };
@@ -72,9 +80,10 @@ export const useMetricsOpenAIByCompany = () => {
       startOfMonth.setDate(1);
 
       const { data: metrics, error: metricsError } = await supabase
-        .from("metrics_openai")
-        .select("empresa_id, tokens_input, tokens_output, custo_estimado")
-        .gte("data", startOfMonth.toISOString().split("T")[0]);
+        .from("provider_metrics")
+        .select("empresa_id, tokens_input, tokens_output, cost")
+        .eq("provider", "openai")
+        .gte("date", startOfMonth.toISOString().split("T")[0]);
 
       if (metricsError) throw metricsError;
 
@@ -108,7 +117,7 @@ export const useMetricsOpenAIByCompany = () => {
 
         const current = aggregated.get(empresaId)!;
         current.total += (m.tokens_input || 0) + (m.tokens_output || 0);
-        current.custo += m.custo_estimado || 0;
+        current.custo += (m as any).cost || 0;
       });
 
       aggregated.forEach(item => {
@@ -128,9 +137,10 @@ export const useMetricsOpenAIByUser = () => {
       startOfMonth.setDate(1);
 
       const { data: metrics, error: metricsError } = await supabase
-        .from("metrics_openai")
-        .select("usuario_id, tokens_input, tokens_output, custo_estimado")
-        .gte("data", startOfMonth.toISOString().split("T")[0]);
+        .from("provider_metrics")
+        .select("usuario_id, tokens_input, tokens_output, cost")
+        .eq("provider", "openai")
+        .gte("date", startOfMonth.toISOString().split("T")[0]);
 
       if (metricsError) throw metricsError;
 
@@ -159,7 +169,7 @@ export const useMetricsOpenAIByUser = () => {
 
         const current = aggregated.get(userId)!;
         current.total += (m.tokens_input || 0) + (m.tokens_output || 0);
-        current.custo += m.custo_estimado || 0;
+        current.custo += (m as any).cost || 0;
       });
 
       return Array.from(aggregated.values()).sort((a, b) => b.total - a.total);
@@ -187,7 +197,13 @@ export const useMetricsGemini = (days: number = 30) => {
         .order("date", { ascending: false });
 
       if (error) throw error;
-      return (data || []) as MetricsGemini[];
+      return (data || []).map(item => ({
+        ...item,
+        data: item.date,
+        tokens_total: (item.tokens_input || 0) + (item.tokens_output || 0),
+        custo_estimado: item.cost || 0,
+        modelo: 'gemini-1.5-flash'
+      })) as unknown as MetricsGemini[];
     },
   });
 };
@@ -203,61 +219,7 @@ export const useMetricsGeminiByCompany = () => {
   });
 };
 
-export const useMetricsCartesiaByCompany = () => {
-  return useQuery({
-    queryKey: ["metrics_cartesia_by_company"],
-    queryFn: async () => {
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-
-      const { data: metrics, error: metricsError } = await supabase
-        .from("metrics_cartesia")
-        .select("empresa_id, caracteres_enviados, creditos_usados, custo_estimado")
-        .gte("data", startOfMonth.toISOString().split("T")[0]);
-
-      if (metricsError) throw metricsError;
-
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("id, company_name");
-
-      if (profilesError) throw profilesError;
-
-      const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
-      const aggregated = new Map<string, MetricsByCompany>();
-
-      let totalCreditos = 0;
-      metrics?.forEach(m => {
-        totalCreditos += m.creditos_usados || 0;
-      });
-
-      metrics?.forEach(m => {
-        const empresaId = m.empresa_id || 'sem_empresa';
-        const profile = m.empresa_id ? profileMap.get(m.empresa_id) : null;
-
-        if (!aggregated.has(empresaId)) {
-          aggregated.set(empresaId, {
-            empresa_id: empresaId,
-            empresa_nome: profile?.company_name || 'Sem empresa',
-            total: 0,
-            custo: 0,
-            percentual: 0,
-          });
-        }
-
-        const current = aggregated.get(empresaId)!;
-        current.total += m.creditos_usados || 0;
-        current.custo += m.custo_estimado || 0;
-      });
-
-      aggregated.forEach(item => {
-        item.percentual = totalCreditos > 0 ? (item.total / totalCreditos) * 100 : 0;
-      });
-
-      return Array.from(aggregated.values()).sort((a, b) => b.total - a.total);
-    },
-  });
-};
+// Cartesia removida
 
 // =====================================================
 // HOOK: MÉTRICAS RENDER
@@ -270,11 +232,12 @@ export const useMetricsRender = (days: number = 30) => {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
 
-      const { data, error } = await supabase
-        .from("metrics_render")
+      const { data, error } = await (supabase as any)
+        .from("provider_metrics")
         .select("*")
-        .gte("data", startDate.toISOString().split("T")[0])
-        .order("data", { ascending: false });
+        .eq("provider", "render")
+        .gte("date", startDate.toISOString().split("T")[0])
+        .order("date", { ascending: false });
 
       if (error) throw error;
       return (data || []).map(item => ({
@@ -289,9 +252,10 @@ export const useMetricsRenderLatest = () => {
   return useQuery({
     queryKey: ["metrics_render_latest"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("metrics_render")
+      const { data, error } = await (supabase as any)
+        .from("provider_metrics")
         .select("*")
+        .eq("provider", "render")
         .order("created_at", { ascending: false })
         .limit(1)
         .single();
@@ -318,16 +282,21 @@ export const useMetricsCloudflare = (days: number = 30) => {
       startDate.setDate(startDate.getDate() - days);
 
       const { data, error } = await supabase
-        .from("metrics_cloudflare")
+        .from("provider_metrics")
         .select("*")
-        .gte("data", startDate.toISOString().split("T")[0])
-        .order("data", { ascending: false });
+        .eq("provider", "cloudflare")
+        .gte("date", startDate.toISOString().split("T")[0])
+        .order("date", { ascending: false });
 
       if (error) throw error;
       return (data || []).map(item => ({
         ...item,
-        trafego_rota: (item.trafego_rota || {}) as TrafegoRota,
-      })) as MetricsCloudflare[];
+        data: item.date,
+        requests_dia: item.requests || 0,
+        custo_estimado: item.cost || 0,
+        trafego_rota: {} as TrafegoRota,
+        plano: 'free'
+      })) as unknown as MetricsCloudflare[];
     },
   });
 };
@@ -340,9 +309,10 @@ export const useMetricsCloudflareByCompany = () => {
       startOfMonth.setDate(1);
 
       const { data: metrics, error: metricsError } = await supabase
-        .from("metrics_cloudflare")
-        .select("empresa_id, requests_dia, custo_estimado")
-        .gte("data", startOfMonth.toISOString().split("T")[0]);
+        .from("provider_metrics")
+        .select("empresa_id, requests, cost")
+        .eq("provider", "cloudflare")
+        .gte("date", startOfMonth.toISOString().split("T")[0]);
 
       if (metricsError) throw metricsError;
 
@@ -357,7 +327,7 @@ export const useMetricsCloudflareByCompany = () => {
 
       let totalRequests = 0;
       metrics?.forEach(m => {
-        totalRequests += m.requests_dia || 0;
+        totalRequests += (m as any).requests || 0;
       });
 
       metrics?.forEach(m => {
@@ -375,8 +345,8 @@ export const useMetricsCloudflareByCompany = () => {
         }
 
         const current = aggregated.get(empresaId)!;
-        current.total += m.requests_dia || 0;
-        current.custo += m.custo_estimado || 0;
+        current.total += m.requests || 0;
+        current.custo += m.cost || 0;
       });
 
       aggregated.forEach(item => {
@@ -400,16 +370,22 @@ export const useMetricsSupabase = (days: number = 30) => {
       startDate.setDate(startDate.getDate() - days);
 
       const { data, error } = await supabase
-        .from("metrics_supabase")
+        .from("provider_metrics")
         .select("*")
-        .gte("data", startDate.toISOString().split("T")[0])
-        .order("data", { ascending: false });
+        .eq("provider", "supabase")
+        .gte("date", startDate.toISOString().split("T")[0])
+        .order("date", { ascending: false });
 
       if (error) throw error;
       return (data || []).map(item => ({
         ...item,
-        consumo_tabela: (item.consumo_tabela || {}) as ConsumoTabela,
-      })) as MetricsSupabase[];
+        data: item.date,
+        leituras_segundo: item.reads || 0,
+        escritas_segundo: item.writes || 0,
+        storage_usado_mb: item.storage_mb || 0,
+        custo_estimado: item.cost || 0,
+        consumo_tabela: {} as ConsumoTabela,
+      })) as unknown as MetricsSupabase[];
     },
   });
 };
@@ -419,18 +395,24 @@ export const useMetricsSupabaseLatest = () => {
     queryKey: ["metrics_supabase_latest"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("metrics_supabase")
+        .from("provider_metrics")
         .select("*")
+        .eq("provider", "supabase")
         .order("created_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (error && error.code !== 'PGRST116') throw error;
       if (!data) return null;
       return {
         ...data,
-        consumo_tabela: (data.consumo_tabela || {}) as ConsumoTabela,
-      } as MetricsSupabase;
+        data: data.date,
+        leituras_segundo: data.reads || 0,
+        escritas_segundo: data.writes || 0,
+        storage_usado_mb: data.storage_mb || 0,
+        custo_estimado: data.cost || 0,
+        consumo_tabela: {} as ConsumoTabela,
+      } as unknown as MetricsSupabase;
     },
   });
 };
@@ -490,41 +472,41 @@ export const useDashboardMetrics = () => {
       const startDateStr = startOfMonth.toISOString().split("T")[0];
 
       // Buscar todas as métricas do mês em paralelo
-      const [openaiRes, cartesiaRes, renderRes, cloudflareRes, supabaseRes] = await Promise.all([
-        supabase
-          .from("metrics_openai")
-          .select("tokens_input, tokens_output, custo_estimado")
-          .gte("data", startDateStr),
-        supabase
+      const [openaiRes, geminiRes, renderRes, cloudflareRes, supabaseRes] = await Promise.all([
+        (supabase as any)
+          .from("provider_metrics")
+          .select("tokens_input, tokens_output, cost")
+          .eq("provider", "openai")
+          .gte("date", startDateStr),
+        (supabase as any)
           .from("provider_metrics")
           .select("tokens_input, tokens_output, cost")
           .eq("provider", "gemini")
           .gte("date", startDateStr),
-        supabase
-          .from("metrics_render")
-          .select("status, chamadas_dia, custo_mensal")
-          .gte("data", startDateStr)
-          .order("created_at", { ascending: false })
-          .limit(1),
-        supabase
-          .from("metrics_cloudflare")
-          .select("requests_dia, workers_executados, custo_estimado")
-          .gte("data", startDateStr),
-        supabase
-          .from("metrics_supabase")
-          .select("leituras_segundo, escritas_segundo, storage_usado_mb, storage_limite_mb, custo_estimado")
-          .gte("data", startDateStr)
-          .order("created_at", { ascending: false })
-          .limit(1),
+        (supabase as any)
+          .from("provider_metrics")
+          .select("requests, cost")
+          .eq("provider", "render")
+          .gte("date", startDateStr),
+        (supabase as any)
+          .from("provider_metrics")
+          .select("requests, cost")
+          .eq("provider", "cloudflare")
+          .gte("date", startDateStr),
+        (supabase as any)
+          .from("provider_metrics")
+          .select("reads, writes, storage_mb, cost")
+          .eq("provider", "supabase")
+          .gte("date", startDateStr),
       ]);
 
       // Calcular totais OpenAI
-      const openaiMetrics = openaiRes.data || [];
+      const openaiMetrics = (openaiRes.data || []) as any[];
       const openaiTokens = openaiMetrics.reduce(
         (acc, m) => acc + (m.tokens_input || 0) + (m.tokens_output || 0),
         0
       );
-      const openaiCusto = openaiMetrics.reduce((acc, m) => acc + (m.custo_estimado || 0), 0);
+      const openaiCusto = openaiMetrics.reduce((acc, m) => acc + (m.cost || 0), 0);
 
       // Calcular totais Gemini
       const geminiMetrics = (geminiRes.data || []) as any[];
@@ -535,22 +517,19 @@ export const useDashboardMetrics = () => {
       // Render status
       const renderLatest = renderRes.data?.[0];
       const renderChamadas = (renderRes.data || []).reduce(
-        (acc, m) => acc + (m.chamadas_dia || 0),
+        (acc, m) => acc + (m.requests || 0),
         0
       );
 
       // Cloudflare totais
       const cloudflareMetrics = cloudflareRes.data || [];
       const cloudflareRequests = cloudflareMetrics.reduce(
-        (acc, m) => acc + (m.requests_dia || 0),
+        (acc, m) => acc + (m.requests || 0),
         0
       );
-      const cloudflareWorkers = cloudflareMetrics.reduce(
-        (acc, m) => acc + (m.workers_executados || 0),
-        0
-      );
+      const cloudflareWorkers = 0; // Campo não existe na tabela unificada
       const cloudflareCusto = cloudflareMetrics.reduce(
-        (acc, m) => acc + (m.custo_estimado || 0),
+        (acc, m) => acc + (m.cost || 0),
         0
       );
 
@@ -561,9 +540,9 @@ export const useDashboardMetrics = () => {
       const custoTotal =
         openaiCusto +
         geminiCusto +
-        (renderLatest?.custo_mensal || 0) +
+        (renderRes.data?.[0]?.cost || 0) +
         cloudflareCusto +
-        (supabaseLatest?.custo_estimado || 0);
+        (supabaseLatest?.cost || 0);
 
       // Projeção para fim do mês
       const hoje = new Date();
@@ -586,7 +565,7 @@ export const useDashboardMetrics = () => {
           status: (renderLatest?.status as 'online' | 'offline' | 'degraded') || 'online',
           uptime_percent: 99.9, // Calcular baseado no histórico
           chamadas_mes: renderChamadas,
-          custo_mes: renderLatest?.custo_mensal || 0,
+          custo_mes: (renderLatest as any)?.cost || 0,
         },
         cloudflare: {
           requests_mes: cloudflareRequests,
@@ -594,13 +573,13 @@ export const useDashboardMetrics = () => {
           custo_mes: cloudflareCusto,
         },
         supabase: {
-          leituras_total: supabaseLatest?.leituras_segundo || 0,
-          escritas_total: supabaseLatest?.escritas_segundo || 0,
+          leituras_total: (supabaseLatest as any)?.reads || 0,
+          escritas_total: (supabaseLatest as any)?.writes || 0,
           storage_usado_percent:
-            supabaseLatest && supabaseLatest.storage_limite_mb > 0
-              ? (supabaseLatest.storage_usado_mb / supabaseLatest.storage_limite_mb) * 100
+            supabaseLatest && (supabaseLatest as any).storage_mb > 0
+              ? (((supabaseLatest as any).storage_mb || 0) / 500) * 100 // Fallback para 500MB se limite for 0
               : 0,
-          custo_mes: supabaseLatest?.custo_estimado || 0,
+          custo_mes: (supabaseLatest as any)?.cost || 0,
         },
         custo_total_mes: custoTotal,
         projecao_fim_mes: projecao,
@@ -623,40 +602,23 @@ export const useChartData = (source: 'openai' | 'gemini' | 'cloudflare' | 'rende
       let query;
       switch (source) {
         case 'openai':
-          query = supabase
-            .from("metrics_openai")
-            .select("data, tokens_input, tokens_output, custo_estimado")
-            .gte("data", startDate.toISOString().split("T")[0])
-            .order("data", { ascending: true });
-          break;
         case 'gemini':
           query = supabase
             .from("provider_metrics")
             .select("date, tokens_input, tokens_output, cost")
-            .eq("provider", "gemini")
+            .eq("provider", source)
             .gte("date", startDate.toISOString().split("T")[0])
             .order("date", { ascending: true });
           break;
         case 'cloudflare':
-          query = supabase
-            .from("metrics_cloudflare")
-            .select("data, requests_dia, custo_estimado")
-            .gte("data", startDate.toISOString().split("T")[0])
-            .order("data", { ascending: true });
-          break;
         case 'render':
-          query = supabase
-            .from("metrics_render")
-            .select("data, chamadas_dia, custo_mensal")
-            .gte("data", startDate.toISOString().split("T")[0])
-            .order("data", { ascending: true });
-          break;
         case 'supabase':
           query = supabase
-            .from("metrics_supabase")
-            .select("data, leituras_segundo, escritas_segundo, custo_estimado")
-            .gte("data", startDate.toISOString().split("T")[0])
-            .order("data", { ascending: true });
+            .from("provider_metrics")
+            .select("date, storage_mb, cost, reads, writes")
+            .eq("provider", source)
+            .gte("date", startDate.toISOString().split("T")[0])
+            .order("date", { ascending: true });
           break;
       }
 
@@ -666,8 +628,8 @@ export const useChartData = (source: 'openai' | 'gemini' | 'cloudflare' | 'rende
       // Agregar por data
       const dailyMap = new Map<string, { valor: number; custo: number }>();
 
-      data?.forEach((item: Record<string, unknown>) => {
-        const dateStr = (item.data || item.date) as string;
+      data?.forEach((item: any) => {
+        const dateStr = item.date as string;
         if (!dailyMap.has(dateStr)) {
           dailyMap.set(dateStr, { valor: 0, custo: 0 });
         }
@@ -675,24 +637,18 @@ export const useChartData = (source: 'openai' | 'gemini' | 'cloudflare' | 'rende
         const current = dailyMap.get(dateStr)!;
         switch (source) {
           case 'openai':
-            current.valor += ((item.tokens_input as number) || 0) + ((item.tokens_output as number) || 0);
-            current.custo += (item.custo_estimado as number) || 0;
-            break;
           case 'gemini':
-            current.valor += ((item.tokens_input as number) || 0) + ((item.tokens_output as number) || 0);
-            current.custo += (item.cost as number) || 0;
+            current.valor += (item.tokens_input || 0) + (item.tokens_output || 0);
+            current.custo += item.cost || 0;
             break;
           case 'cloudflare':
-            current.valor += (item.requests_dia as number) || 0;
-            current.custo += (item.custo_estimado as number) || 0;
-            break;
           case 'render':
-            current.valor += (item.chamadas_dia as number) || 0;
-            current.custo += (item.custo_mensal as number) || 0;
+            current.valor += item.requests || 0;
+            current.custo += item.cost || 0;
             break;
           case 'supabase':
-            current.valor += ((item.leituras_segundo as number) || 0) + ((item.escritas_segundo as number) || 0);
-            current.custo += (item.custo_estimado as number) || 0;
+            current.valor += (item.reads || 0) + (item.writes || 0);
+            current.custo += item.cost || 0;
             break;
         }
       });
@@ -716,9 +672,12 @@ export const useInsertMetricsOpenAI = () => {
   return useMutation({
     mutationFn: async (data: MetricsOpenAIInsert) => {
       const custo = calcularCustoOpenAI(data.tokens_input, data.tokens_output);
-      const { error } = await supabase.from("metrics_openai").insert({
-        ...data,
-        custo_estimado: custo,
+      const { error } = await supabase.from("provider_metrics").insert({
+        provider: "openai",
+        date: data.data || new Date().toISOString().split('T')[0],
+        tokens_input: data.tokens_input,
+        tokens_output: data.tokens_output,
+        cost: custo,
       });
       if (error) throw error;
     },
@@ -756,11 +715,13 @@ export const useInsertMetricsRender = () => {
 
   return useMutation({
     mutationFn: async (data: MetricsRenderInsert) => {
-      const payload = {
-        ...data,
-        logs_erro: data.logs_erro as unknown as any,
-      };
-      const { error } = await supabase.from("metrics_render").insert([payload]);
+      const { error } = await supabase.from("provider_metrics").insert({
+        provider: "render",
+        date: data.data || new Date().toISOString().split('T')[0],
+        requests: data.chamadas_dia,
+        cost: data.custo_mensal || 0,
+        metadata: { status: data.status, instance: data.instancia_tipo }
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -775,7 +736,12 @@ export const useInsertMetricsCloudflare = () => {
 
   return useMutation({
     mutationFn: async (data: MetricsCloudflareInsert) => {
-      const { error } = await supabase.from("metrics_cloudflare").insert(data);
+      const { error } = await supabase.from("provider_metrics").insert({
+        provider: "cloudflare",
+        date: data.data || new Date().toISOString().split('T')[0],
+        requests: data.requests_dia,
+        cost: data.custo_estimado || 0,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -790,7 +756,14 @@ export const useInsertMetricsSupabase = () => {
 
   return useMutation({
     mutationFn: async (data: MetricsSupabaseInsert) => {
-      const { error } = await supabase.from("metrics_supabase").insert(data);
+      const { error } = await supabase.from("provider_metrics").insert({
+        provider: "supabase",
+        date: data.data || new Date().toISOString().split('T')[0],
+        reads: data.leituras_segundo,
+        writes: data.escritas_segundo,
+        storage_mb: data.storage_usado_mb,
+        cost: data.custo_estimado || 0,
+      });
       if (error) throw error;
     },
     onSuccess: () => {

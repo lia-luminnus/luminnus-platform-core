@@ -1,0 +1,1004 @@
+// ======================================================================
+// 🎙️ GEMINI LIVE SERVICE - Conversação em tempo real com Gemini 2.0
+// ======================================================================
+// Implementação REAL com WebSocket bidirecional
+// Usa @google/genai SDK com ai.live.connect()
+// ======================================================================
+
+import { GoogleGenAI, Modality } from '@google/genai';
+
+// ======================================================================
+// TYPES
+// ======================================================================
+
+export interface GeminiLiveSession {
+  id: string;
+  isActive: boolean;
+  isListening: boolean;
+  isSpeaking: boolean;
+}
+
+export interface GeminiLiveEvent {
+  type: 'listening' | 'speaking' | 'message' | 'error' | 'end' | 'connected' | 'user-transcript' | 'lia-transcript' | 'generating-start' | 'generating-end';
+  data?: any;
+}
+
+// ======================================================================
+// AUDIO UTILITIES
+// ======================================================================
+
+/**
+ * Converte Float32Array para Int16Array (PCM 16-bit)
+ */
+function floatTo16BitPCM(float32Array: Float32Array): Int16Array {
+  const int16Array = new Int16Array(float32Array.length);
+  for (let i = 0; i < float32Array.length; i++) {
+    const s = Math.max(-1, Math.min(1, float32Array[i]));
+    int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return int16Array;
+}
+
+/**
+ * Converte Int16Array para base64
+ */
+function int16ArrayToBase64(int16Array: Int16Array): string {
+  const uint8Array = new Uint8Array(int16Array.buffer);
+  let binary = '';
+  for (let i = 0; i < uint8Array.length; i++) {
+    binary += String.fromCharCode(uint8Array[i]);
+  }
+  return btoa(binary);
+}
+
+/**
+ * Converte base64 para ArrayBuffer (PCM 24kHz)
+ */
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+/**
+ * Downsampling de áudio - converte sample rate maior para menor
+ * Ex: 48kHz → 16kHz (fator 3)
+ */
+function downsampleAudio(input: Float32Array, fromRate: number, toRate: number): Float32Array {
+  if (fromRate === toRate) return input;
+
+  const ratio = fromRate / toRate;
+  const outputLength = Math.floor(input.length / ratio);
+  const output = new Float32Array(outputLength);
+
+  for (let i = 0; i < outputLength; i++) {
+    // Média simples dos samples no intervalo
+    const start = Math.floor(i * ratio);
+    const end = Math.floor((i + 1) * ratio);
+    let sum = 0;
+    for (let j = start; j < end && j < input.length; j++) {
+      sum += input[j];
+    }
+    output[i] = sum / (end - start);
+  }
+
+  return output;
+}
+
+// ======================================================================
+// SERVICE
+// ======================================================================
+
+class GeminiLiveService {
+  private currentSession: GeminiLiveSession | null = null;
+  private genAI: GoogleGenAI | null = null;
+  private liveSession: any = null;
+  private audioContext: AudioContext | null = null;
+  private mediaStream: MediaStream | null = null;
+  private audioWorklet: AudioWorkletNode | null = null;
+  private eventListeners: ((event: GeminiLiveEvent) => void)[] = [];
+  private audioQueue: ArrayBuffer[] = [];
+  private isPlayingAudio = false;
+
+  // CORREÇÃO: Acumular toolCalls para processar APÓS turnComplete
+  private pendingToolCalls: any[] = [];
+  private lastToolCallId: string | null = null; // Filtrar duplicados
+
+  // TRANSCRIÇÃO WHISPER: Acumular áudio para transcrever
+  private userAudioChunks: Int16Array[] = [];     // Áudio do usuário (PCM 16-bit)
+  private liaAudioChunks: ArrayBuffer[] = [];     // Áudio da LIA (PCM 24kHz)
+  private isUserSpeaking: boolean = false;        // Flag para detectar silêncio
+  private silenceTimeout: NodeJS.Timeout | null = null;
+
+  // ESTABILIZAÇÃO: Lock para evitar race conditions
+  private isProcessingTurn: boolean = false;
+  private readonly MAX_CHUNKS = 500; // ~10 segundos de áudio (evitar memory leak)
+
+  // FLAG: Controlar se sessão está ativa (evitar envio para WebSocket fechado)
+  private isSessionActive: boolean = false;
+
+  constructor() {
+    console.log('✅ GeminiLiveService inicializado');
+  }
+
+  /**
+   * Adiciona listener de eventos
+   */
+  addEventListener(callback: (event: GeminiLiveEvent) => void): void {
+    this.eventListeners.push(callback);
+  }
+
+  /**
+   * Remove listener de eventos
+   */
+  removeEventListener(callback: (event: GeminiLiveEvent) => void): void {
+    const index = this.eventListeners.indexOf(callback);
+    if (index > -1) {
+      this.eventListeners.splice(index, 1);
+    }
+  }
+
+  /**
+   * Emite evento para todos os listeners
+   */
+  private emitEvent(event: GeminiLiveEvent): void {
+    this.eventListeners.forEach((callback) => callback(event));
+  }
+
+  /**
+   * Busca ephemeral token do backend
+   */
+  private async getEphemeralToken(): Promise<string> {
+    const response = await fetch('/api/live-token');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Falha ao obter token');
+    }
+    const data = await response.json();
+    return data.token;
+  }
+
+  /**
+   * Inicia sessão Gemini Live REAL
+   */
+  async startSession(): Promise<GeminiLiveSession> {
+    try {
+      console.log('🚀 Iniciando sessão Gemini Live REAL...');
+
+      // 1. Obter token do backend
+      const token = await this.getEphemeralToken();
+      console.log('✅ Token obtido');
+
+      // 2. Criar cliente Gemini com token (v1alpha é obrigatório para Live API)
+      this.genAI = new GoogleGenAI({ apiKey: token, httpOptions: { apiVersion: 'v1alpha' } });
+
+      // 3. Criar AudioContext para playback
+      this.audioContext = new AudioContext({ sampleRate: 24000 });
+
+      // 4. Capturar microfone
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 16000,
+          channelCount: 1,
+        },
+      });
+      console.log('🎤 Microfone capturado');
+
+      // 5. Criar sessão
+      const sessionId = `gemini_live_${Date.now()}`;
+      this.currentSession = {
+        id: sessionId,
+        isActive: true,
+        isListening: true,
+        isSpeaking: false,
+      };
+
+      // 6. Conectar ao Gemini Live
+      const model = 'gemini-2.0-flash-exp';
+      const config = {
+        responseModalities: [Modality.AUDIO],
+        // Configuração de voz feminina natural em PT-BR
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: 'Aoede'  // Vozes femininas: Aoede, Kore, Calliope, Melia
+            }
+          },
+          languageCode: 'pt-BR'  // OBRIGATÓRIO para pronúncia brasileira natural
+        }
+        // NOTA: NÃO habilitar inputAudioTranscription/outputAudioTranscription
+        // Causam loops no Gemini Live - transcrições serão feitas via outra API se necessário
+      };
+
+      this.liveSession = await (this.genAI as any).live.connect({
+        model,
+        config,
+        callbacks: {
+          onopen: () => {
+            console.log('✅ Conectado ao Gemini Live API');
+            this.emitEvent({ type: 'connected' });
+            this.emitEvent({ type: 'listening' });
+          },
+          onmessage: (message: any) => {
+            this.handleGeminiMessage(message);
+          },
+          onerror: (error: any) => {
+            console.error('❌ Erro Gemini Live:', error);
+            this.emitEvent({ type: 'error', data: error.message });
+          },
+          onclose: (event: any) => {
+            console.log('🔌 Conexão Gemini Live fechada:', event?.reason);
+            this.emitEvent({ type: 'end' });
+          },
+        },
+      });
+
+      // 7. Configurar captura de áudio
+      await this.setupAudioCapture();
+
+      // MARCAR SESSÃO COMO ATIVA
+      this.isSessionActive = true;
+
+      console.log('✅ Sessão Gemini Live iniciada:', sessionId);
+      return this.currentSession;
+
+    } catch (error: any) {
+      console.error('❌ Erro ao iniciar Gemini Live:', error);
+      this.emitEvent({ type: 'error', data: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Configura captura de áudio do microfone
+   */
+  private async setupAudioCapture(): Promise<void> {
+    if (!this.audioContext || !this.mediaStream) return;
+
+    // Criar nó de origem do microfone
+    const source = this.audioContext.createMediaStreamSource(this.mediaStream);
+
+    // Usar ScriptProcessor para captura (mais compatível)
+    const bufferSize = 4096;
+    const scriptNode = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+
+    scriptNode.onaudioprocess = (event) => {
+      if (!this.liveSession || !this.currentSession?.isActive) return;
+
+      const inputData = event.inputBuffer.getChannelData(0);
+      const sampleRate = this.audioContext?.sampleRate || 48000;
+
+      // DOWNSAMPLING: Converter 48kHz → 16kHz para Gemini
+      const TARGET_RATE = 16000;
+      const downsampledData = downsampleAudio(inputData, sampleRate, TARGET_RATE);
+
+      // Converter para PCM 16-bit
+      const pcmData = floatTo16BitPCM(downsampledData);
+      const base64Audio = int16ArrayToBase64(pcmData);
+
+      // ACUMULAR ÁUDIO DO USUÁRIO para transcrição Whisper (no sample rate original)
+      // Detectar se há áudio significativo (não silêncio)
+      const hasAudio = inputData.some(sample => Math.abs(sample) > 0.01);
+      if (hasAudio) {
+        // Usar áudio ORIGINAL (48kHz) para Whisper, não downsampled
+        this.userAudioChunks.push(floatTo16BitPCM(inputData));
+        this.isUserSpeaking = true;
+
+        // LIMITE: Evitar memory leak
+        if (this.userAudioChunks.length > this.MAX_CHUNKS) {
+          this.userAudioChunks = this.userAudioChunks.slice(-this.MAX_CHUNKS);
+        }
+
+        // Reset timeout de silêncio
+        if (this.silenceTimeout) {
+          clearTimeout(this.silenceTimeout);
+        }
+      }
+
+      // Enviar para Gemini (DOWNSAMPLED a 16kHz)
+      try {
+        this.liveSession.sendRealtimeInput({
+          audio: {
+            data: base64Audio,
+            mimeType: 'audio/pcm;rate=16000',
+          },
+        });
+      } catch (err) {
+        // Ignora erros de envio se a sessão foi fechada
+      }
+    };
+
+    source.connect(scriptNode);
+    scriptNode.connect(this.audioContext.destination);
+
+    console.log('🎙️ Captura de áudio configurada');
+  }
+
+  /**
+   * Processa mensagens recebidas do Gemini
+   * VERSÃO CORRIGIDA - toolCalls só após turnComplete
+   */
+  private async handleGeminiMessage(message: any): Promise<void> {
+    // ===============================================================
+    // INTERRUPÇÃO
+    // ===============================================================
+    if (message.serverContent?.interrupted) {
+      console.log('⚡ Interrupção detectada');
+      this.audioQueue = [];
+      if (this.currentSession) {
+        this.currentSession.isSpeaking = false;
+        this.currentSession.isListening = true;
+      }
+      this.emitEvent({ type: 'listening' });
+      return;
+    }
+
+    // NOTA: Transcrições nativas do Gemini (inputTranscription/outputTranscription)
+    // foram removidas pois causavam loops. Agora usamos Whisper no turnComplete.
+
+    // ===============================================================
+    // PROCESSAR ÁUDIO DA RESPOSTA E TOOL CALLS
+    // ===============================================================
+    if (message.serverContent?.modelTurn?.parts) {
+      for (const part of message.serverContent.modelTurn.parts) {
+        // Áudio - tocar imediatamente E acumular para transcrição
+        if (part.inlineData?.data) {
+          if (this.currentSession) {
+            this.currentSession.isSpeaking = true;
+            this.currentSession.isListening = false;
+          }
+          this.emitEvent({ type: 'speaking' });
+
+          const audioBuffer = base64ToArrayBuffer(part.inlineData.data);
+          this.audioQueue.push(audioBuffer);
+          this.playAudioQueue();
+
+          // ACUMULAR ÁUDIO DA LIA para transcrição Whisper
+          this.liaAudioChunks.push(audioBuffer);
+        }
+
+        // TOOL CALL - ACUMULAR para processar após turnComplete (não executar agora!)
+        if (part.functionCall) {
+          const toolId = part.functionCall.id || `tc_${Date.now()}`;
+
+          // Filtrar duplicados
+          if (toolId !== this.lastToolCallId) {
+            console.log('📋 [Voice] Tool call acumulado:', part.functionCall.name);
+            this.pendingToolCalls.push(part.functionCall);
+            this.lastToolCallId = toolId;
+          } else {
+            console.log('⚠️ [Voice] Tool call duplicado ignorado:', toolId);
+          }
+        }
+      }
+    }
+
+    // TOOL CALLS no nível do serverContent (formato alternativo)
+    if (message.toolCall) {
+      for (const fc of message.toolCall.functionCalls || []) {
+        const toolId = fc.id || `tc_${Date.now()}`;
+        if (toolId !== this.lastToolCallId) {
+          console.log('📋 [Voice] Tool call (alt) acumulado:', fc.name);
+          this.pendingToolCalls.push(fc);
+          this.lastToolCallId = toolId;
+        }
+      }
+    }
+
+    // ===============================================================
+    // FIM DO TURNO - AGORA sim processar toolCalls pendentes
+    // ===============================================================
+    if (message.serverContent?.turnComplete) {
+      // LOCK: Evitar race condition se múltiplos turnComplete chegarem
+      if (this.isProcessingTurn) {
+        console.log('⚠️ Turno já em processamento, ignorando duplicado');
+        return;
+      }
+      this.isProcessingTurn = true;
+
+      console.log('✅ Turno completo');
+
+      try {
+        // PROCESSAR TOOLCALLS PENDENTES (agora é seguro!)
+        if (this.pendingToolCalls.length > 0) {
+          console.log(`🔧 [Voice] Processando ${this.pendingToolCalls.length} toolCall(s) pendente(s)`);
+          for (const tc of this.pendingToolCalls) {
+            await this.handleFunctionCall(tc);
+          }
+          this.pendingToolCalls = []; // Limpar após processar
+        }
+
+        // TRANSCRIÇÃO DESABILITADA TEMPORARIAMENTE
+        // Whisper estava causando problemas (sample rate, transcrições erradas)
+        // TODO: Migrar para Google Speech-to-Text
+        // this.transcribeAndEmit().catch(err => {
+        //   console.error('❌ [Whisper] Erro na transcrição em background:', err);
+        // });
+
+        // Limpar chunks de áudio para evitar acúmulo
+        this.userAudioChunks = [];
+        this.liaAudioChunks = [];
+
+        // Voltar para modo listening IMEDIATAMENTE (não esperar transcrição)
+        if (this.currentSession) {
+          this.currentSession.isSpeaking = false;
+          this.currentSession.isListening = true;
+        }
+        this.emitEvent({ type: 'listening' });
+      } finally {
+        // SEMPRE liberar o lock
+        this.isProcessingTurn = false;
+      }
+    }
+  }
+
+  /**
+   * Transcreve áudios acumulados via Google Speech-to-Text e emite eventos
+   */
+  private async transcribeAndEmit(): Promise<void> {
+    // Verificar se sessão está ativa
+    if (!this.isSessionActive) {
+      this.userAudioChunks = [];
+      this.liaAudioChunks = [];
+      return;
+    }
+
+    try {
+      // Transcrever áudio do USUÁRIO (se houver)
+      if (this.userAudioChunks.length > 0) {
+        const sampleRate = this.audioContext?.sampleRate || 48000;
+        console.log(`🎤 [STT] Transcrevendo ${this.userAudioChunks.length} chunks do usuário...`);
+
+        const userAudioBlob = this.createWavBlob(this.userAudioChunks, sampleRate);
+        const userText = await this.transcribeWithGoogleSTT(userAudioBlob, sampleRate);
+
+        if (userText && userText.trim()) {
+          console.log('📝 [STT] Usuário:', userText);
+          this.emitEvent({ type: 'user-transcript', data: userText.trim() });
+        }
+
+        this.userAudioChunks = [];
+      }
+
+      // Transcrever áudio da LIA (se houver)
+      if (this.liaAudioChunks.length > 0) {
+        console.log(`🔊 [STT] Transcrevendo ${this.liaAudioChunks.length} chunks da LIA...`);
+
+        const liaAudioBlob = this.createWavBlobFromArrayBuffer(this.liaAudioChunks, 24000);
+        const liaText = await this.transcribeWithGoogleSTT(liaAudioBlob, 24000);
+
+        if (liaText && liaText.trim()) {
+          console.log('📝 [STT] LIA:', liaText);
+          this.emitEvent({ type: 'lia-transcript', data: liaText.trim() });
+        }
+
+        this.liaAudioChunks = [];
+      }
+    } catch (error) {
+      console.error('❌ [STT] Erro na transcrição:', error);
+      this.userAudioChunks = [];
+      this.liaAudioChunks = [];
+    }
+  }
+
+  /**
+   * Transcreve áudio usando Google Cloud Speech-to-Text
+   */
+  private async transcribeWithGoogleSTT(audioBlob: Blob, sampleRate: number): Promise<string> {
+    try {
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'audio.wav');
+      formData.append('sampleRate', sampleRate.toString());
+
+      const response = await fetch('/api/speech/transcribe', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        console.error('❌ [STT] Erro na API:', response.status);
+        return '';
+      }
+
+      const data = await response.json();
+      return data.text || '';
+    } catch (error) {
+      console.error('❌ [STT] Erro ao transcrever:', error);
+      return '';
+    }
+  }
+
+  /**
+   * Cria Blob WAV a partir de chunks Int16Array
+   */
+  private createWavBlob(chunks: Int16Array[], sampleRate: number): Blob {
+    // Concatenar todos os chunks
+    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const combined = new Int16Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      combined.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    // Criar header WAV
+    const wavHeader = this.createWavHeader(combined.length * 2, sampleRate, 1, 16);
+    const wavBuffer = new Uint8Array(wavHeader.byteLength + combined.byteLength);
+    wavBuffer.set(new Uint8Array(wavHeader), 0);
+    wavBuffer.set(new Uint8Array(combined.buffer), wavHeader.byteLength);
+
+    return new Blob([wavBuffer], { type: 'audio/wav' });
+  }
+
+  /**
+   * Cria Blob WAV a partir de ArrayBuffers (PCM 24kHz da LIA)
+   */
+  private createWavBlobFromArrayBuffer(chunks: ArrayBuffer[], sampleRate: number): Blob {
+    // Concatenar todos os chunks
+    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+    const combined = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      combined.set(new Uint8Array(chunk), offset);
+      offset += chunk.byteLength;
+    }
+
+    // Criar header WAV
+    const wavHeader = this.createWavHeader(combined.length, sampleRate, 1, 16);
+    const wavBuffer = new Uint8Array(wavHeader.byteLength + combined.byteLength);
+    wavBuffer.set(new Uint8Array(wavHeader), 0);
+    wavBuffer.set(combined, wavHeader.byteLength);
+
+    return new Blob([wavBuffer], { type: 'audio/wav' });
+  }
+
+  /**
+   * Cria header WAV padrão
+   */
+  private createWavHeader(dataLength: number, sampleRate: number, numChannels: number, bitsPerSample: number): ArrayBuffer {
+    const buffer = new ArrayBuffer(44);
+    const view = new DataView(buffer);
+
+    // RIFF chunk descriptor
+    this.writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + dataLength, true);
+    this.writeString(view, 8, 'WAVE');
+
+    // fmt sub-chunk
+    this.writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true); // Subchunk1Size
+    view.setUint16(20, 1, true); // AudioFormat (PCM)
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numChannels * bitsPerSample / 8, true); // ByteRate
+    view.setUint16(32, numChannels * bitsPerSample / 8, true); // BlockAlign
+    view.setUint16(34, bitsPerSample, true);
+
+    // data sub-chunk
+    this.writeString(view, 36, 'data');
+    view.setUint32(40, dataLength, true);
+
+    return buffer;
+  }
+
+  private writeString(view: DataView, offset: number, string: string): void {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  }
+
+  /**
+   * Processa chamadas de função do Gemini Live
+   * IMPLEMENTAÇÃO SEGURA - com validações e try/catch
+   */
+  private async handleFunctionCall(functionCall: any): Promise<void> {
+    const { name, args, id } = functionCall;
+
+    // VALIDAÇÃO: nome da função é obrigatório
+    if (!name) {
+      console.warn('⚠️ [Voice] FunctionCall sem nome, ignorando');
+      return;
+    }
+
+    console.log(`🔧 [Voice] Executando função: ${name}`, args);
+
+    let result: any = null;
+
+    try {
+      // =====================================================
+      // getCurrentTime - Hora atual
+      // =====================================================
+      if (name === 'getCurrentTime') {
+        const timezone = args?.timezone || 'Europe/Lisbon';
+        const now = new Date();
+        const formatter = new Intl.DateTimeFormat('pt-PT', {
+          timeZone: timezone,
+          dateStyle: 'full',
+          timeStyle: 'short'
+        });
+        result = { time: formatter.format(now), timezone };
+        console.log(`🕐 [Voice] Hora: ${result.time}`);
+      }
+
+      // =====================================================
+      // getLocation - Buscar locais (via backend)
+      // =====================================================
+      else if (name === 'getLocation') {
+        const query = args?.query || 'restaurante';
+        try {
+          const response = await fetch(`/api/places/search?query=${encodeURIComponent(query)}`);
+          if (response.ok) {
+            result = await response.json();
+            console.log(`📍 [Voice] Locais encontrados para: ${query}`);
+          } else {
+            result = { error: 'Não consegui buscar locais' };
+          }
+        } catch (fetchError) {
+          console.error('❌ [Voice] Erro ao buscar locais:', fetchError);
+          result = { error: 'Erro ao conectar com API de locais' };
+        }
+      }
+
+      // =====================================================
+      // saveMemory - Salvar memória (via backend)
+      // =====================================================
+      else if (name === 'saveMemory') {
+        const content = args?.content;
+        const category = args?.category || 'general';
+
+        // VALIDAÇÃO ANTI-PERGUNTAS: Não salvar perguntas como memórias
+        const lowerContent = (content || '').toLowerCase();
+        const isQuestion =
+          (content || '').includes('?') ||
+          lowerContent.startsWith('qual') ||
+          lowerContent.startsWith('quem') ||
+          lowerContent.startsWith('onde') ||
+          lowerContent.startsWith('quando') ||
+          lowerContent.startsWith('como') ||
+          lowerContent.startsWith('por que') ||
+          lowerContent.startsWith('o que') ||
+          lowerContent.includes('você pode') ||
+          lowerContent.includes('você consegue') ||
+          lowerContent.includes('que horas');
+
+        if (isQuestion) {
+          console.log('ℹ️ [Voice] Ignorando pergunta (não é memória):', content?.substring(0, 50));
+          result = { saved: false, error: 'Perguntas não são salvas como memórias' };
+        } else if (content) {
+          try {
+            const response = await fetch('/api/memory/save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content, category })
+            });
+            if (response.ok) {
+              result = { saved: true, content };
+              console.log(`💾 [Voice] Memória salva: ${content}`);
+            } else {
+              result = { saved: false, error: 'Erro ao salvar' };
+            }
+          } catch (fetchError) {
+            console.error('❌ [Voice] Erro ao salvar memória:', fetchError);
+            result = { saved: false, error: 'Erro de conexão' };
+          }
+        } else {
+          result = { saved: false, error: 'Conteúdo vazio' };
+        }
+      }
+
+      // =====================================================
+      // generateImage - Gerar imagem (via backend)
+      // =====================================================
+      else if (name === 'generateImage') {
+        const prompt = args?.prompt;
+        const style = args?.style || 'realistic';
+        if (prompt) {
+          try {
+            console.log(`🎨 [Voice] Gerando imagem (${style}): ${prompt.substring(0, 30)}...`);
+
+            // EMITIR EVENTO DE INÍCIO DE GERAÇÃO (para mostrar loading)
+            this.emitEvent({
+              type: 'generating-start',
+              data: { action: 'image', prompt: prompt.substring(0, 50) }
+            });
+
+            const response = await fetch('/api/image/generate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ prompt, style })
+            });
+            if (response.ok) {
+              const data = await response.json();
+
+              // Emitir evento para renderização no painel dinâmico
+              this.emitEvent({
+                type: 'message',
+                data: {
+                  type: 'image-generated',
+                  content: {
+                    type: 'image',
+                    url: data.url,
+                    prompt: prompt,
+                    style: style,
+                    caption: data.message
+                  }
+                }
+              });
+
+              result = {
+                success: true,
+                message: `Imagem ${style === 'realistic' ? 'realista' : 'artística'} gerada com sucesso! Veja na área dinâmica.`,
+                ...data
+              };
+              console.log(`✅ [Voice] Imagem gerada e evento emitido`);
+
+              // EMITIR EVENTO DE FIM DE GERAÇÃO
+              this.emitEvent({ type: 'generating-end', data: { action: 'image', success: true } });
+            } else {
+              result = { success: false, error: 'Erro ao gerar imagem' };
+              this.emitEvent({ type: 'generating-end', data: { action: 'image', success: false } });
+            }
+          } catch (fetchError) {
+            console.error('❌ [Voice] Erro ao gerar imagem:', fetchError);
+            result = { success: false, error: 'Erro de conexão' };
+            this.emitEvent({ type: 'generating-end', data: { action: 'image', success: false } });
+          }
+        } else {
+          result = { success: false, error: 'Prompt vazio' };
+        }
+      }
+
+      // =====================================================
+      // generateChart - Gerar gráfico visual
+      // =====================================================
+      else if (name === 'generateChart') {
+        const topic = args?.topic || 'Gráfico';
+        const chartType = args?.chartType || 'bar';
+        const labels = args?.labels || [];
+        const values = args?.values || [];
+
+        console.log(`📊 [Voice] Gerando gráfico ${chartType}: ${topic}`);
+
+        // Construir dados do gráfico
+        const chartData = {
+          type: 'chart',
+          title: topic,
+          chartType: chartType,
+          labels: labels,
+          datasets: [{
+            label: topic,
+            data: values,
+            backgroundColor: chartType === 'pie'
+              ? ['#00f3ff', '#ff6384', '#ffce56', '#4bc0c0', '#9966ff', '#ff9f40']
+              : 'rgba(0, 243, 255, 0.7)',
+            borderColor: '#00f3ff',
+            borderWidth: 2
+          }]
+        };
+
+        // Emitir evento para renderização
+        this.emitEvent({
+          type: 'message',
+          data: {
+            type: 'chart-generated',
+            content: chartData
+          }
+        });
+
+        result = {
+          success: true,
+          message: `Gráfico de ${chartType === 'pie' ? 'pizza' : chartType === 'bar' ? 'barras' : chartType === 'line' ? 'linhas' : 'área'} "${topic}" gerado e exibido na área dinâmica!`,
+          chartType,
+          topic
+        };
+
+        console.log(`✅ [Voice] Gráfico gerado e evento emitido`);
+      }
+
+      // =====================================================
+      // generateTable - Gerar tabela visual
+      // =====================================================
+      else if (name === 'generateTable') {
+        const title = args?.title || 'Tabela';
+        const headers = args?.headers || [];
+        const rows = args?.rows || [];
+
+        console.log(`📋 [Voice] Gerando tabela: ${title}`);
+
+        // Construir dados da tabela
+        const tableData = {
+          type: 'table',
+          title: title,
+          headers: headers,
+          rows: rows
+        };
+
+        // Emitir evento para renderização
+        this.emitEvent({
+          type: 'message',
+          data: {
+            type: 'table-generated',
+            content: tableData
+          }
+        });
+
+        result = {
+          success: true,
+          message: `Tabela "${title}" gerada e exibida na área dinâmica!`,
+          title,
+          headerCount: headers.length,
+          rowCount: rows.length
+        };
+
+        console.log(`✅ [Voice] Tabela gerada e evento emitido`);
+      }
+
+      // =====================================================
+      // Função desconhecida
+      // =====================================================
+      else {
+        console.warn(`⚠️ [Voice] Função desconhecida: ${name}`);
+        result = { error: `Função ${name} não implementada` };
+      }
+
+    } catch (error) {
+      console.error(`❌ [Voice] Erro ao executar ${name}:`, error);
+      result = { error: `Erro ao executar ${name}` };
+    }
+
+    // =====================================================
+    // ENVIAR RESPOSTA VIA sendToolResponse (método correto)
+    // Isso permite que o Gemini continue gerando áudio
+    // =====================================================
+    if (result !== null && this.liveSession) {
+      console.log(`✅ [Voice] Função ${name} executada:`, JSON.stringify(result).substring(0, 100));
+
+      try {
+        // Usar sendToolResponse do SDK (não send!)
+        this.liveSession.sendToolResponse({
+          functionResponses: [{
+            id: id || `fn_${Date.now()}`,
+            name: name,
+            response: result
+          }]
+        });
+        console.log(`📤 [Voice] FunctionResponse enviada via sendToolResponse`);
+      } catch (sendError: any) {
+        console.error('❌ [Voice] Erro ao enviar FunctionResponse:', sendError.message);
+      }
+    }
+  }
+
+
+  /**
+   * Reproduz áudio da fila
+   */
+  private async playAudioQueue(): Promise<void> {
+    if (this.isPlayingAudio || !this.audioContext) return;
+
+    this.isPlayingAudio = true;
+
+    while (this.audioQueue.length > 0) {
+      const buffer = this.audioQueue.shift();
+      if (!buffer) continue;
+
+      try {
+        // Criar buffer de áudio PCM 24kHz
+        const audioBuffer = this.audioContext.createBuffer(
+          1, // mono
+          buffer.byteLength / 2, // número de samples (16-bit = 2 bytes)
+          24000 // sample rate
+        );
+
+        const channelData = audioBuffer.getChannelData(0);
+        const int16View = new Int16Array(buffer);
+
+        for (let i = 0; i < int16View.length; i++) {
+          channelData[i] = int16View[i] / 32768; // Normalizar para -1 a 1
+        }
+
+        // Tocar
+        const source = this.audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(this.audioContext.destination);
+
+        await new Promise<void>((resolve) => {
+          source.onended = () => resolve();
+          source.start();
+        });
+
+      } catch (err) {
+        console.error('❌ Erro ao tocar áudio:', err);
+      }
+    }
+
+    this.isPlayingAudio = false;
+
+    // Voltar para listening após terminar de falar
+    if (this.currentSession) {
+      this.currentSession.isSpeaking = false;
+      this.currentSession.isListening = true;
+    }
+    this.emitEvent({ type: 'listening' });
+  }
+
+  /**
+   * Para sessão Gemini Live
+   */
+  async stopSession(): Promise<void> {
+    try {
+      console.log('🛑 Parando sessão Gemini Live...');
+
+      // IMPORTANTE: Marcar sessão como inativa PRIMEIRO para evitar envios
+      this.isSessionActive = false;
+
+      // Fechar sessão Gemini
+      if (this.liveSession) {
+        try {
+          this.liveSession.close();
+        } catch (err: any) {
+          // Ignora erro de WebSocket já fechado
+          console.log('ℹ️ Sessão já estava fechando');
+        }
+        this.liveSession = null;
+      }
+
+      // Parar microfone
+      if (this.mediaStream) {
+        this.mediaStream.getTracks().forEach((track) => track.stop());
+        this.mediaStream = null;
+      }
+
+      // Fechar AudioContext (com verificação de estado)
+      if (this.audioContext && this.audioContext.state !== 'closed') {
+        try {
+          await this.audioContext.close();
+        } catch (err) {
+          // Ignora
+        }
+        this.audioContext = null;
+      }
+
+      // Limpar tudo
+      this.audioQueue = [];
+      this.currentSession = null;
+      this.genAI = null;
+      this.pendingToolCalls = [];
+      this.userAudioChunks = [];
+      this.liaAudioChunks = [];
+      this.isProcessingTurn = false;
+
+      this.emitEvent({ type: 'end' });
+      console.log('✅ Sessão Gemini Live encerrada');
+
+    } catch (error) {
+      console.error('❌ Erro ao parar sessão:', error);
+    }
+  }
+
+  /**
+   * Retorna sessão atual
+   */
+  getSession(): GeminiLiveSession | null {
+    return this.currentSession;
+  }
+
+  /**
+   * Verifica se está ativo
+   */
+  isActive(): boolean {
+    return this.currentSession?.isActive || false;
+  }
+}
+
+// ======================================================================
+// SINGLETON EXPORT
+// ======================================================================
+
+export const geminiLiveService = new GeminiLiveService();

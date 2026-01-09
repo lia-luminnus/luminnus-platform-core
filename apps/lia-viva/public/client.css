@@ -1,0 +1,334 @@
+body {
+  background-color: #0b0b0b;
+  color: #fff;
+  font-family: "Segoe UI", sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  margin: 0;
+}
+
+h1 {
+  margin-top: 25px;
+  font-size: 28px;
+  text-shadow: 0 0 8px #00ff9d;
+}
+
+#sessionButton {
+  background: #00ff6a;
+  color: #000;
+  border: none;
+  padding: 12px 30px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 15px;
+  box-shadow: 0 0 15px #00ff6a44;
+  margin: 15px;
+  transition: all 0.3s;
+}
+
+#sessionButton.active {
+  background: #ff3366;
+  box-shadow: 0 0 15px #ff336644;
+}
+
+#container {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 95%;
+  max-width: 1400px;
+  background: #101010;
+  border-radius: 15px;
+  box-shadow: 0 0 25px #00ff6a22;
+  padding: 20px;
+  gap: 20px;
+}
+
+#chat {
+  flex: 2;
+  background: #141414;
+  border-radius: 10px;
+  padding: 15px;
+  overflow-y: auto;
+  height: 500px;
+  box-shadow: inset 0 0 15px #00ff6a11;
+  display: flex;
+  flex-direction: column;
+}
+
+.message {
+  margin: 10px 0;
+  padding: 10px 15px;
+  border-radius: 10px;
+  max-width: 80%;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.user {
+  background: #0078ff;
+  align-self: flex-end;
+  color: #fff;
+}
+
+.lia {
+  background: #00ff6a;
+  color: #000;
+  align-self: flex-start;
+}
+
+.debug {
+  background: #ff6600;
+  color: #fff;
+  align-self: flex-start;
+  font-size: 0.9em;
+}
+
+.searching {
+  background: #ffaa00;
+  color: #000;
+  align-self: flex-start;
+  font-style: italic;
+}
+
+#typing {
+  animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+  0% {
+    opacity: 0.2;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.2;
+  }
+}
+
+#liaContainer {
+  flex: 1;
+  position: relative;
+  background: radial-gradient(circle at center, #0e0e0e, #050505);
+  border-radius: 10px;
+  height: 500px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  box-shadow: 0 0 15px #00b7ff22;
+}
+
+#liaImage {
+  width: 90%;
+  max-width: 320px;
+  height: auto;
+  object-fit: contain;
+  border-radius: 10px;
+  transition: transform 0.3s;
+}
+
+#liaImage.speaking {
+  transform: scale(1.05);
+  filter: drop-shadow(0 0 20px #00ff6a);
+}
+
+#liaImage.searching {
+  filter: drop-shadow(0 0 20px #ffaa00);
+  animation: pulse 1.5s infinite;
+}
+
+#liaStatus {
+  position: absolute;
+  bottom: 10px;
+  right: 20px;
+  color: #00ff9d;
+  font-size: 14px;
+}
+
+#inputArea {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 95%;
+  max-width: 1400px;
+  margin-top: 20px;
+  gap: 10px;
+}
+
+#messageInput {
+  flex: 1;
+  padding: 12px 15px;
+  border-radius: 8px;
+  border: none;
+  font-size: 16px;
+}
+
+#messageInput:disabled {
+  background: #333;
+  color: #666;
+  cursor: not-allowed;
+}
+
+#sendButton,
+#micButton {
+  background: #00ff6a;
+  border: none;
+  color: #000;
+  font-weight: bold;
+  padding: 12px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.3s;
+}
+
+#sendButton:disabled {
+  background: #333;
+  color: #666;
+  cursor: not-allowed;
+}
+
+#micButton.recording {
+  background: #ff3366;
+  box-shadow: 0 0 15px #ff336688;
+  animation: pulse 1.5s infinite;
+}
+
+/* 🎙️ Dictate Button - Falar para digitar */
+#dictateButton {
+  padding: 10px 15px;
+  background-color: #00d9ff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.3s;
+}
+
+#dictateButton:hover:not(:disabled) {
+  background-color: #00b8d4;
+  transform: scale(1.05);
+}
+
+#dictateButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 🎙️ Seletor de Personalidade de Voz */
+#voiceSelector {
+  width: 95%;
+  max-width: 1400px;
+  margin-top: 20px;
+  background: #101010;
+  border-radius: 10px;
+  padding: 15px 20px;
+  box-shadow: 0 0 15px #00ff6a22;
+}
+
+#voiceSelector label {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #00ff9d;
+}
+
+#voiceButtons {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+}
+
+.voice-btn {
+  flex: 1;
+  max-width: 200px;
+  background: #1a1a1a;
+  border: 2px solid #333;
+  color: #fff;
+  padding: 15px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  transition: all 0.3s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.voice-btn span {
+  font-size: 12px;
+  font-weight: normal;
+  color: #999;
+}
+
+.voice-btn:hover {
+  background: #252525;
+  border-color: #00ff6a;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px #00ff6a33;
+}
+
+.voice-btn.active {
+  background: #00ff6a;
+  color: #000;
+  border-color: #00ff6a;
+  box-shadow: 0 0 20px #00ff6a66;
+}
+
+.voice-btn.active span {
+  color: #000;
+}
+
+#connectionStatus {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #00ff6a;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* ✅ Animações para notificações de erro */
+@keyframes slideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+}

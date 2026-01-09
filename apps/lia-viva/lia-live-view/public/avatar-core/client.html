@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Avatar Engine Pro - Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a0e1a 0%, #1a1a2e 50%, #0f0f23 100%);
+            min-height: 100vh;
+            color: #e0f7ff;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 20px 0;
+            border-bottom: 1px solid rgba(0,243,255,0.2);
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            background: linear-gradient(90deg, #00f3ff, #bc13fe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        header p {
+            color: rgba(224,247,255,0.6);
+            margin-top: 5px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 30px;
+        }
+
+        .avatar-section {
+            background: rgba(26,26,46,0.8);
+            border-radius: 20px;
+            padding: 20px;
+            border: 1px solid rgba(0,243,255,0.2);
+        }
+
+        #avatar-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1;
+            background: linear-gradient(180deg, #1a1a2e 0%, #0f0f23 100%);
+            border-radius: 15px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #lia-canvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        #status-badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid rgba(0,243,255,0.3);
+        }
+
+        .status-loading { color: #ffd700; }
+        .status-ready { color: #00ff88; }
+        .status-speaking { color: #00f3ff; }
+        .status-error { color: #ff4757; }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .control-section {
+            background: rgba(26,26,46,0.8);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(0,243,255,0.1);
+        }
+
+        .control-section h3 {
+            color: #00f3ff;
+            font-size: 14px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .emotion-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .emotion-btn {
+            padding: 10px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.08);
+            color: white;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .emotion-btn:hover {
+            background: rgba(0,243,255,0.2);
+            transform: translateY(-2px);
+        }
+
+        .emotion-btn.active {
+            background: #00f3ff;
+            color: #0a0e1a;
+        }
+
+        .speak-input {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .speak-input textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(0,243,255,0.2);
+            border-radius: 10px;
+            background: rgba(0,0,0,0.3);
+            color: white;
+            font-size: 13px;
+            resize: none;
+            height: 80px;
+        }
+
+        .speak-input textarea:focus {
+            outline: none;
+            border-color: #00f3ff;
+        }
+
+        .speak-btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(90deg, #00f3ff, #bc13fe);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .speak-btn:hover {
+            transform: scale(1.02);
+        }
+
+        .speak-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .temperature-slider {
+            margin-top: 10px;
+        }
+
+        .temperature-slider input {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899);
+            appearance: none;
+            cursor: pointer;
+        }
+
+        .temperature-slider input::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+
+        .temperature-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: rgba(255,255,255,0.5);
+            margin-top: 5px;
+        }
+
+        .log-panel {
+            background: rgba(0,0,0,0.4);
+            border-radius: 10px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 11px;
+        }
+
+        .log-entry {
+            padding: 3px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .log-time {
+            color: rgba(255,255,255,0.4);
+        }
+
+        .log-message {
+            color: rgba(255,255,255,0.8);
+        }
+
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: rgba(255,255,255,0.4);
+            font-size: 12px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎭 Avatar Engine Pro</h1>
+            <p>Sistema de Avatar Profissional - Teste Standalone</p>
+        </header>
+
+        <div class="main-content">
+            <!-- Avatar Display -->
+            <div class="avatar-section">
+                <div id="avatar-container">
+                    <canvas id="lia-canvas" width="512" height="512"></canvas>
+                    <div id="status-badge" class="status-loading">⏳ Carregando...</div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="controls">
+                <!-- Emotions -->
+                <div class="control-section">
+                    <h3>🎭 Expressões</h3>
+                    <div class="emotion-grid">
+                        <button class="emotion-btn" data-emotion="neutral">😐 Neutro</button>
+                        <button class="emotion-btn" data-emotion="happy">😊 Feliz</button>
+                        <button class="emotion-btn" data-emotion="sad">😢 Triste</button>
+                        <button class="emotion-btn" data-emotion="angry">😠 Raiva</button>
+                        <button class="emotion-btn" data-emotion="surprised">😲 Surpreso</button>
+                        <button class="emotion-btn" data-emotion="curious">🤔 Curioso</button>
+                        <button class="emotion-btn" data-emotion="confused">😕 Confuso</button>
+                        <button class="emotion-btn" data-emotion="proud">😌 Orgulho</button>
+                        <button class="emotion-btn" data-emotion="fearful">😨 Medo</button>
+                    </div>
+                </div>
+
+                <!-- Speak -->
+                <div class="control-section">
+                    <h3>🗣️ Falar</h3>
+                    <div class="speak-input">
+                        <textarea id="speak-text" placeholder="Digite uma frase para a LIA falar...">Olá! Que bom te ver por aqui!</textarea>
+                        <button class="speak-btn" id="speak-btn">▶️ Falar</button>
+                    </div>
+                </div>
+
+                <!-- Temperature -->
+                <div class="control-section">
+                    <h3>🌡️ Temperatura Emocional: <span id="temp-value">5</span></h3>
+                    <div class="temperature-slider">
+                        <input type="range" id="temperature" min="1" max="10" value="5">
+                        <div class="temperature-labels">
+                            <span>Séria</span>
+                            <span>Neutra</span>
+                            <span>Alegre</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="control-section">
+                    <h3>⚡ Ações</h3>
+                    <div class="emotion-grid">
+                        <button class="emotion-btn" id="blink-btn">👁️ Piscar</button>
+                        <button class="emotion-btn" id="reset-btn">🔄 Reset</button>
+                        <button class="emotion-btn" id="debug-btn">🐛 Debug</button>
+                    </div>
+                </div>
+
+                <!-- Logs -->
+                <div class="control-section">
+                    <h3>📋 Logs</h3>
+                    <div class="log-panel" id="log-panel">
+                        <div class="log-entry">
+                            <span class="log-time">--:--:--</span>
+                            <span class="log-message">Aguardando inicialização...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            Avatar Engine Pro v1.0 | TensorFlow.js + MediaPipe
+        </footer>
+    </div>
+
+    <!-- Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@1.0.5/dist/face-landmarks-detection.min.js"></script>
+
+    <!-- Avatar Engine Modules -->
+    <script src="/avatar-core/ExpressionExtractor.js"></script>
+    <script src="/avatar-core/FaceRigBuilder.js"></script>
+    <script src="/avatar-core/LipSyncEngine.js"></script>
+    <script src="/avatar-core/MotionSynthesizer.js"></script>
+    <script src="/avatar-core/EmotionEngine.js"></script>
+    <script src="/avatar-core/AvatarEnginePro.js"></script>
+
+    <!-- Client Logic -->
+    <script src="/avatar-core/client-pro.js"></script>
+</body>
+</html>

@@ -4,6 +4,8 @@ import { LanguageContext } from '../App';
 import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import { completeIntegrationsOnboarding } from '../services/profileService';
 
 // Sub-serviços do Google Workspace
 interface GoogleService {
@@ -146,10 +148,25 @@ interface ActivityLog {
 
 const Integrations: React.FC = () => {
     const { t } = useContext(LanguageContext);
-    const { profile, plan, session } = useDashboardAuth();
+    const { profile, plan, session, refreshProfile } = useDashboardAuth();
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedIntegration, setSelectedIntegration] = useState<IntegrationDef | null>(null);
+
+    // v2.0: Detectar primeiro acesso pós-onboarding via URL
+    const [isFirstAccess, setIsFirstAccess] = useState(false);
+    const [completingOnboarding, setCompletingOnboarding] = useState(false);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
+        if (params.get('first_access') === 'true') {
+            setIsFirstAccess(true);
+            // Limpar parâmetro da URL para evitar reexibição
+            const newUrl = window.location.pathname + '#/integrations';
+            window.history.replaceState({}, document.title, newUrl);
+        }
+    }, []);
 
     // Estado para serviços Google selecionados (toggle individual)
     const [selectedGoogleServices, setSelectedGoogleServices] = useState<string[]>(
@@ -298,7 +315,23 @@ const Integrations: React.FC = () => {
     };
 
     // Total de integrações conectadas
+    // v2.1: Google Workspace conta cada serviço individualmente (Gmail=1, Calendar=1, etc.)
     const connectedIntegrations = userIntegrations.filter(ui => ui.status === 'active');
+
+    // Calcular total real considerando serviços Google
+    const calculateActiveCount = () => {
+        let count = 0;
+        connectedIntegrations.forEach(ui => {
+            if (ui.provider === 'google_workspace' && ui.services && ui.services.length > 0) {
+                // Google Workspace: cada serviço conta como 1
+                count += ui.services.length;
+            } else {
+                // Outras integrações: cada uma conta como 1
+                count += 1;
+            }
+        });
+        return count;
+    };
 
     const filteredIntegrations = INTEGRATIONS.filter(int => {
         const matchesCategory = activeTab === 'all' || int.category === activeTab;
@@ -307,7 +340,7 @@ const Integrations: React.FC = () => {
         return matchesCategory && matchesSearch;
     });
 
-    const activeCount = connectedIntegrations.length;
+    const activeCount = calculateActiveCount();
     const pendingCount = INTEGRATIONS.filter(i => canAccess(i) && !isConnected(i.id)).length;
     const blockedCount = INTEGRATIONS.filter(i => !canAccess(i)).length;
 
@@ -316,6 +349,18 @@ const Integrations: React.FC = () => {
             toast.error(`Upgrade para o plano ${integration.planRequired.toUpperCase()} para acessar`);
             return;
         }
+
+        // v2.1: Pré-carregar serviços já conectados ao abrir modal do Google Workspace
+        if (integration.id === 'google_workspace') {
+            const googleInt = getConnectedIntegration('google_workspace');
+            if (googleInt?.services && googleInt.services.length > 0) {
+                setSelectedGoogleServices(googleInt.services);
+            } else {
+                // Se não tem conexão, selecionar todos por padrão
+                setSelectedGoogleServices(GOOGLE_SERVICES.map(s => s.id));
+            }
+        }
+
         setSelectedIntegration(integration);
     };
 
@@ -324,11 +369,85 @@ const Integrations: React.FC = () => {
         console.log('[Integrations] Custom integration request submitted');
     };
 
+    // v2.0: Concluir onboarding de integrações
+    const handleCompleteIntegrationsOnboarding = async () => {
+        if (!profile?.id) return;
+
+        setCompletingOnboarding(true);
+        try {
+            await completeIntegrationsOnboarding(profile.id, []);
+            await refreshProfile();
+            setIsFirstAccess(false);
+            toast.success('Configuração inicial concluída! Bem-vindo ao seu painel de integrações.');
+            navigate('/home');
+        } catch (error) {
+            console.error('[Integrations] Erro ao concluir onboarding:', error);
+            // Continue anyway
+            setIsFirstAccess(false);
+            toast.success('Configuração salva!');
+        } finally {
+            setCompletingOnboarding(false);
+        }
+    };
+
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0D111C]">
             <Header title={t('integrationsTitle')} />
 
             <div className="flex-1 p-8 pt-2 overflow-y-auto">
+                {/* v2.0: Banner de Primeiro Acesso (Onboarding) */}
+                {isFirstAccess && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-6 p-6 bg-gradient-to-r from-green-500/10 via-emerald-500/5 to-transparent rounded-3xl border border-green-500/30"
+                    >
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="flex items-start gap-4">
+                                <div className="w-14 h-14 rounded-2xl bg-green-500/20 flex items-center justify-center flex-shrink-0">
+                                    <span className="material-symbols-outlined text-3xl text-green-500">celebration</span>
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-black text-green-600 dark:text-green-400 mb-1">
+                                        🎉 Parabéns! Seu painel está pronto.
+                                    </h3>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                                        Conecte suas ferramentas favoritas para que a LIA possa automatizar tarefas,
+                                        enviar lembretes e integrar seus dados. <strong>Você pode fazer isso agora ou depois.</strong>
+                                    </p>
+                                    <p className="text-xs text-green-600 dark:text-green-400 mt-2 flex items-center gap-1">
+                                        <span className="material-symbols-outlined text-sm">info</span>
+                                        Dica da LIA: Quanto mais conexões, mais inteligente eu fico!
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex gap-3 flex-shrink-0">
+                                <button
+                                    onClick={handleCompleteIntegrationsOnboarding}
+                                    disabled={completingOnboarding}
+                                    className="px-5 py-2.5 rounded-xl border border-gray-300 dark:border-white/20 text-sm font-bold hover:bg-gray-100 dark:hover:bg-white/5 transition-all disabled:opacity-50"
+                                >
+                                    Pular por agora
+                                </button>
+                                <button
+                                    onClick={handleCompleteIntegrationsOnboarding}
+                                    disabled={completingOnboarding}
+                                    className="px-6 py-2.5 rounded-xl bg-green-500 text-white text-sm font-bold hover:bg-green-600 transition-all shadow-lg shadow-green-500/30 disabled:opacity-50 flex items-center gap-2"
+                                >
+                                    {completingOnboarding ? (
+                                        <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+                                    ) : (
+                                        <>
+                                            <span className="material-symbols-outlined text-lg">rocket_launch</span>
+                                            Concluir Onboarding
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+
                 {/* Header com Badges */}
                 <div className="mb-8 p-6 bg-gradient-to-r from-brand-primary/10 via-purple-500/5 to-transparent rounded-3xl border border-brand-primary/20">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -432,7 +551,14 @@ const Integrations: React.FC = () => {
                                     {connected && (
                                         <span className="flex items-center gap-1 px-3 py-1 rounded-full bg-green-500/20 text-green-600 dark:text-green-400 text-[10px] font-bold uppercase">
                                             <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                                            Conectado
+                                            {/* v2.1: Mostrar quantidade de serviços Google conectados */}
+                                            {integration.id === 'google_workspace' ? (
+                                                (() => {
+                                                    const googleInt = getConnectedIntegration('google_workspace');
+                                                    const serviceCount = googleInt?.services?.length || 0;
+                                                    return `${serviceCount} serviço${serviceCount !== 1 ? 's' : ''}`;
+                                                })()
+                                            ) : 'Conectado'}
                                         </span>
                                     )}
                                 </div>
@@ -564,6 +690,17 @@ const Integrations: React.FC = () => {
                                 <div className="text-6xl mb-4">{selectedIntegration.icon}</div>
                                 <h2 className="text-2xl font-black tracking-tight">{selectedIntegration.name}</h2>
                                 <p className="text-gray-500 text-sm mt-1">{selectedIntegration.description}</p>
+                                {/* v2.1: Mostrar status conectado se já tiver conexão */}
+                                {isConnected(selectedIntegration.id) && (
+                                    <div className="mt-3 flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/20">
+                                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                                        <span className="text-xs font-bold text-green-600 dark:text-green-400">
+                                            {selectedIntegration.id === 'google_workspace' ? (
+                                                `${getConnectedIntegration('google_workspace')?.services?.length || 0} serviços conectados`
+                                            ) : 'Conectado'}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Renderização especial para Google Workspace */}
@@ -571,7 +708,7 @@ const Integrations: React.FC = () => {
                                 <div className="mb-6">
                                     <div className="flex items-center justify-between mb-3">
                                         <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400">
-                                            Selecione os Serviços
+                                            {isConnected('google_workspace') ? 'Gerenciar Serviços' : 'Selecione os Serviços'}
                                         </h4>
                                         <span className="text-xs text-brand-primary font-bold">
                                             {selectedGoogleServices.length} de {selectedIntegration.subServices.length}
@@ -658,8 +795,12 @@ const Integrations: React.FC = () => {
                                             console.log('[Integrations] Serviços selecionados:', selectedGoogleServices);
 
                                             try {
+                                                // Construir redirect_uri apontando para o Dashboard atual
+                                                const dashboardRedirectUri = `${window.location.origin}/#/oauth/callback`;
+                                                console.log('[Integrations] Usando redirect_uri:', dashboardRedirectUri);
+
                                                 const response = await fetch(
-                                                    `/api/auth/google?services=${selectedGoogleServices.join(',')}&user_id=${profile.id}`
+                                                    `/api/auth/google?services=${selectedGoogleServices.join(',')}&user_id=${profile.id}&redirect_uri=${encodeURIComponent(dashboardRedirectUri)}`
                                                 );
 
                                                 if (!response.ok) {

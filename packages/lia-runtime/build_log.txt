@@ -1,0 +1,48 @@
+
+> @luminnus/lia-runtime@1.0.0 build D:\luminnus-platform-core\packages\lia-runtime
+> tsup
+
+[34mCLI[39m Building entry: {"index":"src/index.ts","live/index":"src/live/index.ts","contracts/index":"src/contracts/index.ts","utils/index":"src/utils/index.ts","version/index":"src/version/index.ts","memory/index":"src/memory/index.ts"}
+[34mCLI[39m Using tsconfig: tsconfig.json
+[34mCLI[39m tsup v8.5.1
+[34mCLI[39m Using tsup config: D:\luminnus-platform-core\packages\lia-runtime\tsup.config.ts
+[34mCLI[39m Target: es2020
+[34mCJS[39m Build start
+[34mESM[39m Build start
+[32mCJS[39m [1mdist\contracts\index.js     [22m[32m525.00 B[39m
+[32mCJS[39m [1mdist\utils\index.js         [22m[32m1.82 KB[39m
+[32mCJS[39m [1mdist\live\index.js          [22m[32m19.72 KB[39m
+[32mCJS[39m [1mdist\memory\index.js        [22m[32m4.31 KB[39m
+[32mCJS[39m [1mdist\version\index.js       [22m[32m4.06 KB[39m
+[32mCJS[39m [1mdist\index.js               [22m[32m28.37 KB[39m
+[32mCJS[39m [1mdist\utils\index.js.map     [22m[32m4.55 KB[39m
+[32mCJS[39m [1mdist\contracts\index.js.map [22m[32m3.31 KB[39m
+[32mCJS[39m [1mdist\index.js.map           [22m[32m71.31 KB[39m
+[32mCJS[39m [1mdist\memory\index.js.map    [22m[32m10.22 KB[39m
+[32mCJS[39m [1mdist\live\index.js.map      [22m[32m48.54 KB[39m
+[32mCJS[39m [1mdist\version\index.js.map   [22m[32m9.50 KB[39m
+[32mCJS[39m ÔÜí´©Å Build success in 1064ms
+[32mESM[39m [1mdist\utils\index.mjs         [22m[32m1.80 KB[39m
+[32mESM[39m [1mdist\contracts\index.mjs     [22m[32m497.00 B[39m
+[32mESM[39m [1mdist\version\index.mjs       [22m[32m4.04 KB[39m
+[32mESM[39m [1mdist\live\index.mjs          [22m[32m19.67 KB[39m
+[32mESM[39m [1mdist\memory\index.mjs        [22m[32m4.04 KB[39m
+[32mESM[39m [1mdist\index.mjs               [22m[32m27.99 KB[39m
+[32mESM[39m [1mdist\contracts\index.mjs.map [22m[32m3.31 KB[39m
+[32mESM[39m [1mdist\utils\index.mjs.map     [22m[32m4.55 KB[39m
+[32mESM[39m [1mdist\live\index.mjs.map      [22m[32m48.50 KB[39m
+[32mESM[39m [1mdist\index.mjs.map           [22m[32m71.26 KB[39m
+[32mESM[39m [1mdist\version\index.mjs.map   [22m[32m9.50 KB[39m
+[32mESM[39m [1mdist\memory\index.mjs.map    [22m[32m10.21 KB[39m
+[32mESM[39m ÔÜí´©Å Build success in 1065ms
+[34mDTS[39m Build start
+src/live/geminiLiveService.ts(17,67): error TS2307: Cannot find module '@luminnus/shared' or its corresponding type declarations.
+
+Error: error occurred in dts build
+    at Worker.<anonymous> (D:\luminnus-platform-core\node_modules\.pnpm\tsup@8.5.1_@swc+core@1.15.7_@swc+helpers@0.5.17__jiti@2.6.1_postcss@8.5.6_tsx@4.21.0_typescript@5.8.3\node_modules\tsup\dist\index.js:1545:26)
+    at Worker.emit (node:events:519:28)
+    at MessagePort.<anonymous> (node:internal/worker:270:53)
+    at [nodejs.internal.kHybridDispatch] (node:internal/event_target:827:20)
+    at MessagePort.<anonymous> (node:internal/per_context/messageport:23:28)
+DTS Build error
+ÔÇëELIFECYCLEÔÇë Command failed with exit code 1.

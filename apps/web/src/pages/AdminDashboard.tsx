@@ -17,6 +17,7 @@ import AdminIntegrations from "@/components/admin/AdminIntegrations";
 import AdminMetrics from "@/components/admin/AdminMetrics";
 import AdminSupport from "@/components/admin/AdminSupport";
 import AdminLiaCoreUpdates from "@/components/admin/AdminLiaCoreUpdates";
+import AdminLIAContainer from "@/components/admin/AdminLIAContainer";
 import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -27,6 +28,14 @@ const AdminDashboard = () => {
   const { isAdmin, isLoading, adminEmail } = useAdminAuth();
   const [activeSection, setActiveSection] = useState("overview");
   const navigate = useNavigate();
+
+  // Verificação de parâmetros da URL para abrir seções específicas (ex: volta do OAuth)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("integrations") === "true") {
+      setActiveSection("integrations");
+    }
+  }, []);
 
   // Verificação extra por email (para evitar flash)
   const isAdminByEmail = user?.email && ADMIN_EMAILS.includes(user.email);
@@ -58,6 +67,8 @@ const AdminDashboard = () => {
         return <AdminOverview />;
       case "lia-chat":
         return <AdminLiaChat />;
+      case "lia-viva":
+        return <AdminLIAContainer />;
       case "users":
         return <AdminUsers />;
       case "companies":
@@ -94,6 +105,7 @@ const AdminDashboard = () => {
     switch (activeSection) {
       case "overview": return "Visão Geral";
       case "lia-chat": return "Assistente LIA";
+      case "lia-viva": return "LIA (Painel Completo)";
       case "users": return "Gerenciar Usuários";
       case "companies": return "Gestão de Empresas";
       case "lia-config": return "Configurações da LIA";
@@ -120,7 +132,7 @@ const AdminDashboard = () => {
       />
 
       {/* Main Content */}
-      <main className="flex-1 md:ml-64">
+      <main className="flex-1 md:ml-64 min-w-0 overflow-x-hidden">
         {/* Top Bar */}
         <div className="border-b border-border bg-card px-6 py-4">
           <div className="flex items-center justify-between">
@@ -132,17 +144,17 @@ const AdminDashboard = () => {
                 Logado como: <span className="font-medium">{adminEmail}</span>
               </p>
             </div>
-            <div className="hidden items-center gap-4 md:flex">
+            <div className="hidden items-center gap-4 md:flex shrink-0">
               <div className="text-right">
-                <div className="text-sm font-medium text-foreground">Painel Admin</div>
-                <div className="text-xs text-muted-foreground">Sistema LIA</div>
+                <div className="text-sm font-medium text-foreground whitespace-nowrap">Painel Admin</div>
+                <div className="text-xs text-muted-foreground whitespace-nowrap">Sistema LIA</div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Content Area */}
-        <div className="p-6">
+        <div className="p-6 w-full">
           {renderSection()}
         </div>
       </main>

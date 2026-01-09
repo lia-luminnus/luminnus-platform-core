@@ -113,19 +113,19 @@ const AppContent: React.FC = () => {
     }
   }, [profile?.modules, setModules]);
 
-  // Detectar primeiro acesso pós-onboarding para mostrar modal de integrações
+  // Detectar primeiro acesso pós-onboarding para redirecionar ao Hub de Integrações (v2.0)
+  // Substitui o modal genérico pelo Hub completo
   useEffect(() => {
     if (
       profile &&
       profile.onboarding_completed &&
       !profile.onboarding_integrations_done &&
-      location.pathname !== '/onboarding'
+      location.pathname !== '/onboarding' &&
+      location.pathname !== '/integrations'
     ) {
-      // Pequeno delay para garantir que o dashboard carregou
-      const timer = setTimeout(() => {
-        setShowIntegrationModal(true);
-      }, 500);
-      return () => clearTimeout(timer);
+      // Redirecionar diretamente para o Hub de Integrações completo
+      console.log('[App] Primeiro acesso pós-onboarding → Redirecionando para Hub de Integrações');
+      window.location.hash = '#/integrations?first_access=true';
     }
   }, [profile, location.pathname]);
 

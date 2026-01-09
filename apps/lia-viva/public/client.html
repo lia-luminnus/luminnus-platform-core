@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LIA - Luminnus Intelligent Assistant</title>
+  <link rel="stylesheet" href="/client.css">
+  <!-- Evita 404 do favicon: aponta para a imagem da LIA caso não exista favicon.ico -->
+  <link rel="icon" href="/lia-face/Lia.png" type="image/png">
+</head>
+
+<body>
+  <h1>🎙️ LIA - Luminnus Intelligent Assistant</h1>
+  <button id="sessionButton">🎤 Iniciar Chat de Voz</button>
+
+  <div id="container">
+    <div id="chat"></div>
+
+    <div id="liaContainer">
+      <img id="liaImage" src="/lia-face/Lia.png" alt="LIA" />
+      <div id="liaStatus">💚 Pronta.</div>
+    </div>
+  </div>
+
+  <div id="inputArea">
+    <input id="messageInput" type="text" placeholder="Digite sua mensagem..." />
+    <button id="dictateButton" title="Falar para digitar">🎙️</button>
+    <button id="sendButton">Enviar</button>
+    <button id="micButton">🎤</button>
+  </div>
+
+  <!-- 🎙️ Seletor de Personalidade de Voz -->
+  <div id="voiceSelector">
+    <label>🎙️ Personalidade da Voz:</label>
+    <div id="voiceButtons">
+      <button class="voice-btn active" data-voice="viva">
+        ✨ Viva
+        <span>Alegre e simpática</span>
+      </button>
+      <button class="voice-btn" data-voice="clara">
+        🌸 Clara
+        <span>Calma e acolhedora</span>
+      </button>
+      <button class="voice-btn" data-voice="firme">
+        💼 Firme
+        <span>Profissional e objetiva</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="connectionStatus">🟢 Conectado</div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/realtime-voice-client.js"></script>
+  <script src="/client.js?v=3"></script>
+</body>
+
+</html>

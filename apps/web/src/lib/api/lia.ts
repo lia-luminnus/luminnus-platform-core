@@ -43,29 +43,45 @@ export interface LiaResponse {
 }
 
 /**
+ * Opções para envio de mensagem
+ */
+export interface EnviarMensagemOptions {
+  liaMode?: 'NORMAL' | 'DIAGNOSTIC';
+  conversationId?: string;
+  userId?: string;
+}
+
+/**
  * FUNÇÃO: Enviar mensagem para a LIA
  * @param mensagem - A mensagem a ser enviada para a LIA
+ * @param options - Opções adicionais (liaMode, conversationId, etc)
  * @returns Promise com a resposta da API
  */
-export async function enviarMensagemLIA(mensagem: string): Promise<LiaResponse> {
+export async function enviarMensagemLIA(mensagem: string, options?: EnviarMensagemOptions): Promise<LiaResponse> {
   const apiUrl = obterUrlApiLIA();
   const maxRetries = 2;
   let lastError: Error | null = null;
 
   console.log(`[LIA API] URL configurada: ${apiUrl}`);
   console.log(`[LIA API] Enviando mensagem:`, mensagem);
+  console.log(`[LIA API] Modo: ${options?.liaMode || 'NORMAL'}`);
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`[LIA API] Tentativa ${attempt}/${maxRetries}...`);
-      
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
-      
+
       const response = await fetch(`${apiUrl}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: mensagem }),
+        body: JSON.stringify({
+          message: mensagem,
+          liaMode: options?.liaMode || 'NORMAL',
+          conversationId: options?.conversationId,
+          userId: options?.userId,
+        }),
         signal: controller.signal
       });
 
@@ -81,12 +97,12 @@ export async function enviarMensagemLIA(mensagem: string): Promise<LiaResponse> 
 
       const data = await response.json();
       console.log('[LIA API] Resposta recebida:', data);
-      
+
       return data;
-      
+
     } catch (error) {
       lastError = error as Error;
-      
+
       if (error.name === 'AbortError') {
         console.error(`[LIA API] Timeout na tentativa ${attempt} - A API pode estar hibernada`);
         if (attempt < maxRetries) {
@@ -95,14 +111,14 @@ export async function enviarMensagemLIA(mensagem: string): Promise<LiaResponse> 
           continue;
         }
       }
-      
+
       console.error(`[LIA API] Erro na tentativa ${attempt}:`, error);
-      
+
       if (attempt === maxRetries) {
-        const errorMessage = lastError?.name === 'AbortError' 
+        const errorMessage = lastError?.name === 'AbortError'
           ? "⏱️ A API está demorando muito para responder. Ela pode estar 'acordando' do modo hibernação. Tente novamente em alguns segundos."
           : `❌ Não foi possível conectar à API: ${lastError?.message || 'Erro desconhecido'}`;
-        
+
         throw new Error(errorMessage);
       }
     }

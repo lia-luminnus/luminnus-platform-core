@@ -13,6 +13,8 @@ import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import TermsOfService from "@/pages/TermsOfService";
 import AdminConfig from "@/pages/AdminConfig";
 import AdminDashboard from "@/pages/AdminDashboard";
+import Files from "@/pages/Files";
+import OAuthCallback from "@/pages/OAuthCallback";
 
 /**
  * AppRoutes Component
@@ -30,11 +32,15 @@ const AppRoutes = () => {
       <Route path="/" element={<Index />} />
       <Route path="/planos" element={<Plans />} />
       <Route path="/auth" element={<Auth />} />
+      <Route path="/oauth-callback" element={<OAuthCallback />} />
       <Route path="/dashboard/*" element={<Dashboard />} />
       <Route path="/area-do-cliente" element={<ClientArea />} />
       <Route path="/minha-conta" element={<MyAccount />} />
       <Route path="/politica-de-privacidade" element={<PrivacyPolicy />} />
       <Route path="/termos-de-uso" element={<TermsOfService />} />
+
+      {/* ==================== CLIENT FILES DASHBOARD ==================== */}
+      <Route path="/files" element={<Files />} />
 
       {/* ==================== ADMIN SYSTEM ROUTES ==================== */}
 
@@ -48,5 +54,6 @@ const AppRoutes = () => {
     </Routes>
   );
 };
+
 
 export default AppRoutes;

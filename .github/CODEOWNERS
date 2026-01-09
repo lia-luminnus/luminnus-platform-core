@@ -1,0 +1,68 @@
+# =============================================================================
+# CODEOWNERS - Luminnus Platform
+# =============================================================================
+# Arquivo que define os owners de cada área do código.
+# Alterações nessas áreas exigem aprovação dos owners listados.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# CORE_STABLE - Exige aprovação obrigatória
+# -----------------------------------------------------------------------------
+
+# Backend Realtime (Socket.IO, WebRTC, voz)
+/apps/lia-viva/lia-live-view/server/realtime/** @wendell-owner
+
+# Configurações críticas (Supabase, OpenAI, Google)
+/apps/lia-viva/lia-live-view/server/config/** @wendell-owner
+
+# Serviços core (memória, ferramentas, AI router)
+/apps/lia-viva/lia-live-view/server/services/** @wendell-owner
+
+# Assistentes GPT
+/apps/lia-viva/lia-live-view/server/assistants/** @wendell-owner
+
+# Rotas de API (conversas, mensagens, etc)
+/apps/lia-viva/lia-live-view/server/routes/** @wendell-owner
+
+# Personalidade da LIA
+/apps/lia-viva/lia-live-view/server/personality/** @wendell-owner
+
+# Contratos de eventos
+/apps/lia-viva/lia-live-view/server/contracts/** @wendell-owner
+
+# -----------------------------------------------------------------------------
+# AUTH - Exige aprovação obrigatória
+# -----------------------------------------------------------------------------
+
+# Dashboard Auth
+/Dashboard-client/contexts/DashboardAuthContext.tsx @wendell-owner
+
+# Admin Panel Auth
+/admin-panel/src/contexts/AuthContext.tsx @wendell-owner
+
+# Supabase config
+/Dashboard-client/lib/supabase.ts @wendell-owner
+/admin-panel/src/lib/supabase.ts @wendell-owner
+
+# -----------------------------------------------------------------------------
+# UI_STABLE - Componentes LIA aprovados
+# -----------------------------------------------------------------------------
+
+# LIA no Admin Panel
+/admin-panel/src/components/lia/** @wendell-owner
+
+# LIA no Dashboard
+/Dashboard-client/components/lia/** @wendell-owner
+
+# -----------------------------------------------------------------------------
+# EXPERIMENTAL - Livre para desenvolvimento
+# -----------------------------------------------------------------------------
+
+# Shared packages (não requer aprovação)
+# /packages/shared/**
+
+# Testes (não requer aprovação)
+# /apps/*/tests/**
+
+# Documentação (não requer aprovação)
+# /docs/**

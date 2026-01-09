@@ -1,0 +1,812 @@
+{
+    "functions": [
+        {
+            "name": "sendWhatsAppMessage",
+            "description": "Envia uma mensagem da Lia para o cliente via WhatsApp.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "phoneNumber": {
+                        "type": "string",
+                        "description": "Número do cliente."
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "Mensagem enviada."
+                    },
+                    "messageType": {
+                        "type": "string",
+                        "enum": [
+                            "text",
+                            "audio",
+                            "image"
+                        ]
+                    },
+                    "mediaUrl": {
+                        "type": "string",
+                        "description": "URL se for mídia."
+                    }
+                },
+                "required": [
+                    "phoneNumber",
+                    "message",
+                    "messageType"
+                ]
+            }
+        },
+        {
+            "name": "interpretWhatsAppInput",
+            "description": "Analisa e interpreta a entrada recebida do cliente via WhatsApp.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "clientId": {
+                        "type": "string"
+                    },
+                    "inputType": {
+                        "type": "string",
+                        "enum": [
+                            "text",
+                            "audio",
+                            "image",
+                            "document"
+                        ]
+                    },
+                    "inputContent": {
+                        "type": "string"
+                    },
+                    "timestamp": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "clientId",
+                    "inputType",
+                    "inputContent"
+                ]
+            }
+        },
+        {
+            "name": "queryClientDatabase",
+            "description": "Busca informações no banco de dados do cliente.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string"
+                    },
+                    "clientId": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "query"
+                ]
+            }
+        },
+        {
+            "name": "startLiveAssistantMode",
+            "description": "Ativa o modo de conversa ao vivo com a LIA.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "enum": [
+                            "voice",
+                            "video"
+                        ]
+                    },
+                    "language": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "mode"
+                ]
+            }
+        },
+        {
+            "name": "scheduleMeeting",
+            "description": "Agenda uma reunião no calendário.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string"
+                    },
+                    "date": {
+                        "type": "string"
+                    },
+                    "participants": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "platform": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "title",
+                    "date"
+                ]
+            }
+        },
+        {
+            "name": "sendEmail",
+            "description": "Envia um e-mail personalizado.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "subject": {
+                        "type": "string"
+                    },
+                    "body": {
+                        "type": "string"
+                    },
+                    "attachments": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "to",
+                    "subject",
+                    "body"
+                ]
+            }
+        },
+        {
+            "name": "whatsappInteraction",
+            "description": "Interage com o cliente via WhatsApp.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string"
+                    },
+                    "media": {
+                        "type": "string"
+                    },
+                    "clientId": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "message"
+                ]
+            }
+        },
+        {
+            "name": "createTask",
+            "description": "Cria uma nova tarefa no painel.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string"
+                    },
+                    "deadline": {
+                        "type": "string"
+                    },
+                    "priority": {
+                        "type": "string",
+                        "enum": [
+                            "baixa",
+                            "média",
+                            "alta"
+                        ]
+                    },
+                    "description": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "title"
+                ]
+            }
+        },
+        {
+            "name": "searchWeb",
+            "description": "Pesquisa na web por informações.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string"
+                    },
+                    "language": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "query"
+                ]
+            }
+        },
+        {
+            "name": "recordVideoMessage",
+            "description": "Grava uma mensagem de vídeo personalizada.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string"
+                    },
+                    "clientName": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "message"
+                ]
+            }
+        },
+        {
+            "name": "translateText",
+            "description": "Traduz um texto para outro idioma.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string"
+                    },
+                    "targetLanguage": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "text",
+                    "targetLanguage"
+                ]
+            }
+        },
+        {
+            "name": "generateDocument",
+            "description": "Gera um documento estruturado.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string"
+                    },
+                    "content": {
+                        "type": "string"
+                    },
+                    "format": {
+                        "type": "string",
+                        "enum": [
+                            "pdf",
+                            "docx",
+                            "txt"
+                        ]
+                    }
+                },
+                "required": [
+                    "title",
+                    "content",
+                    "format"
+                ]
+            }
+        },
+        {
+            "name": "analyzeImageInput",
+            "description": "Analisa uma imagem enviada pelo cliente.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "imageUrl": {
+                        "type": "string"
+                    },
+                    "context": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "imageUrl"
+                ]
+            }
+        },
+        {
+            "name": "scheduleReminder",
+            "description": "Agenda um lembrete personalizado.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reminderText": {
+                        "type": "string"
+                    },
+                    "reminderTime": {
+                        "type": "string"
+                    },
+                    "channel": {
+                        "type": "string",
+                        "enum": [
+                            "app",
+                            "email",
+                            "whatsapp"
+                        ]
+                    }
+                },
+                "required": [
+                    "reminderText",
+                    "reminderTime"
+                ]
+            }
+        },
+        {
+            "name": "sendQuickMessage",
+            "description": "Envia uma mensagem curta ao usuário.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "recipient": {
+                        "type": "string"
+                    },
+                    "message": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "recipient",
+                    "message"
+                ]
+            }
+        },
+        {
+            "name": "createQuickNote",
+            "description": "Cria uma nota rápida.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string"
+                    },
+                    "category": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "content"
+                ]
+            }
+        },
+        {
+            "name": "getDailySummary",
+            "description": "Resumo das tarefas do dia.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "userId": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "userId"
+                ]
+            }
+        },
+        {
+            "name": "translateTextLight",
+            "description": "Tradução leve e rápida.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string"
+                    },
+                    "targetLanguage": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "text",
+                    "targetLanguage"
+                ]
+            }
+        },
+        {
+            "name": "lightSearchMemory",
+            "description": "Busca informações no histórico.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "query"
+                ]
+            }
+        },
+        {
+            "name": "buscar_na_web",
+            "description": "Busca avançada na web.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string"
+                    },
+                    "language": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "query"
+                ]
+            }
+        },
+        {
+            "name": "gerar_imagem",
+            "description": "Gera uma imagem com base no prompt.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {
+                        "type": "string"
+                    },
+                    "size": {
+                        "type": "string",
+                        "enum": [
+                            "256x256",
+                            "512x512",
+                            "1024x1024"
+                        ]
+                    }
+                },
+                "required": [
+                    "prompt"
+                ]
+            }
+        },
+        {
+            "name": "falar_com_voz",
+            "description": "Transforma texto em áudio com voz da LIA.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string"
+                    },
+                    "voiceStyle": {
+                        "type": "string",
+                        "enum": [
+                            "padrão",
+                            "amigável",
+                            "profissional",
+                            "leve"
+                        ]
+                    }
+                },
+                "required": [
+                    "text"
+                ]
+            }
+        },
+        {
+            "name": "obter_hora_local",
+            "description": "Retorna hora local do usuário.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "timezone": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "timezone"
+                ]
+            }
+        },
+        {
+            "name": "resumir_arquivo",
+            "description": "Resume arquivos PDF/texto.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "fileUrl": {
+                        "type": "string"
+                    },
+                    "language": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "fileUrl"
+                ]
+            }
+        },
+        {
+            "name": "traduzir_arquivo",
+            "description": "Traduz conteúdo de arquivo enviado.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "fileUrl": {
+                        "type": "string"
+                    },
+                    "targetLanguage": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "fileUrl",
+                    "targetLanguage"
+                ]
+            }
+        },
+        {
+            "name": "interpretar_sentimento",
+            "description": "Analisa sentimento do texto.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "text"
+                ]
+            }
+        },
+        {
+            "name": "resposta_personalizada",
+            "description": "Gera resposta adaptada ao usuário.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "context": {
+                        "type": "string"
+                    },
+                    "tone": {
+                        "type": "string",
+                        "enum": [
+                            "formal",
+                            "informal",
+                            "leve",
+                            "executivo"
+                        ]
+                    }
+                },
+                "required": [
+                    "context"
+                ]
+            }
+        },
+        {
+            "name": "criar_relatorio",
+            "description": "Gera relatórios estruturados.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string"
+                    },
+                    "content": {
+                        "type": "string"
+                    },
+                    "format": {
+                        "type": "string",
+                        "enum": [
+                            "pdf",
+                            "docx",
+                            "txt"
+                        ]
+                    }
+                },
+                "required": [
+                    "title",
+                    "content",
+                    "format"
+                ]
+            }
+        },
+        {
+            "name": "criar_componente",
+            "description": "Cria componente no dev studio.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "componentType": {
+                        "type": "string"
+                    },
+                    "properties": {
+                        "type": "object"
+                    }
+                },
+                "required": [
+                    "componentType"
+                ]
+            }
+        },
+        {
+            "name": "editar_componente",
+            "description": "Edita componente existente.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "componentId": {
+                        "type": "string"
+                    },
+                    "changes": {
+                        "type": "object"
+                    }
+                },
+                "required": [
+                    "componentId",
+                    "changes"
+                ]
+            }
+        },
+        {
+            "name": "criar_automacao",
+            "description": "Cria automações personalizadas.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "steps": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "name",
+                    "steps"
+                ]
+            }
+        },
+        {
+            "name": "criar_api",
+            "description": "Cria uma API simples automaticamente.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "route": {
+                        "type": "string"
+                    },
+                    "method": {
+                        "type": "string",
+                        "enum": [
+                            "GET",
+                            "POST",
+                            "PUT",
+                            "DELETE"
+                        ]
+                    },
+                    "response": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "route",
+                    "method"
+                ]
+            }
+        },
+        {
+            "name": "criar_painel_cliente",
+            "description": "Cria um painel com seções personalizadas.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "clientId": {
+                        "type": "string"
+                    },
+                    "sections": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "clientId"
+                ]
+            }
+        },
+        {
+            "name": "integrar_ferramenta",
+            "description": "Integra CRM, ERP, WhatsApp etc.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "toolName": {
+                        "type": "string"
+                    },
+                    "credentials": {
+                        "type": "object"
+                    }
+                },
+                "required": [
+                    "toolName"
+                ]
+            }
+        },
+        {
+            "name": "criar_api_personalizada",
+            "description": "Cria APIs avançadas com vários endpoints.",
+            "strict": false,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "apiName": {
+                        "type": "string"
+                    },
+                    "endpoints": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "route": {
+                                    "type": "string"
+                                },
+                                "method": {
+                                    "type": "string"
+                                },
+                                "response": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "required": [
+                    "apiName",
+                    "endpoints"
+                ]
+            }
+        }
+    ]
+}

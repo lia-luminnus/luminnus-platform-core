@@ -1,0 +1,28 @@
+{
+  "base": {
+    "idle": "Lia-idle.png",
+    "listening": "Lia-listening.png",
+    "thinking": "Lia-thinking.png",
+    "speaking": "Lia-speaking.png",
+    "error": "Lia-idle.png"
+  },
+  "expressions": {
+    "neutral": "Lia-idle.png",
+    "happy": "Lia-idle.png",
+    "sad": "Lia-idle.png",
+    "surprised": "Lia-idle.png",
+    "confused": "Lia-idle.png",
+    "angry": "Lia-idle.png",
+    "proud": "Lia-idle.png",
+    "curious": "Lia-listening.png"
+  },
+  "gestures": {
+    "wave_short": "Lia-idle.png",
+    "shrug": "Lia-thinking.png"
+  },
+  "speaking": {
+    "mouth_open": "Lia-speaking.png",
+    "mouth_semi": "Lia-speaking.png",
+    "mouth_closed": "Lia-idle.png"
+  }
+}

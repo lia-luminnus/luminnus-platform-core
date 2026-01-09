@@ -3,7 +3,7 @@ import React, { useState, createContext, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
-import LiaChat from './components/LiaChat';
+import LIAHub from './components/lia/LIAHub';
 import Calendar from './components/Calendar';
 import Files from './components/Files';
 import Automations from './components/Automations';
@@ -18,19 +18,22 @@ import Sales from './components/Sales';
 import Stock from './components/Stock';
 import Properties from './components/Properties';
 import MedicalRecords from './components/MedicalRecords';
+import Integrations from './components/Integrations';
 import Onboarding from './components/Onboarding';
+import AuthBridge from './components/AuthBridge';
+import { useDashboardAuth } from './contexts/DashboardAuthContext';
 import { useAppStore } from './store/useAppStore';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const PlaceholderModule: React.FC<{ title: string, icon: string }> = ({ title, icon }) => (
-  <motion.div 
+  <motion.div
     initial={{ opacity: 0, scale: 0.95 }}
     animate={{ opacity: 1, scale: 1 }}
     className="flex flex-col h-full items-center justify-center p-8 text-center"
   >
     <div className="w-32 h-32 rounded-full bg-brand-primary/10 flex items-center justify-center mb-8 animate-pulse shadow-2xl">
-        <span className="material-symbols-outlined text-6xl text-brand-primary">{icon}</span>
+      <span className="material-symbols-outlined text-6xl text-brand-primary">{icon}</span>
     </div>
     <h1 className="text-4xl font-black mb-4 tracking-tighter">{title}</h1>
     <p className="text-gray-500 max-w-md font-medium">Este módulo de elite foi ativado. Em breve, a LIA integrará funcionalidades avançadas aqui.</p>
@@ -52,7 +55,7 @@ export const translations = {
 
 export const ThemeContext = createContext({
   isDark: true,
-  toggleTheme: () => {},
+  toggleTheme: () => { },
 });
 
 export const LanguageContext = createContext<{
@@ -61,59 +64,119 @@ export const LanguageContext = createContext<{
   t: (key: keyof typeof translations['pt']) => string;
 }>({
   language: 'pt',
-  setLanguage: () => {},
+  setLanguage: () => { },
   t: (key: any) => key,
 });
 
 const AppContent: React.FC = () => {
-    const { isFirstVisit } = useAppStore();
-    const location = useLocation();
+  const { user, onboardingCompleted, loading, initialized } = useDashboardAuth();
+  const location = useLocation();
+  const { resetOnboarding } = useAppStore();
+  const [updateAvailable, setUpdateAvailable] = useState<{ version?: string, force?: boolean } | null>(null);
 
-    if (isFirstVisit && location.pathname !== '/onboarding') {
-        return <Navigate to="/onboarding" replace />;
-    }
+  useEffect(() => {
+    const handleUpdate = (e: any) => {
+      setUpdateAvailable(e.detail);
+    };
+    window.addEventListener('lia-system-update' as any, handleUpdate);
+    return () => window.removeEventListener('lia-system-update' as any, handleUpdate);
+  }, []);
 
+  // v4.1: O reset de onboarding agora é tratado no componente AuthBridge
+  // via parâmetro admin_access=true, garantindo SSOT com o Admin Panel.
+
+  if (!initialized || loading) {
     return (
-        <div className="flex h-screen w-screen bg-gray-50 dark:bg-[#0A0F1A] text-gray-900 dark:text-gray-100 font-sans overflow-hidden">
-            {location.pathname !== '/onboarding' && <Sidebar />}
-            <main className="flex-1 flex flex-col min-w-0 relative">
-                <AnimatePresence mode="wait">
-                    <motion.div
-                        key={location.pathname}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
-                        className="h-full flex flex-col"
-                    >
-                        <Routes location={location}>
-                            <Route path="/onboarding" element={<Onboarding />} />
-                            <Route path="/" element={<Dashboard />} />
-                            <Route path="/crm" element={<CRM />} />
-                            <Route path="/lia" element={<LiaChat />} />
-                            <Route path="/calendar" element={<Calendar />} />
-                            <Route path="/files" element={<Files />} />
-                            <Route path="/automations" element={<Automations />} />
-                            <Route path="/financial" element={<Financial />} />
-                            <Route path="/team" element={<Team />} />
-                            <Route path="/settings" element={<Settings />} />
-                            <Route path="/plan" element={<Plan />} />
-                            <Route path="/support" element={<Support />} />
-                            <Route path="/stock" element={<Stock />} />
-                            <Route path="/sales" element={<Sales />} />
-                            <Route path="/logistics" element={<Logistics />} />
-                            <Route path="/properties" element={<Properties />} />
-                            <Route path="/records" element={<MedicalRecords />} />
-                            <Route path="/projects" element={<PlaceholderModule title="Projetos" icon="rocket_launch" />} />
-                            <Route path="/reports" element={<PlaceholderModule title="Relatórios" icon="bar_chart" />} />
-                            <Route path="*" element={<Navigate to="/" replace />} />
-                        </Routes>
-                    </motion.div>
-                </AnimatePresence>
-            </main>
+      <div className="flex h-screen items-center justify-center bg-[#0A0F1A]">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-brand-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-white/70 font-medium">Sincronizando Core LIA...</p>
         </div>
+      </div>
     );
-}
+  }
+
+  if (!onboardingCompleted && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  return (
+    <div className="flex h-screen w-screen bg-gray-50 dark:bg-[#0A0F1A] text-gray-900 dark:text-gray-100 font-sans overflow-hidden flex-col">
+      <AnimatePresence>
+        {updateAvailable && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="bg-brand-primary text-white py-2 px-4 flex items-center justify-between text-sm font-medium z-[100] shadow-lg"
+          >
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-base">rocket_launch</span>
+              <span>Uma nova versão da LIA está disponível {updateAvailable.version ? `(v${updateAvailable.version})` : ''}.</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setUpdateAvailable(null)}
+                className="px-3 py-1 hover:bg-white/10 rounded-md transition-colors"
+              >
+                Depois
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className="bg-white text-black px-3 py-1 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-1 font-bold"
+              >
+                Atualizar Agora
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="flex flex-1 overflow-hidden min-h-0">
+        {location.pathname !== '/onboarding' && <Sidebar />}
+        <main className="flex-1 flex flex-col min-w-0 relative min-h-0">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+              className="h-full flex flex-col"
+            >
+              <Routes location={location}>
+                <Route path="/auth-bridge" element={<AuthBridge />} />
+                <Route path="/onboarding" element={<Onboarding />} />
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/crm" element={<CRM />} />
+                <Route path="/lia/*" element={<LIAHub />} />
+                <Route path="/integrations" element={<Integrations />} />
+                <Route path="/calendar" element={<Calendar />} />
+                <Route path="/files" element={<Files />} />
+                <Route path="/automations" element={<Automations />} />
+                <Route path="/financial" element={<Financial />} />
+                <Route path="/team" element={<Team />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/plan" element={<Plan />} />
+                <Route path="/support" element={<Support />} />
+                <Route path="/stock" element={<Stock />} />
+                <Route path="/sales" element={<Sales />} />
+                <Route path="/logistics" element={<Logistics />} />
+                <Route path="/properties" element={<Properties />} />
+                <Route path="/records" element={<MedicalRecords />} />
+                <Route path="/projects" element={<PlaceholderModule title="Projetos" icon="rocket_launch" />} />
+                <Route path="/reports" element={<PlaceholderModule title="Relatórios" icon="bar_chart" />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </motion.div>
+          </AnimatePresence>
+        </main>
+      </div>
+    </div>
+  );
+};
+
+import { DashboardAuthProvider } from './contexts/DashboardAuthContext';
 
 const App: React.FC = () => {
   const [isDark, setIsDark] = useState(true);
@@ -134,16 +197,18 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ isDark, toggleTheme }}>
-      <LanguageContext.Provider value={{ language, setLanguage, t }}>
-        <div className={isDark ? 'dark' : ''}>
-          <Router>
-            <Toaster position="top-right" />
-            <AppContent />
-          </Router>
-        </div>
-      </LanguageContext.Provider>
-    </ThemeContext.Provider>
+    <DashboardAuthProvider>
+      <ThemeContext.Provider value={{ isDark, toggleTheme }}>
+        <LanguageContext.Provider value={{ language, setLanguage, t }}>
+          <div className={isDark ? 'dark' : ''}>
+            <Router>
+              <Toaster position="top-right" />
+              <AppContent />
+            </Router>
+          </div>
+        </LanguageContext.Provider>
+      </ThemeContext.Provider>
+    </DashboardAuthProvider>
   );
 };
 

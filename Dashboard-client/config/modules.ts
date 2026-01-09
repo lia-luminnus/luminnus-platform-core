@@ -11,7 +11,7 @@ export const MODULE_REGISTRY: Record<ModuleId, ModuleDefinition> = {
   financial: { id: 'financial', translationKey: 'financial', icon: 'monitoring', path: '/financial' },
   automations: { id: 'automations', translationKey: 'automations', icon: 'bolt', path: '/automations' },
   team: { id: 'team', translationKey: 'team', icon: 'group', path: '/team' },
-  
+
   // New Modular Options
   stock: { id: 'stock', translationKey: 'stock', icon: 'inventory_2', path: '/stock' },
   projects: { id: 'projects', translationKey: 'projects', icon: 'rocket_launch', path: '/projects' },
@@ -25,32 +25,33 @@ export const MODULE_REGISTRY: Record<ModuleId, ModuleDefinition> = {
   plan: { id: 'plan', translationKey: 'plan', icon: 'credit_card', path: '/plan', isCore: true },
   settings: { id: 'settings', translationKey: 'settings', icon: 'settings', path: '/settings', isCore: true },
   support: { id: 'support', translationKey: 'support', icon: 'support_agent', path: '/support', isCore: true },
+  integrations: { id: 'integrations', translationKey: 'integrations', icon: 'extension', path: '/integrations', isCore: true },
 };
 
 // 2. Presets: Defines which modules are active by default for each profession
 export const CATEGORY_PRESETS: Record<string, ModuleId[]> = {
   technical_services: ['dashboard', 'lia', 'calendar', 'crm', 'files', 'financial', 'automations', 'plan', 'settings', 'support'],
-  
+
   liberal_professionals: ['dashboard', 'lia', 'crm', 'calendar', 'files', 'financial', 'automations', 'reports', 'plan', 'settings', 'support'],
-  
+
   health_wellness: ['dashboard', 'lia', 'calendar', 'medical_records', 'financial', 'files', 'crm', 'plan', 'settings', 'support'],
-  
+
   real_estate: ['dashboard', 'lia', 'crm', 'properties', 'calendar', 'files', 'financial', 'automations', 'plan', 'settings', 'support'],
-  
+
   retail: ['dashboard', 'lia', 'stock', 'sales', 'financial', 'automations', 'team', 'plan', 'settings', 'support'],
-  
+
   food: ['dashboard', 'lia', 'stock', 'sales', 'financial', 'team', 'plan', 'settings', 'support'],
-  
+
   logistics: ['dashboard', 'lia', 'logistics', 'stock', 'financial', 'team', 'automations', 'plan', 'settings', 'support'],
-  
+
   tech: ['dashboard', 'lia', 'projects', 'automations', 'team', 'files', 'crm', 'plan', 'settings', 'support'],
-  
+
   creative: ['dashboard', 'lia', 'projects', 'files', 'crm', 'calendar', 'plan', 'settings', 'support'],
-  
+
   business_services: ['dashboard', 'lia', 'crm', 'financial', 'reports', 'files', 'team', 'automations', 'plan', 'settings', 'support'],
-  
+
   education: ['dashboard', 'lia', 'calendar', 'files', 'crm', 'financial', 'plan', 'settings', 'support'],
-  
+
   other: ['dashboard', 'lia', 'crm', 'calendar', 'files', 'financial', 'plan', 'settings', 'support'], // Generic default
 };
 
@@ -60,22 +61,22 @@ export const getModules = (activeIds: ModuleId[]): ModuleDefinition[] => {
   const active = activeIds
     .filter(id => MODULE_REGISTRY[id])
     .map(id => MODULE_REGISTRY[id]);
-    
+
   // Ensure core modules are always present if missing (safety check)
   const coreModules = Object.values(MODULE_REGISTRY).filter(m => m.isCore);
-  
+
   // Combine and deduplicate
   const uniqueMap = new Map<ModuleId, ModuleDefinition>();
   [...active, ...coreModules].forEach(m => uniqueMap.set(m.id, m));
-  
+
   // Re-sort based on a preferred order (optional, but keeps sidebar tidy)
   const preferredOrder: ModuleId[] = [
-    'dashboard', 'crm', 'lia', 'calendar', 'files', 
+    'dashboard', 'integrations', 'crm', 'lia', 'calendar', 'files',
     'projects', 'stock', 'sales', 'properties', 'medical_records', 'logistics',
-    'automations', 'financial', 'reports', 'team', 
+    'automations', 'financial', 'reports', 'team',
     'settings', 'plan', 'support'
   ];
-  
+
   return preferredOrder
     .filter(id => uniqueMap.has(id))
     .map(id => uniqueMap.get(id)!);

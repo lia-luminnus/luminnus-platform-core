@@ -1,0 +1,7 @@
+{
+  "name": "LIA Live View",
+  "description": "Futuristic Realtime Interface using Gemini Live API for audio and visual interaction.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

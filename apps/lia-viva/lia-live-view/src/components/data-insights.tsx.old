@@ -1,0 +1,123 @@
+"use client"
+
+import { TrendingUp, TrendingDown, Users, DollarSign, Activity, BarChart3 } from "lucide-react"
+
+const metrics = [
+  { label: "Total Revenue", value: "$1.2M", change: "+12.5%", trend: "up", icon: DollarSign },
+  { label: "Active Users", value: "48.2K", change: "+8.3%", trend: "up", icon: Users },
+  { label: "AI Queries", value: "2.4M", change: "+24.7%", trend: "up", icon: Activity },
+  { label: "Efficiency", value: "94.2%", change: "-2.1%", trend: "down", icon: BarChart3 },
+]
+
+export function DataInsights() {
+  return (
+    <div className="h-full w-full overflow-y-auto p-8">
+      {/* Header */}
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-[#00f3ff] mb-2">Data Insights</h2>
+        <p className="text-[rgba(224,247,255,0.6)]">Real-time analytics and performance metrics</p>
+      </div>
+
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-4 gap-6 mb-8">
+        {metrics.map((metric, index) => (
+          <div
+            key={index}
+            className="glass-panel neon-border rounded-xl p-6 hover:shadow-[0_0_30px_rgba(0,243,255,0.3)] transition-all duration-300"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 rounded-xl bg-[rgba(0,243,255,0.1)] border border-[rgba(0,243,255,0.3)] flex items-center justify-center">
+                <metric.icon className="w-6 h-6 text-[#00f3ff]" />
+              </div>
+              <div
+                className={`flex items-center gap-1 text-sm font-mono ${metric.trend === "up" ? "text-[#00ff88]" : "text-[#ff4444]"}`}
+              >
+                {metric.trend === "up" ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                {metric.change}
+              </div>
+            </div>
+            <p className="text-2xl font-bold text-[#e0f7ff] mb-1">{metric.value}</p>
+            <p className="text-sm text-[rgba(224,247,255,0.5)]">{metric.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Charts Row */}
+      <div className="grid grid-cols-2 gap-6">
+        {/* Line Chart */}
+        <div className="glass-panel neon-border rounded-xl p-6">
+          <h3 className="text-lg font-bold text-[#e0f7ff] mb-4">Revenue Trend</h3>
+          <div className="h-64">
+            <svg viewBox="0 0 400 200" className="w-full h-full">
+              {/* Grid */}
+              {[0, 50, 100, 150, 200].map((y) => (
+                <line key={y} x1="0" y1={y} x2="400" y2={y} stroke="rgba(0,243,255,0.1)" strokeWidth="1" />
+              ))}
+              {/* Area fill */}
+              <path d="M0,180 Q50,160 100,140 T200,100 T300,60 T400,40 L400,200 L0,200 Z" fill="url(#areaGradient)" />
+              <defs>
+                <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#00f3ff" stopOpacity="0.3" />
+                  <stop offset="100%" stopColor="#00f3ff" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              {/* Line */}
+              <path
+                d="M0,180 Q50,160 100,140 T200,100 T300,60 T400,40"
+                fill="none"
+                stroke="#00f3ff"
+                strokeWidth="3"
+                className="drop-shadow-[0_0_10px_rgba(0,243,255,0.8)]"
+              />
+            </svg>
+          </div>
+        </div>
+
+        {/* Bar Chart */}
+        <div className="glass-panel neon-border rounded-xl p-6">
+          <h3 className="text-lg font-bold text-[#e0f7ff] mb-4">AI Query Distribution</h3>
+          <div className="h-64">
+            <svg viewBox="0 0 400 200" className="w-full h-full">
+              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, i) => {
+                const height1 = 40 + Math.random() * 120
+                const height2 = 30 + Math.random() * 100
+                return (
+                  <g key={i}>
+                    <rect
+                      x={i * 55 + 10}
+                      y={200 - height1}
+                      width="20"
+                      height={height1}
+                      fill="#00f3ff"
+                      opacity="0.8"
+                      rx="4"
+                    />
+                    <rect
+                      x={i * 55 + 32}
+                      y={200 - height2}
+                      width="20"
+                      height={height2}
+                      fill="#bc13fe"
+                      opacity="0.8"
+                      rx="4"
+                    />
+                    <text
+                      x={i * 55 + 25}
+                      y="220"
+                      fill="rgba(224,247,255,0.5)"
+                      fontSize="10"
+                      textAnchor="middle"
+                      className="font-mono"
+                    >
+                      {day}
+                    </text>
+                  </g>
+                )
+              })}
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

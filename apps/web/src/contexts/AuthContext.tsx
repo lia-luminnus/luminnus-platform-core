@@ -131,33 +131,33 @@ const syncClienteRecord = async (user: User): Promise<string | null> => {
   if (!user) return null;
 
   try {
-    // Tenta buscar cliente existente
+    // v3.0: Usar maybeSingle e upsert para evitar erros de constraint
     const { data: existingCliente } = await supabase
       .from("clientes")
       .select("id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (existingCliente) {
       return existingCliente.id;
     }
 
-    // Se nao existe, cria novo registro
+    // Se nao existe, cria novo registro (upsert por segurança)
     const { data: newCliente, error } = await supabase
       .from("clientes")
-      .insert({
+      .upsert({
         user_id: user.id,
         nome: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Cliente',
         email: user.email || '',
         telefone: user.user_metadata?.phone || null,
         endereco: user.user_metadata?.address || null,
         status_processo: 'inicial'
-      })
+      }, { onConflict: 'user_id' })
       .select("id")
       .single();
 
     if (error) {
-      console.error('Erro ao criar registro de cliente:', error);
+      console.error('Erro ao sincronizar registro de cliente:', error);
       return null;
     }
 

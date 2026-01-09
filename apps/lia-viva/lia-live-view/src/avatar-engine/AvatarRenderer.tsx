@@ -1,0 +1,146 @@
+"use client"
+
+// =====================================================
+// AVATAR RENDERER v3.0 - Frame Único com Crossfade
+// =====================================================
+// Exibe apenas um frame por vez.
+// Crossfade suave entre trocas.
+// =====================================================
+
+import { useState, useEffect, useRef } from "react"
+import { AvatarEngine, type AvatarState, type AvatarFrame } from "./AvatarEngine"
+
+// =====================================================
+// TIPOS
+// =====================================================
+
+interface AvatarRendererProps {
+    className?: string
+    showStatus?: boolean
+    size?: 'small' | 'medium' | 'large' | 'full'
+}
+
+// =====================================================
+// COMPONENTE
+// =====================================================
+
+export function AvatarRenderer({
+    className = '',
+    showStatus = false,
+    size = 'full'
+}: AvatarRendererProps) {
+    // Estado
+    const [state, setState] = useState<AvatarState>(AvatarEngine.state)
+    const [frame, setFrame] = useState<AvatarFrame>(AvatarEngine.frame)
+
+    // Frame anterior para crossfade
+    const [prevUrl, setPrevUrl] = useState<string | null>(null)
+    const transitionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    // Inscrever no engine
+    useEffect(() => {
+        const unsubscribe = AvatarEngine.subscribe((newState, newFrame) => {
+            // Se URL mudou, gerenciar transição
+            if (newFrame.url !== frame.url) {
+                // SÓ faz crossfade se a transição for > 30ms (suave)
+                // Se for lip-sync (0ms), troca instantaneamente sem ghosting
+                if (newFrame.transition > 30) {
+                    setPrevUrl(frame.url)
+
+                    if (transitionRef.current) clearTimeout(transitionRef.current)
+
+                    transitionRef.current = setTimeout(() => {
+                        setPrevUrl(null)
+                    }, newFrame.transition)
+                } else {
+                    // Transição instantânea
+                    setPrevUrl(null)
+                }
+            }
+
+            setState(newState)
+            setFrame(newFrame)
+        })
+
+        return () => {
+            unsubscribe()
+            if (transitionRef.current) clearTimeout(transitionRef.current)
+        }
+    }, [frame.url])
+
+    // Classes de tamanho (proporcionais à viewport)
+    const sizeClass = {
+        small: 'w-48 h-64',
+        medium: 'w-80 h-[28rem]',
+        large: 'w-[36rem] h-[48rem]',
+        full: 'w-full h-full max-h-full'
+    }[size]
+
+    return (
+        <div className={`relative overflow-hidden flex items-center justify-center ${sizeClass} ${className}`}>
+
+            {/* Frame anterior (crossfade out) */}
+            {prevUrl && (
+                <img
+                    src={prevUrl}
+                    alt="LIA Previous"
+                    className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                    style={{
+                        opacity: 0,
+                        transition: `opacity ${frame.transition}ms ease-out`,
+                        maxHeight: '100%'
+                    }}
+                    draggable={false}
+                />
+            )}
+
+            {/* Frame atual */}
+            <img
+                src={frame.url}
+                alt="LIA Avatar"
+                className="w-auto h-auto max-w-full max-h-full object-contain"
+                style={{
+                    opacity: 1,
+                    transition: `opacity ${frame.transition}ms ease-in`
+                }}
+                draggable={false}
+            />
+
+            {/* Status (debug) */}
+            {showStatus && (
+                <div className="absolute top-2 right-2 flex flex-col gap-1 z-10">
+                    <div className="px-2 py-1 rounded bg-black/80 text-[10px] text-white font-mono capitalize">
+                        {state.expression}
+                    </div>
+
+                    {state.isTalking && (
+                        <div className="px-2 py-1 rounded bg-green-500/80 text-[10px] text-white font-mono flex items-center gap-1">
+                            <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                            {state.talkState}
+                        </div>
+                    )}
+
+                    <div className="px-2 py-1 rounded bg-purple-500/70 text-[10px] text-white font-mono">
+                        🌡️ {state.emotionTemperature}
+                    </div>
+                </div>
+            )}
+
+            {/* Indicador visual de fala */}
+            {state.isTalking && (
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-black/60 text-white/90 text-xs font-medium flex items-center gap-2 z-10">
+                    <div className="flex items-end gap-0.5 h-4">
+                        <div className="w-1 bg-green-400 rounded animate-pulse" style={{ height: '8px', animationDelay: '0ms' }} />
+                        <div className="w-1 bg-green-400 rounded animate-pulse" style={{ height: '14px', animationDelay: '150ms' }} />
+                        <div className="w-1 bg-green-400 rounded animate-pulse" style={{ height: '10px', animationDelay: '300ms' }} />
+                        <div className="w-1 bg-green-400 rounded animate-pulse" style={{ height: '16px', animationDelay: '100ms' }} />
+                        <div className="w-1 bg-green-400 rounded animate-pulse" style={{ height: '6px', animationDelay: '200ms' }} />
+                    </div>
+                    Falando
+                </div>
+            )}
+        </div>
+    )
+}
+
+export default AvatarRenderer

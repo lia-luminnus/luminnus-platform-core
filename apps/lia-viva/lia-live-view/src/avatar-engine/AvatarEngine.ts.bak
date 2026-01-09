@@ -1,0 +1,260 @@
+// =====================================================
+// AVATAR ENGINE v3.0 - Lógica Limpa
+// =====================================================
+// SEM aleatoriedade. SEM timers automáticos.
+// Expressão muda APENAS quando:
+// 1. EmotionEngine processa uma mensagem
+// 2. Usuário clica em botão de teste
+// 3. Lip-sync durante áudio
+// =====================================================
+
+import FrameMap from './FrameMap.json'
+
+// =====================================================
+// TIPOS
+// =====================================================
+
+export type ExpressionName =
+    | 'neutral' | 'happy' | 'surprised' | 'confused'
+    | 'curious' | 'sad' | 'frustrated' | 'proud'
+    | 'bored' | 'contempt' | 'fearful' | 'envious' | 'focused'
+
+export type TalkState = 'closed' | 'mid' | 'open'
+
+export interface AvatarState {
+    expression: ExpressionName  // Emoção atual
+    isTalking: boolean          // Se está em lip-sync
+    talkState: TalkState        // Estado da boca durante fala
+    emotionTemperature: number  // 1-10
+}
+
+export interface AvatarFrame {
+    url: string         // URL da imagem atual
+    transition: number  // Duração do crossfade em ms
+}
+
+type Listener = (state: AvatarState, frame: AvatarFrame) => void
+
+// =====================================================
+// CONFIGURAÇÃO
+// =====================================================
+
+const CONFIG = {
+    expressionTransition: 200,   // ms para trocar expressão
+    talkTransition: 80,          // ms para trocar frame de fala
+    talkCycleInterval: 150       // ms entre frames de fala
+}
+
+// =====================================================
+// CLASSE PRINCIPAL
+// =====================================================
+
+class AvatarEngineClass {
+    // Estado interno
+    private _expression: ExpressionName = 'neutral'
+    private _isTalking: boolean = false
+    private _talkState: TalkState = 'closed'
+    private _temperature: number = 5
+
+    // Timer de lip-sync
+    private _talkTimer: ReturnType<typeof setInterval> | null = null
+    private _talkPhase: number = 0
+
+    // Listeners
+    private _listeners: Set<Listener> = new Set()
+
+    constructor() {
+        console.log('🎭 AvatarEngine v3.0 inicializado (Lógica Limpa)')
+    }
+
+    // =====================================================
+    // GETTERS
+    // =====================================================
+
+    get state(): AvatarState {
+        return {
+            expression: this._expression,
+            isTalking: this._isTalking,
+            talkState: this._talkState,
+            emotionTemperature: this._temperature
+        }
+    }
+
+    get frame(): AvatarFrame {
+        // Se está falando, usa frame de fala
+        // Senão, usa frame da emoção
+        if (this._isTalking) {
+            const talkData = (FrameMap.talk as Record<TalkState, { file: string }>)[this._talkState]
+            return {
+                url: talkData?.file || this.getExpressionUrl(this._expression),
+                transition: CONFIG.talkTransition
+            }
+        }
+
+        return {
+            url: this.getExpressionUrl(this._expression),
+            transition: CONFIG.expressionTransition
+        }
+    }
+
+    get expressions(): ExpressionName[] {
+        return Object.keys(FrameMap.expressions) as ExpressionName[]
+    }
+
+    // =====================================================
+    // OBTER URL DA EXPRESSÃO
+    // =====================================================
+
+    private getExpressionUrl(expr: ExpressionName): string {
+        const data = (FrameMap.expressions as Record<string, { file: string }>)[expr]
+        return data?.file || (FrameMap.expressions as any).neutral.file
+    }
+
+    // =====================================================
+    // DEFINIR EXPRESSÃO (chamado pelo EmotionEngine)
+    // =====================================================
+
+    setExpression(expression: ExpressionName) {
+        // Não muda se estiver falando (lip-sync tem prioridade)
+        if (this._isTalking) {
+            // Salvar para usar depois que parar de falar
+            this._expression = expression
+            console.log(`🎭 Expressão agendada: ${expression} (após lip-sync)`)
+            return
+        }
+
+        if (this._expression === expression) return
+
+        this._expression = expression
+        console.log(`🎭 Expressão: ${expression}`)
+        this.notify()
+    }
+
+    // =====================================================
+    // TEMPERATURA EMOCIONAL
+    // =====================================================
+
+    setEmotionTemperature(temp: number) {
+        this._temperature = Math.max(1, Math.min(10, temp))
+        console.log(`🌡️ Temperatura: ${this._temperature}`)
+        this.notify()
+    }
+
+    getExpressionsForTemperature(): ExpressionName[] {
+        const key = String(this._temperature)
+        const mapping = FrameMap.temperatureMapping as Record<string, string[]>
+        return (mapping[key] || mapping['5']) as ExpressionName[]
+    }
+
+    // =====================================================
+    // LIP-SYNC (separado da emoção)
+    // =====================================================
+
+    startTalking() {
+        if (this._isTalking) return
+
+        this._isTalking = true
+        this._talkPhase = 0
+
+        console.log('🗣️ Lip-sync iniciado')
+
+        // Ciclo: closed → mid → open → mid → closed ...
+        const talkSequence: TalkState[] = ['closed', 'mid', 'open', 'mid']
+        let index = 0
+
+        this._talkTimer = setInterval(() => {
+            this._talkState = talkSequence[index]
+            index = (index + 1) % talkSequence.length
+            this.notify()
+        }, CONFIG.talkCycleInterval)
+
+        // Notificar estado inicial
+        this._talkState = 'closed'
+        this.notify()
+    }
+
+    stopTalking() {
+        if (!this._isTalking) return
+
+        if (this._talkTimer) {
+            clearInterval(this._talkTimer)
+            this._talkTimer = null
+        }
+
+        this._isTalking = false
+        this._talkState = 'closed'
+
+        console.log(`🗣️ Lip-sync parado. Voltando para: ${this._expression}`)
+
+        // Volta para a expressão atual
+        this.notify()
+    }
+
+    // =====================================================
+    // EVENTOS DO SISTEMA
+    // =====================================================
+
+    onSpeakingStart() {
+        this.startTalking()
+    }
+
+    onSpeakingEnd() {
+        this.stopTalking()
+    }
+
+    onListeningStart() {
+        this.setExpression('curious')
+    }
+
+    onThinking() {
+        this.setExpression('focused')
+    }
+
+    onIdle() {
+        // Não muda automaticamente - só quando EmotionEngine decidir
+    }
+
+    // =====================================================
+    // APLICAR EMOÇÃO DO GPT (chamado pelo EmotionEngine)
+    // =====================================================
+
+    applyEmotion(emotion: ExpressionName) {
+        // Verificar se é permitida pela temperatura
+        const allowed = this.getExpressionsForTemperature()
+        const finalEmotion = allowed.includes(emotion) ? emotion : (allowed[0] || 'neutral')
+
+        this.setExpression(finalEmotion)
+    }
+
+    // =====================================================
+    // LISTENERS
+    // =====================================================
+
+    subscribe(listener: Listener): () => void {
+        this._listeners.add(listener)
+        listener(this.state, this.frame)
+        return () => this._listeners.delete(listener)
+    }
+
+    private notify() {
+        const state = this.state
+        const frame = this.frame
+        this._listeners.forEach(l => l(state, frame))
+    }
+
+    // =====================================================
+    // CLEANUP
+    // =====================================================
+
+    destroy() {
+        if (this._talkTimer) clearInterval(this._talkTimer)
+        this._listeners.clear()
+    }
+}
+
+// =====================================================
+// SINGLETON
+// =====================================================
+
+export const AvatarEngine = new AvatarEngineClass()
+export default AvatarEngine

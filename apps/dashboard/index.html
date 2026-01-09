@@ -55,6 +55,36 @@
       },
     }
   </script>
+  
+  <!-- OAuth Callback Redirect Script -->
+  <!-- Google OAuth não preserva fragmentos de hash (#), então precisamos detectar o callback na raiz e redirecionar -->
+  <script>
+    (function() {
+      // Detectar se é um callback OAuth (tem parâmetro 'code' ou 'error')
+      var params = new URLSearchParams(window.location.search);
+      var code = params.get('code');
+      var error = params.get('error');
+      var state = params.get('state');
+      var successParam = params.get('success');
+      var providerParam = params.get('provider');
+      
+      // Se tiver código ou erro de OAuth, redirecionar para a rota do HashRouter
+      if (code || error) {
+        console.log('[OAuth Redirect] Detectado callback OAuth, redirecionando para /#/oauth/callback');
+        // Preservar todos os parâmetros na nova URL
+        window.location.href = window.location.origin + '/#/oauth/callback' + window.location.search;
+        return;
+      }
+      
+      // Se vier com success=true e provider (callback antigo), redirecionar para integrações
+      if (successParam === 'true' && providerParam) {
+        console.log('[OAuth Redirect] Detectado callback de sucesso, redirecionando para /#/integrations');
+        window.location.href = window.location.origin + '/#/integrations?success=true&provider=' + providerParam;
+        return;
+      }
+    })();
+  </script>
+  
   <style>
     /* Custom Scrollbar Styling */
     ::-webkit-scrollbar {

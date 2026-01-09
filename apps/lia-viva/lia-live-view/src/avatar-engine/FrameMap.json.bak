@@ -1,0 +1,124 @@
+{
+    "_version": "3.0",
+    "_description": "Mapeamento LIMPO de frames da LIA. Cada expressão aponta para arquivo ÚNICO e DIFERENTE.",
+    "_note": "Não existem frames de fala dedicados. Usando Gemini images como alternativa.",
+    "expressions": {
+        "neutral": {
+            "file": "/avatar/ChatGPT Image 10 de out. de 2025, 07_29_56.png",
+            "description": "Expressão neutra padrão - rosto sereno"
+        },
+        "happy": {
+            "file": "/avatar/Lia expressando alegriafelicidade.PNG",
+            "description": "Feliz, sorrindo"
+        },
+        "surprised": {
+            "file": "/avatar/Lia com uma expressão de surpresa.PNG",
+            "description": "Surpresa, olhos arregalados"
+        },
+        "confused": {
+            "file": "/avatar/Lia com uma expressão de confusão.PNG",
+            "description": "Confusa, franzindo a testa"
+        },
+        "curious": {
+            "file": "/avatar/Lia expressando curiosidade.PNG",
+            "description": "Curiosa, interessada"
+        },
+        "sad": {
+            "file": "/avatar/Lia expressando tristeza.PNG",
+            "description": "Triste"
+        },
+        "frustrated": {
+            "file": "/avatar/Lia expressando frustração.PNG",
+            "description": "Frustrada"
+        },
+        "proud": {
+            "file": "/avatar/Lia expressando orgulho.PNG",
+            "description": "Orgulhosa, confiante"
+        },
+        "bored": {
+            "file": "/avatar/Lia expressando tédio.PNG",
+            "description": "Entediada"
+        },
+        "contempt": {
+            "file": "/avatar/Lia expressando desprezo.PNG",
+            "description": "Desprezo"
+        },
+        "fearful": {
+            "file": "/avatar/Lia expressando medo.PNG",
+            "description": "Com medo, preocupada"
+        },
+        "envious": {
+            "file": "/avatar/Lia expressando inveja.PNG",
+            "description": "Invejosa"
+        },
+        "focused": {
+            "file": "/avatar/Gemini_Generated_Image_nk1tnnnk1tnnnk1t.PNG",
+            "description": "Focada, concentrada"
+        }
+    },
+    "talk": {
+        "_note": "Frames de fala - boca em 3 posições diferentes. USANDO imagens existentes como substitutos.",
+        "closed": {
+            "file": "/avatar/ChatGPT Image 10 de out. de 2025, 07_29_56.png",
+            "description": "Boca fechada (usando neutral)"
+        },
+        "mid": {
+            "file": "/avatar/Gemini_Generated_Image_nk1tnnnk1tnnnk1t.PNG",
+            "description": "Boca semi-aberta (usando focused)"
+        },
+        "open": {
+            "file": "/avatar/Gemini_Generated_Image_up9tpfup9tpfup9t.PNG",
+            "description": "Boca aberta (usando gemini alternativo)"
+        }
+    },
+    "temperatureMapping": {
+        "1": [
+            "neutral",
+            "focused"
+        ],
+        "2": [
+            "neutral",
+            "focused"
+        ],
+        "3": [
+            "neutral",
+            "focused",
+            "curious"
+        ],
+        "4": [
+            "neutral",
+            "curious",
+            "proud"
+        ],
+        "5": [
+            "neutral",
+            "curious",
+            "happy"
+        ],
+        "6": [
+            "curious",
+            "happy",
+            "proud"
+        ],
+        "7": [
+            "happy",
+            "curious",
+            "surprised"
+        ],
+        "8": [
+            "happy",
+            "curious",
+            "surprised",
+            "proud"
+        ],
+        "9": [
+            "happy",
+            "surprised",
+            "curious"
+        ],
+        "10": [
+            "happy",
+            "surprised"
+        ]
+    }
+}

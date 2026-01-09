@@ -16,6 +16,9 @@ import {
 } from "./lib/metricsCollector.js";
 import supabase from "./lib/supabaseClient.js";
 import crypto from "crypto";
+import { LIA_FULL_PERSONALITY } from "./lib/personality.js";
+import { loadImportantMemories } from "./lib/memories.js";
+import { GoogleGenAI } from "@google/genai";
 
 const app = express();
 
@@ -243,6 +246,83 @@ app.post("/proxy-realtime", async (req, res) => {
     console.error("[Proxy Realtime] Erro:", error);
     res.status(500).json({
       error: "Erro interno ao processar WebRTC",
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// =====================================================
+// ROTA: Gemini Live (/api/live-token)
+// =====================================================
+
+app.get("/api/live-token", async (req, res) => {
+  try {
+    console.log("[Gemini Live] Iniciando solicitação de token efêmero...");
+
+    const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+
+    if (!geminiApiKey) {
+      console.error("[Gemini Live] GEMINI_API_KEY não configurada");
+      return res.status(500).json({ error: "API Key do Gemini não configurada no servidor" });
+    }
+
+    // Extrair userId do token Supabase se disponível
+    const authHeader = req.headers.authorization;
+    let userId = "00000000-0000-0000-0000-000000000001"; // Fallback dev
+
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.split(" ")[1];
+      try {
+        const { data, error } = await supabase.auth.getUser(token);
+        if (!error && data?.user?.id) {
+          userId = data.user.id;
+        }
+      } catch (authErr) {
+        console.warn("[Gemini Live] Erro ao validar token, usando fallback:", authErr.message);
+      }
+    }
+
+    // Carregar memórias do usuário
+    console.log(`[Gemini Live] Carregando memórias para user: ${userId}`);
+    const memories = await loadImportantMemories(userId);
+    let memoriesContext = "";
+    if (memories && memories.length > 0) {
+      memoriesContext = "\n\n📝 MEMÓRIAS SALVAS SOBRE O USUÁRIO:\n" +
+        memories.map(m => `• ${m.key || 'Dato'}: ${m.content}`).join("\n");
+    }
+
+    // Instrução completa
+    const fullSystemInstruction = `${LIA_FULL_PERSONALITY}${memoriesContext}`;
+
+    // Gerar Token Efêmero (usando @google/genai v1alpha)
+    const genAI = new GoogleGenAI({ apiKey: geminiApiKey, httpOptions: { apiVersion: 'v1alpha' } });
+    const expireTime = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+    const result = await genAI.authTokens.create({
+      config: {
+        uses: 1,
+        expireTime,
+        liveConnectConstraints: {
+          model: 'gemini-2.0-flash-exp',
+          config: {
+            responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Aoede' } },
+              languageCode: 'pt-BR'
+            },
+            tools: [{ googleSearch: {} }],
+            systemInstruction: fullSystemInstruction
+          }
+        }
+      }
+    });
+
+    console.log("✅ [Gemini Live] Token efêmero gerado com sucesso");
+    res.json({ token: result.name, expiresAt: expireTime });
+  } catch (error) {
+    console.error("[Gemini Live] Erro ao gerar token:", error);
+    res.status(500).json({
+      error: "Erro ao gerar token do Gemini Live",
       details: error instanceof Error ? error.message : String(error)
     });
   }
@@ -572,6 +652,7 @@ app.get("/api/auth/google", async (req, res) => {
     // State para segurança (inclui user_id e serviços)
     const state = Buffer.from(JSON.stringify({
       user_id: user_id || 'anonymous',
+      tenant_id: req.query.tenant_id || 'anonymous',
       services: selectedServices,
       timestamp: Date.now()
     })).toString('base64');
@@ -579,7 +660,7 @@ app.get("/api/auth/google", async (req, res) => {
     // Construir URL de autorização do Google
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     authUrl.searchParams.set('client_id', clientId);
-    authUrl.searchParams.set('redirect_uri', redirect_uri || `${process.env.APP_URL || 'http://localhost:3000'}/#/oauth/callback`);
+    authUrl.searchParams.set('redirect_uri', redirect_uri || `${process.env.APP_URL || 'http://localhost:8080'}/oauth-callback`);
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('scope', Array.from(scopes).join(' '));
     authUrl.searchParams.set('access_type', 'offline'); // Para obter refresh_token
@@ -604,6 +685,16 @@ app.get("/api/auth/google", async (req, res) => {
     console.error("[OAuth Google] Erro ao iniciar:", error);
     res.status(500).json({ error: "Erro ao iniciar OAuth", details: error.message });
   }
+});
+
+// GET /api/auth/google/callback
+// Handler para quando o Google ou o túnel do servidor 3000 redirecionar via GET.
+// Redireciona de volta para a rota de callback do frontend no port 8080.
+app.get("/api/auth/google/callback", (req, res) => {
+  const query = new URLSearchParams(req.query).toString();
+  const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:8080'}/oauth-callback?${query}`;
+  console.log(`[OAuth Backend] Redirecting GET callback to frontend: ${frontendUrl}`);
+  res.redirect(frontendUrl);
 });
 
 // POST /api/auth/google/callback - Trocar código por tokens
@@ -643,7 +734,7 @@ app.post("/api/auth/google/callback", async (req, res) => {
         code,
         client_id: clientId,
         client_secret: clientSecret,
-        redirect_uri: redirect_uri || `${process.env.APP_URL || 'http://localhost:3000'}/#/oauth/callback`,
+        redirect_uri: redirect_uri || `${process.env.APP_URL || 'http://localhost:8080'}/oauth-callback`,
         grant_type: 'authorization_code'
       })
     });
@@ -672,22 +763,40 @@ app.post("/api/auth/google/callback", async (req, res) => {
     // Salvar tokens no Supabase (se tiver user_id)
     if (stateData.user_id && stateData.user_id !== 'anonymous') {
       const { error: saveError } = await supabase
-        .from('user_integrations')
+        .from('integrations_connections')
         .upsert({
-          id: crypto.randomUUID(),
           user_id: stateData.user_id,
-          provider: 'google_workspace',
-          services: stateData.services || Object.keys(GOOGLE_SCOPES),
+          tenant_id: stateData.tenant_id || stateData.user_id,
+          provider: 'google',
+          scopes: stateData.services || [],
           access_token: tokens.access_token,
           refresh_token: tokens.refresh_token,
           expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
           provider_email: googleUser?.email,
+          status: 'authorized'
+        }, { onConflict: 'user_id,tenant_id,provider' });
+
+      if (saveError) {
+        console.error("[OAuth Google] Erro ao salvar tokens em integrations_connections:", saveError);
+      }
+
+      // Também salvar em user_integrations para compatibilidade com o frontend
+      const { error: userIntError } = await supabase
+        .from('user_integrations')
+        .upsert({
+          user_id: stateData.user_id,
+          provider: 'google_workspace',
+          services: stateData.services || [],
+          status: 'active',
+          google_email: googleUser?.email,
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token,
+          expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
           connected_at: new Date().toISOString()
         }, { onConflict: 'user_id,provider' });
 
-      if (saveError) {
-        console.error("[OAuth Google] Erro ao salvar tokens:", saveError);
-        // Continuar mesmo com erro - tokens ainda são válidos
+      if (userIntError) {
+        console.error("[OAuth Google] Erro ao salvar em user_integrations:", userIntError);
       }
     }
 
@@ -701,6 +810,68 @@ app.post("/api/auth/google/callback", async (req, res) => {
   } catch (error) {
     console.error("[OAuth Google] Erro no callback:", error);
     res.status(500).json({ error: "Erro no callback OAuth", details: error.message });
+  }
+});
+
+// POST /api/auth/google/save - Salvar tokens já trocados (chamado pelo Unified Server)
+app.post("/api/auth/google/save", async (req, res) => {
+  try {
+    const { user_id, tenant_id, services, tokens, googleUser } = req.body;
+
+    console.log(`[OAuth Save] Saving tokens for user: ${user_id}`);
+
+    if (!user_id || user_id === 'anonymous') {
+      return res.status(400).json({ error: "user_id inválido" });
+    }
+
+    // Salvar em integrations_connections
+    const { error: saveError } = await supabase
+      .from('integrations_connections')
+      .upsert({
+        user_id: user_id,
+        tenant_id: tenant_id || user_id,
+        provider: 'google',
+        scopes: services || [],
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+        provider_email: googleUser?.email,
+        status: 'authorized'
+      }, { onConflict: 'user_id,tenant_id,provider' });
+
+    if (saveError) {
+      console.error("[OAuth Save] Erro ao salvar em integrations_connections:", saveError);
+    }
+
+    // Também salvar em user_integrations para compatibilidade
+    const { error: userIntError } = await supabase
+      .from('user_integrations')
+      .upsert({
+        user_id: user_id,
+        provider: 'google_workspace',
+        services: services || [],
+        status: 'active',
+        google_email: googleUser?.email,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+        connected_at: new Date().toISOString()
+      }, { onConflict: 'user_id,provider' });
+
+    if (userIntError) {
+      console.error("[OAuth Save] Erro ao salvar em user_integrations:", userIntError);
+    }
+
+    console.log(`[OAuth Save] Tokens salvos para: ${googleUser?.email || 'unknown'}`);
+
+    res.json({
+      success: true,
+      message: "Tokens salvos com sucesso",
+      email: googleUser?.email
+    });
+  } catch (error) {
+    console.error("[OAuth Save] Erro:", error);
+    res.status(500).json({ error: "Erro ao salvar tokens", details: error.message });
   }
 });
 
@@ -796,10 +967,10 @@ app.delete("/api/auth/google", async (req, res) => {
 
     // Remover do Supabase
     const { error: deleteError } = await supabase
-      .from('user_integrations')
+      .from('integrations_connections')
       .delete()
       .eq('user_id', user_id)
-      .eq('provider', 'google_workspace');
+      .eq('provider', 'google');
 
     if (deleteError) {
       console.error("[OAuth Google] Erro ao desconectar:", deleteError);
@@ -812,6 +983,47 @@ app.delete("/api/auth/google", async (req, res) => {
   } catch (error) {
     console.error("[OAuth Google] Erro ao desconectar:", error);
     res.status(500).json({ error: "Erro ao desconectar", details: error.message });
+  }
+});
+
+// GET /api/integrations - Lista de integrações do usuário
+app.get("/api/integrations", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Token não fornecido" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return res.status(401).json({ error: "Usuário não autenticado" });
+    }
+
+    const { data: integrations, error: fetchError } = await supabase
+      .from('user_integrations')
+      .select('*')
+      .eq('user_id', user.id);
+
+    if (fetchError) {
+      console.error("[API] Erro ao buscar integrações:", fetchError);
+      return res.status(500).json({ error: "Erro ao buscar integrações" });
+    }
+
+    res.json({
+      success: true,
+      integrations: (integrations || []).map(int => ({
+        id: int.id,
+        provider: int.provider === 'google_workspace' ? 'google_workspace' : int.provider,
+        services: int.services || [],
+        status: int.status || 'active',
+        connected_at: int.connected_at
+      }))
+    });
+  } catch (error) {
+    console.error("[API] Erro em /api/integrations:", error);
+    res.status(500).json({ error: "Erro interno" });
   }
 });
 

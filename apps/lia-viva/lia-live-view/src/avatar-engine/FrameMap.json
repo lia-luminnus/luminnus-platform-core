@@ -1,0 +1,122 @@
+{
+    "_version": "3.1",
+    "_description": "Mapeamento de frames da LIA corrigido. Aponta para a imagem oficial Lia.png em todos os estados.",
+    "expressions": {
+        "neutral": {
+            "file": "/images/lia-bust.png",
+            "description": "Neutro (Imagem Oficial)"
+        },
+        "happy": {
+            "file": "/images/lia-bust.png",
+            "description": "Feliz"
+        },
+        "surprised": {
+            "file": "/images/lia-bust.png",
+            "description": "Surpresa"
+        },
+        "confused": {
+            "file": "/images/lia-bust.png",
+            "description": "Confusa"
+        },
+        "curious": {
+            "file": "/images/lia-bust.png",
+            "description": "Curiosa"
+        },
+        "sad": {
+            "file": "/images/lia-bust.png",
+            "description": "Triste"
+        },
+        "frustrated": {
+            "file": "/images/lia-bust.png",
+            "description": "Frustrada"
+        },
+        "proud": {
+            "file": "/images/lia-bust.png",
+            "description": "Orgulhosa"
+        },
+        "bored": {
+            "file": "/images/lia-bust.png",
+            "description": "Entediada"
+        },
+        "contempt": {
+            "file": "/images/lia-bust.png",
+            "description": "Desprezo"
+        },
+        "fearful": {
+            "file": "/images/lia-bust.png",
+            "description": "Com medo"
+        },
+        "envious": {
+            "file": "/images/lia-bust.png",
+            "description": "Invejosa"
+        },
+        "focused": {
+            "file": "/images/lia-bust.png",
+            "description": "Focada"
+        }
+    },
+    "talk": {
+        "closed": {
+            "file": "/images/lia-bust.png",
+            "description": "Boca fechada"
+        },
+        "mid": {
+            "file": "/images/lia-bust.png",
+            "description": "Boca semi-aberta"
+        },
+        "open": {
+            "file": "/images/lia-bust.png",
+            "description": "Boca aberta"
+        }
+    },
+    "temperatureMapping": {
+        "1": [
+            "neutral",
+            "focused"
+        ],
+        "2": [
+            "neutral",
+            "focused"
+        ],
+        "3": [
+            "neutral",
+            "focused",
+            "curious"
+        ],
+        "4": [
+            "neutral",
+            "curious",
+            "proud"
+        ],
+        "5": [
+            "neutral",
+            "curious",
+            "happy"
+        ],
+        "6": [
+            "curious",
+            "happy",
+            "proud"
+        ],
+        "7": [
+            "happy",
+            "curious",
+            "surprised"
+        ],
+        "8": [
+            "happy",
+            "curious",
+            "surprised",
+            "proud"
+        ],
+        "9": [
+            "happy",
+            "surprised",
+            "curious"
+        ],
+        "10": [
+            "happy",
+            "surprised"
+        ]
+    }
+}
