@@ -135,6 +135,10 @@ interface UserIntegration {
     provider_email: string | null;
     status: string;
     connected_at: string;
+    // v2.2: Dados de validade de token
+    expires_at?: string;
+    is_expired?: boolean;
+    has_refresh_token?: boolean;
 }
 
 interface ActivityLog {
@@ -301,6 +305,20 @@ const Integrations: React.FC = () => {
     // Verificar conexão real do Supabase
     const isConnected = (integrationId: string) => {
         return userIntegrations.some(ui => ui.provider === integrationId && ui.status === 'active');
+    };
+
+    // v2.2: Verificar se a conexão tem problemas (token expirado sem refresh)
+    const getConnectionWarning = (integrationId: string) => {
+        const ui = userIntegrations.find(ui => ui.provider === integrationId);
+        if (!ui || ui.status !== 'active') return null;
+
+        if (ui.is_expired && !ui.has_refresh_token) {
+            return 'Token expirado. Reconnect necessário.';
+        }
+        if (ui.is_expired) {
+            return 'Sessão expirada. Tentando renovar...';
+        }
+        return null;
     };
 
     // Obter dados da integração conectada
@@ -549,17 +567,28 @@ const Integrations: React.FC = () => {
                                 <div className="flex items-start justify-between mb-4">
                                     <div className="text-4xl">{integration.icon}</div>
                                     {connected && (
-                                        <span className="flex items-center gap-1 px-3 py-1 rounded-full bg-green-500/20 text-green-600 dark:text-green-400 text-[10px] font-bold uppercase">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                                            {/* v2.1: Mostrar quantidade de serviços Google conectados */}
-                                            {integration.id === 'google_workspace' ? (
-                                                (() => {
-                                                    const googleInt = getConnectedIntegration('google_workspace');
-                                                    const serviceCount = googleInt?.services?.length || 0;
-                                                    return `${serviceCount} serviço${serviceCount !== 1 ? 's' : ''}`;
-                                                })()
-                                            ) : 'Conectado'}
-                                        </span>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <span className={`flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-bold uppercase ${getConnectionWarning(integration.id)
+                                                ? 'bg-yellow-500/20 text-yellow-600 dark:text-yellow-400'
+                                                : 'bg-green-500/20 text-green-600 dark:text-green-400'
+                                                }`}>
+                                                <span className={`w-1.5 h-1.5 rounded-full ${getConnectionWarning(integration.id) ? 'bg-yellow-500' : 'bg-green-500'}`}></span>
+                                                {/* v2.1: Mostrar quantidade de serviços Google conectados */}
+                                                {integration.id === 'google_workspace' ? (
+                                                    (() => {
+                                                        const googleInt = getConnectedIntegration('google_workspace');
+                                                        const serviceCount = googleInt?.services?.length || 0;
+                                                        return `${serviceCount} serviço${serviceCount !== 1 ? 's' : ''}`;
+                                                    })()
+                                                ) : 'Conectado'}
+                                            </span>
+                                            {getConnectionWarning(integration.id) && (
+                                                <span className="text-[9px] font-black text-yellow-600 dark:text-yellow-400 flex items-center gap-0.5">
+                                                    <span className="material-symbols-outlined text-[10px]">warning</span>
+                                                    {getConnectionWarning(integration.id)}
+                                                </span>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
 

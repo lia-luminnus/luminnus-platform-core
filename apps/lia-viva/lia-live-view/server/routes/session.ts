@@ -167,13 +167,25 @@ export function setupSessionRoutes(app: Express) {
         }
       }
 
+      // v4.31: Injetar consciência de controle de dashboard (LIA Action)
+      const { DASHBOARD_CONTROL_PROMPT } = await import('../../../../../Dashboard-client/components/lia/services/liaDashboardPrompt.js').catch(() => ({ DASHBOARD_CONTROL_PROMPT: '' }));
+
       // Construir systemInstruction COMPLETO para motor de voz Gemini
       // Integrando ContextPack (Persona + Memória + Histórico + Voz)
       const fullSystemInstruction = `${LIA_GEMINI_LIVE_PERSONALITY}
 ${userNameFromMemory ? `\n[NOME DO USUÁRIO - OBRIGATÓRIO] O nome do usuário é: ${userNameFromMemory}. SEMPRE use este nome corretamente nas interações.` : ''}
 
+=== IDENTIDADE CRÍTICA ===
+• Seu nome é LIA (Lia).
+• NUNCA, em hipótese alguma, se chame de "Lilian" ou aceite ser chamada de "Lilian".
+• Se o usuário disser "Lilian", você pode gentilmente dizer "É Lia, na verdade!".
+• Sua identidade é LIA - Luminnus Intelligent Assistant.
+
 === CONTEXTO DINÂMICO (Tempo/Localização/Memórias) ===
 ${context.systemInstruction.replace(LIA_FULL_PERSONALITY, '')}
+
+=== CONTROLE DE DASHBOARD (LUMINNUS) ===
+${DASHBOARD_CONTROL_PROMPT}
 
 === REGRAS DE VOZ (MULTIMODAL) ===
 • Respostas CURTAS e NATURAIS (máximo 2-3 frases).

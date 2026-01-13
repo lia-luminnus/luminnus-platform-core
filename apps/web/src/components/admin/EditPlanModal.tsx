@@ -145,26 +145,43 @@ export const EditPlanModal = ({ plan, isOpen, onClose, onSave }: EditPlanModalPr
     const price = form.watch("price");
     const discount = form.watch("discount");
 
+    // Função auxiliar para tratar preços com separadores europeus e brasileiros
+    const parsePrice = (priceStr: string | undefined): number => {
+        if (!priceStr) return 0;
+        let clean = priceStr.replace(/[^0-9.,]/g, '');
+        if (clean.includes(',') && clean.includes('.')) {
+            clean = clean.replace(/\./g, '').replace(',', '.');
+        } else if (clean.includes(',')) {
+            clean = clean.replace(',', '.');
+        }
+        return parseFloat(clean) || 0;
+    };
+
     useEffect(() => {
         if (price) {
-            // Extrai apenas números do preço
-            const cleanPrice = price.replace(/[^0-9.,]/g, '').replace(',', '.');
-            const numericPrice = parseFloat(cleanPrice);
+            const numericPrice = parsePrice(price);
 
-            // Só calcula se tiver um valor numérico válido e maior que 0
-            if (!isNaN(numericPrice) && numericPrice > 0 && cleanPrice.length > 0) {
+            if (numericPrice > 0) {
                 const discountValue = discount || 0;
                 const annualTotal = (numericPrice * 12) * (1 - (discountValue / 100));
                 const formattedAnnual = `€${Math.round(annualTotal)}`;
                 form.setValue("annualPrice", formattedAnnual);
             } else {
-                // Se não tiver valor válido, limpa o campo anual
                 form.setValue("annualPrice", "€0");
             }
         } else {
             form.setValue("annualPrice", "€0");
         }
     }, [price, discount, form]);
+
+    const onInvalid = (errors: any) => {
+        console.error('[EditPlanModal] Erros de validação:', errors);
+        const firstError = Object.values(errors)[0] as any;
+        toast.error("Erro no formulário", {
+            description: firstError?.message || "Verifique os campos obrigatórios.",
+            duration: 4000,
+        });
+    };
 
     const onSubmit = async (values: PlanFormValues) => {
         if (!plan) return;
@@ -182,7 +199,7 @@ export const EditPlanModal = ({ plan, isOpen, onClose, onSave }: EditPlanModalPr
         setSaving(true);
 
         try {
-            const dataToSave = {
+            const dataToSave: any = {
                 id: plan.id,
                 plan_name: values.name,
                 price: values.price,
@@ -192,21 +209,23 @@ export const EditPlanModal = ({ plan, isOpen, onClose, onSave }: EditPlanModalPr
                 max_conversations: values.maxConversations,
                 max_messages: values.maxMessages,
                 features: values.features,
+                discount: values.discount,
                 updated_at: new Date().toISOString(),
             };
 
+            console.log('[EditPlanModal] Salvando dados:', dataToSave);
+
             // Salvar no Supabase
-            const { data, error } = await supabase
+            const { error } = await supabase
                 .from('plan_configs')
-                .upsert(dataToSave)
-                .select();
+                .upsert(dataToSave, { onConflict: 'id' });
 
             if (error) {
-                console.error('[EditPlanModal] Erro do Supabase:', error);
+                console.error('[EditPlanModal] Erro do Supabase ao salvar:', error);
                 throw error;
             }
 
-            // Atualizar o plano localmente
+            // Atualizar o plano localmente para o frontend
             const updatedPlan: Plan = {
                 ...plan,
                 name: values.name,
@@ -220,20 +239,20 @@ export const EditPlanModal = ({ plan, isOpen, onClose, onSave }: EditPlanModalPr
                 features: values.features,
             };
 
-            onSave(updatedPlan);
+            await onSave(updatedPlan);
 
             toast.success("Plano atualizado!", {
-                description: `As configurações do plano ${values.name} foram salvas com sucesso.`,
+                description: `As configurações do plano ${values.name} foram salvas com sucesso no banco de dados.`,
                 duration: 3000,
             });
 
             onClose();
         } catch (error: any) {
-            console.error('[EditPlanModal] Erro ao salvar:', error);
-            const errorMessage = error?.message || error?.hint || 'Erro desconhecido';
+            console.error('[EditPlanModal] Erro fatal ao salvar:', error);
+            const errorMessage = error?.message || error?.hint || 'Erro desconhecido ao comunicar com o Supabase';
             toast.error("Erro ao salvar", {
-                description: `${errorMessage}. Tente novamente.`,
-                duration: 4000,
+                description: `${errorMessage}. Verifique sua conexão e tente novamente.`,
+                duration: 5000,
             });
         } finally {
             setSaving(false);
@@ -269,7 +288,7 @@ export const EditPlanModal = ({ plan, isOpen, onClose, onSave }: EditPlanModalPr
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogContent className="max-w-4xl h-[90vh] overflow-hidden flex flex-col">
                 {/* Header com gradiente do plano */}
                 <div className={`-mx-6 -mt-6 mb-4 bg-gradient-to-r ${plan?.color || 'from-purple-500 to-pink-500'} p-6 text-white`}>
                     <DialogHeader>
@@ -283,10 +302,11 @@ export const EditPlanModal = ({ plan, isOpen, onClose, onSave }: EditPlanModalPr
                     </DialogHeader>
                 </div>
 
-                {/* Formulário com scroll */}
-                <ScrollArea className="flex-1 pr-4">
+                {/* Formulário com scroll - altura explícita */}
+                <ScrollArea className="flex-1 pr-4 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)' }}>
+
                     <Form {...form}>
-                        <form id="plan-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                        <form id="plan-form" onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
                             {/* Informações Básicas */}
                             <div className="space-y-4">
                                 <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-300">Informações Básicas</h3>

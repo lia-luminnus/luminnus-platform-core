@@ -21,6 +21,7 @@ export interface Plan {
 
 export const plans: Plan[] = [
   {
+    id: "7c3aed01-3211-4bda-bc6b-4e5a9d828590",
     name: "Start",
     price: "€27",
     annualPrice: "€291,60",
@@ -46,6 +47,7 @@ export const plans: Plan[] = [
     maxMessages: 1000
   },
   {
+    id: "7c3aed02-3211-4bda-bc6b-4e5a9d828590",
     name: "Plus",
     price: "€147",
     annualPrice: "€1.411",
@@ -75,6 +77,7 @@ export const plans: Plan[] = [
     maxMessages: 5000
   },
   {
+    id: "7c3aed03-3211-4bda-bc6b-4e5a9d828590",
     name: "Pro",
     price: "A partir de €997",
     annualPrice: "A partir de €9.564",

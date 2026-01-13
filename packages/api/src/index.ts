@@ -7,6 +7,8 @@ import { versionRouter } from './routes/version.js';
 import { meRouter } from './routes/me.js';
 import { authRouter } from './routes/auth.js';
 import { integrationsRouter } from './routes/integrations.js';
+import dashboardRouter from './routes/dashboardRoutes.js';
+import metricsRouter from './routes/metricsRoutes.js';
 import { errorHandler } from './middleware/error.js';
 import { setupWebSocket } from './ws/gateway.js';
 import http from 'http';
@@ -34,6 +36,8 @@ app.use('/version', versionRouter);
 app.use('/api/me', meRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/integrations', integrationsRouter);
+app.use('/api/dashboard', dashboardRouter);
+app.use('/api/metrics', metricsRouter);
 
 // Error handler
 app.use(errorHandler);

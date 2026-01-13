@@ -29,7 +29,7 @@ const Plans = () => {
     <div className="min-h-screen bg-[#0B0B0F]">
       <UnifiedHeader />
 
-      <section className="py-32 lg:py-40 relative overflow-hidden">
+      <section className="py-20 lg:py-24 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-[#0B0B0F] via-primary/5 to-[#0B0B0F]" />
 
         <div className="container mx-auto px-4 lg:px-8 relative z-10">
@@ -49,7 +49,7 @@ const Plans = () => {
           </div>
 
           {/* Billing Toggle */}
-          <div className="flex items-center justify-center gap-4 mb-16 animate-fade-in">
+          <div className="flex items-center justify-center gap-4 mb-10 animate-fade-in">
             <span className={`text-lg font-semibold transition-all ${!isAnnual ? 'text-white' : 'text-white/50'}`}>
               Mensal
             </span>
@@ -81,8 +81,33 @@ const Plans = () => {
               {/* Plans Grid */}
               <div id="planos" className="grid md:grid-cols-3 gap-8 max-w-7xl mx-auto">
                 {plans.map((plan, index) => {
-                  // Lógica de cálculo de preços
-                  const numericPrice = parseFloat(plan.price.replace(/[^0-9.,]/g, '').replace(',', '.'));
+                  // Lógica de cálculo de preços robusta
+                  const parsePrice = (str: string) => {
+                    if (!str) return 0;
+                    let clean = str.replace(/[^0-9.,]/g, '');
+                    if (!clean) return 0;
+
+                    // Se tiver vírgula E ponto: pontos são milhares, vírgula é decimal
+                    if (clean.includes(',') && clean.includes('.')) {
+                      return parseFloat(clean.replace(/\./g, '').replace(',', '.')) || 0;
+                    }
+                    // Se tiver apenas vírgula: é decimal
+                    if (clean.includes(',')) {
+                      return parseFloat(clean.replace(',', '.')) || 0;
+                    }
+                    // Se tiver apenas ponto: verificar se é milhar ou decimal
+                    if (clean.includes('.')) {
+                      const parts = clean.split('.');
+                      const lastPart = parts[parts.length - 1];
+                      // Ponto seguido de exatamente 3 dígitos = milhar (ex: 1.411)
+                      if (lastPart.length === 3) {
+                        return parseFloat(clean.replace(/\./g, '')) || 0;
+                      }
+                    }
+                    return parseFloat(clean) || 0;
+                  };
+
+                  const numericPrice = parsePrice(plan.price);
                   const discount = plan.discount || 0;
 
                   // Preço Anual Total = (Mensal * 12) - Desconto%
@@ -103,8 +128,8 @@ const Plans = () => {
                   return (
                     <div
                       key={index}
-                      className={`relative p-8 rounded-2xl bg-white/5 backdrop-blur-lg border-2 transition-all duration-300 hover:scale-105 animate-fade-in ${plan.popular
-                        ? "border-[#7C3AED] shadow-[0_0_60px_rgba(124,58,237,0.4)]"
+                      className={`relative p-6 lg:p-7 rounded-2xl bg-white/5 backdrop-blur-lg border-2 transition-all duration-300 hover:scale-[1.02] animate-fade-in ${plan.popular
+                        ? "border-[#7C3AED] shadow-[0_0_40px_rgba(124,58,237,0.3)]"
                         : "border-white/10 hover:border-white/20"
                         }`}
                       style={{ animationDelay: `${index * 0.1}s` }}
@@ -129,7 +154,7 @@ const Plans = () => {
                                 <div className="flex flex-col items-center">
                                   <div className="flex items-center gap-2">
                                     <p
-                                      className="text-6xl font-black tracking-tighter"
+                                      className="text-5xl font-black tracking-tighter"
                                       style={{
                                         background: gradient,
                                         WebkitBackgroundClip: 'text',

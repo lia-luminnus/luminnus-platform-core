@@ -1,5 +1,5 @@
 
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import Header from './Header';
@@ -8,13 +8,35 @@ import { useAppStore } from '../store/useAppStore';
 import { Skeleton } from './ui/Skeleton';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
+import { useDashboardAuth } from '../contexts/DashboardAuthContext';
+
+// Feature flag for Dashboard Engine V2
+const DASHBOARD_ENGINE_V2 = import.meta.env.VITE_DASHBOARD_ENGINE_V2 === 'true';
+
+// Lazy load Dashboard Engine components
+const DashboardProvider = lazy(() =>
+  import('./dashboard-engine').then(m => ({ default: m.DashboardProvider }))
+);
+const DashboardRenderer = lazy(() =>
+  import('./dashboard-engine').then(m => ({ default: m.DashboardRenderer }))
+);
+const DashboardEditor = lazy(() =>
+  import('./dashboard-engine').then(m => ({ default: m.DashboardEditor }))
+);
 
 const Dashboard: React.FC = () => {
   const { t } = useContext(LanguageContext);
   const { businessType, onboarding_completed, integrations_completed } = useAppStore();
   const [timeRange, setTimeRange] = useState('weekly');
   const [loading, setLoading] = useState(true);
+  const [showEditor, setShowEditor] = useState(false);
+  const { user, plan: authPlan } = useDashboardAuth();
+  const { planType: storePlanType } = useAppStore();
   const navigate = useNavigate();
+
+  const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || '00000000-0000-0000-0000-000000000001';
+  // Use authPlan from backend if available, otherwise fallback to store plan (which defaults to 'Pro')
+  const userPlan = (authPlan?.name?.toLowerCase() as 'start' | 'plus' | 'pro') || (storePlanType?.toLowerCase() as 'start' | 'plus' | 'pro') || 'pro';
 
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 1200);
@@ -33,6 +55,44 @@ const Dashboard: React.FC = () => {
 
     return () => clearTimeout(timer);
   }, [onboarding_completed, integrations_completed, navigate]);
+
+  // ============================================
+  // Dashboard Engine V2 (Config-Driven)
+  // ============================================
+  if (DASHBOARD_ENGINE_V2) {
+    return (
+      <div className="flex flex-col h-full bg-gray-50 dark:bg-dark-bg">
+        <Header />
+        <div className="flex-1 overflow-hidden">
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-brand-primary/30 border-t-brand-primary rounded-full animate-spin mx-auto mb-4" />
+                <p className="text-gray-400 text-sm">Carregando Dashboard Engine...</p>
+              </div>
+            </div>
+          }>
+            <DashboardRenderer
+              tenantId={tenantId}
+              plan={userPlan}
+              isEditable={true}
+            />
+            <DashboardEditor
+              isOpen={showEditor}
+              onClose={() => setShowEditor(false)}
+              plan={userPlan}
+              mode="add"
+            />
+          </Suspense>
+        </div>
+
+      </div>
+    );
+  }
+
+  // ============================================
+  // Legacy Dashboard (Static)
+  // ============================================
 
   const getDynamicStats = () => {
     switch (businessType) {

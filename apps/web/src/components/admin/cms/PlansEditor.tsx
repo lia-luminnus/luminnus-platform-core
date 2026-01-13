@@ -10,18 +10,51 @@ import { CheckCircle2, Save, Sparkles } from 'lucide-react';
 import { Plan, PlanFromDB } from '@/hooks/usePlans';
 import { plans as fallbackPlans } from '@/data/plansData';
 
+// Ordem fixa dos planos: Start=1, Plus=2, Pro=3
+const PLAN_ORDER: Record<string, number> = {
+  'Start': 1,
+  'Plus': 2,
+  'Pro': 3,
+};
+
+function sortPlans(plans: Plan[]): Plan[] {
+  return [...plans].sort((a, b) => {
+    const orderA = PLAN_ORDER[a.name] || 99;
+    const orderB = PLAN_ORDER[b.name] || 99;
+    return orderA - orderB;
+  });
+}
+
 // Função para converter plano do banco para formato do frontend
 function convertPlanFromDB(dbPlan: PlanFromDB): Plan {
   const gradientStart = dbPlan.gradient_start || '262.1 83.3% 57.8%';
   const gradientEnd = dbPlan.gradient_end || '330.4 81.2% 60.4%';
 
-  // Calcular desconto dinamicamente (não existe coluna discount no Supabase)
-  const numericPrice = parseFloat(dbPlan.price.replace(/[^0-9.,]/g, '').replace(',', '.'));
+  // parsePrice com suporte a formato europeu (ponto como milhar)
+  const parsePrice = (priceStr: string | undefined): number => {
+    if (!priceStr) return 0;
+    let clean = priceStr.replace(/[^0-9.,]/g, '');
+    if (!clean) return 0;
+
+    if (clean.includes(',') && clean.includes('.')) {
+      clean = clean.replace(/\./g, '').replace(',', '.');
+    } else if (clean.includes(',')) {
+      clean = clean.replace(',', '.');
+    } else if (clean.includes('.')) {
+      const parts = clean.split('.');
+      const lastPart = parts[parts.length - 1];
+      if (lastPart.length === 3) {
+        clean = clean.replace(/\./g, '');
+      }
+    }
+    return parseFloat(clean) || 0;
+  };
+
+  const numericPrice = parsePrice(dbPlan.price);
   const numericAnnualPrice = dbPlan.annual_price
-    ? parseFloat(dbPlan.annual_price.replace(/[^0-9.,]/g, '').replace(',', '.'))
+    ? parsePrice(dbPlan.annual_price)
     : numericPrice * 12;
 
-  // Desconto = ((Mensal * 12) - Anual) / (Mensal * 12) * 100
   const expectedAnnual = numericPrice * 12;
   const calculatedDiscount = expectedAnnual > 0
     ? Math.round(((expectedAnnual - numericAnnualPrice) / expectedAnnual) * 100)
@@ -50,7 +83,7 @@ function convertPlanFromDB(dbPlan: PlanFromDB): Plan {
 }
 
 export const PlansEditor = () => {
-  const [plans, setPlans] = useState<Plan[]>(fallbackPlans);
+  const [plans, setPlans] = useState<Plan[]>(sortPlans(fallbackPlans));
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -68,13 +101,13 @@ export const PlansEditor = () => {
       setErrorMessage(null);
       const { data } = await supabase
         .from('plan_configs')
-        .select('*')
-        .order('created_at', { ascending: true });
+        .select('*');
 
       if (data && data.length > 0) {
-        // Converter dados do banco para formato do frontend
         const convertedPlans = data.map(convertPlanFromDB);
-        setPlans(convertedPlans);
+        setPlans(sortPlans(convertedPlans)); // Ordenar pelo nome fixo
+        setUsingFallback(false);
+        setErrorMessage(null);
       } else {
         // Nenhum dado do Supabase - usar dados locais como fallback
         setPlans(fallbackPlans);
@@ -98,14 +131,16 @@ export const PlansEditor = () => {
   };
 
   const handleSave = async (updatedPlan: Plan) => {
-    // Atualizar lista local
+    // Atualizar lista local imediatamente para feedback visual rápido
     setPlans((prev) =>
       prev.map((p) => (p.id === updatedPlan.id ? updatedPlan : p))
     );
+
+    // Recarregar do banco para garantir sincronização total
+    await loadPlans();
+
     setIsModalOpen(false);
     setSelectedPlan(null);
-    // Recarregar do banco para garantir sincronização
-    await loadPlans();
   };
 
   const handleClose = () => {

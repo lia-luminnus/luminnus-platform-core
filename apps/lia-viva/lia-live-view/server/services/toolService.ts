@@ -315,6 +315,57 @@ export class ToolService {
             {
                 name: 'getProjectMap',
                 description: 'DIAGNOSTIC ONLY: Retorna o mapa da estrutura do sistema (árvore de arquivos principal).'
+            },
+            // ========== DASHBOARD CONTROL TOOLS (LIA Action Protocol v3.0) ==========
+            {
+                name: 'dashboardGetSnapshot',
+                description: 'ESSENCIAL: Obtém a visão atual do dashboard do usuário (todos os widgets, tipos e títulos). Use PROATIVAMENTE sempre que o usuário perguntar o que tem no dashboard ou antes de sugerir qualquer mudança, para garantir que você sabe exatamente o que está na tela.',
+                parameters: {
+                    type: 'object',
+                    properties: {}
+                }
+            },
+            {
+                name: 'dashboardReplaceWidget',
+                description: 'Substitui um widget existente por outro tipo, mantendo a mesma posição. Use quando o usuário pedir "troque", "substitua" ou "mude" um widget. NÃO PRECISA do ID exato - pode buscar por tipo ou título.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        targetWidgetType: {
+                            type: 'string',
+                            description: 'Tipo do widget a substituir (ex: table_rank, pie_chart, line_timeseries)',
+                            enum: ['kpi_card', 'line_timeseries', 'bar_grouped', 'donut_breakdown', 'table_rank', 'table_transactions', 'funnel', 'gauge', 'heatmap_calendar', 'alerts_list', 'radar_multidim', 'bar_horizontal', 'area_timeseries', 'pie_chart']
+                        },
+                        targetWidgetTitle: {
+                            type: 'string',
+                            description: 'Parte do título do widget a substituir (ex: "ranking", "despesas")'
+                        },
+                        newWidgetType: {
+                            type: 'string',
+                            description: 'Tipo do novo widget',
+                            enum: ['kpi_card', 'line_timeseries', 'bar_grouped', 'donut_breakdown', 'table_rank', 'table_transactions', 'funnel', 'gauge', 'heatmap_calendar', 'alerts_list', 'radar_multidim', 'bar_horizontal', 'area_timeseries', 'pie_chart']
+                        },
+                        newWidgetTitle: {
+                            type: 'string',
+                            description: 'Título para o novo widget'
+                        }
+                    },
+                    required: ['newWidgetType']
+                }
+            },
+            {
+                name: 'dashboardReorganize',
+                description: 'Reorganiza o layout do dashboard. Use quando o usuário pedir para "organizar", "arrumar" ou "reorganizar" o dashboard.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        layout: {
+                            type: 'string',
+                            enum: ['kpis-top', 'charts-first', 'auto'],
+                            description: 'Tipo de reorganização: kpis-top (KPIs no topo), charts-first (gráficos primeiro), auto (automático)'
+                        }
+                    }
+                }
             }
         ];
     }
@@ -596,6 +647,45 @@ export class ToolService {
                             backend: ['apps/lia-viva/lia-live-view/server/routes/chat.ts', 'apps/lia-viva/lia-live-view/server/services/toolService.ts'],
                             config: ['package.json', 'pnpm-workspace.yaml']
                         }
+                    };
+                }
+
+                // ========== DASHBOARD CONTROL TOOLS (LIA Action Protocol v3.0) ==========
+                case 'dashboardGetSnapshot': {
+                    // Emitir evento para o frontend capturar e executar
+                    return {
+                        success: true,
+                        action: 'DASHBOARD_GET_SNAPSHOT',
+                        message: 'Deixa eu ver como está o seu dashboard agora... Pronto, estou visualizando todos os seus widgets!',
+                        instruction: 'O frontend deve chamar DashboardContext.getSnapshot() e retornar os dados.'
+                    };
+                }
+
+                case 'dashboardReplaceWidget': {
+                    // Emitir evento para o frontend capturar e executar
+                    return {
+                        success: true,
+                        action: 'DASHBOARD_REPLACE_WIDGET',
+                        params: {
+                            targetWidgetType: args.targetWidgetType,
+                            targetWidgetTitle: args.targetWidgetTitle,
+                            newWidgetType: args.newWidgetType,
+                            newWidgetConfig: {
+                                title: args.newWidgetTitle
+                            }
+                        },
+                        message: `Com certeza! Estou substituindo o widget de ${args.targetWidgetType || args.targetWidgetTitle || 'dados'} por um novo ${args.newWidgetType} para você.`
+                    };
+                }
+
+                case 'dashboardReorganize': {
+                    return {
+                        success: true,
+                        action: 'DASHBOARD_REORGANIZE',
+                        params: {
+                            layout: args.layout || 'auto'
+                        },
+                        message: `Entendido. Vou reorganizar os elementos para deixar seu dashboard mais arrumado no modo ${args.layout || 'automático'}.`
                     };
                 }
 

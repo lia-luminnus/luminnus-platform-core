@@ -209,7 +209,8 @@ export async function audioToText(audioBuffer, mimeType = "audio/webm") {
     const transcription = await openai.audio.transcriptions.create({
       file: file,
       model: "whisper-1",
-      language: "pt"
+      language: "pt",
+      prompt: "Lia, Luminnus, inteligência artificial, assistente, Wendell, tecnologia, dashboard, gráfico de pizza, gráfico de barras, ranking, tabela de dados, faturamento, despesas, trocar widget."
     });
 
     appendLog(GPT_LOG, {

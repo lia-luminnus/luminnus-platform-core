@@ -62,12 +62,22 @@ class SocketService {
             if (params.conversationId) this.conversationId = params.conversationId;
         }
 
-        // Se já está conectado, retornar socket existente
-        if (this.socket?.connected) {
+        // v1.1.1: Detecção de troca de usuário (Fator Crítico de Identidade)
+        const hasIdChanged = params?.userId && this.authParams?.userId && params.userId !== this.authParams.userId;
+
+        // Se já está conectado e o ID não mudou, retornar socket existente
+        if (this.socket?.connected && !hasIdChanged) {
             return this.socket;
         }
 
-        if (this.isConnecting) {
+        // Se o ID mudou, forçamos o encerramento da conexão anterior antes de criar a nova
+        if (hasIdChanged && this.socket) {
+            console.log('🔄 [Socket] Identidade mudou. Reiniciando conexão para o novo usuário...');
+            this.socket.disconnect();
+            this.socket = null;
+        }
+
+        if (this.isConnecting && !hasIdChanged) {
             console.log('⏳ [Socket] Conexão já em andamento...');
             // Aguarda um pouco e tenta retornar o que foi criado
             await new Promise(r => setTimeout(r, 500));

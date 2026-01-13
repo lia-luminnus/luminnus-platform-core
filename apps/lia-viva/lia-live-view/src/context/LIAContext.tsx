@@ -405,6 +405,24 @@ export function LIAProvider({ children }: LIAProviderProps) {
     console.log(`💬 [Scope] Mensagem adicionada ao escopo: ${scopeKey}`);
   }, []);
 
+  // v3.5: Sync addToScopeRef for Gemini Live events
+  // This wrapper converts (message, mode, convId) to (scopeKey, message)
+  useEffect(() => {
+    addToScopeRef.current = (message: Message, mode?: 'chat' | 'multimodal' | 'live', convId?: string) => {
+      // Build scopeKey from mode and convId, or use active scope
+      let scopeKey = activeScopeRef.current;
+      if (mode && convId) {
+        scopeKey = convId; // getScopeKey returns just convId
+      }
+      if (scopeKey) {
+        addMessageToScope(scopeKey, message);
+      } else {
+        console.warn('⚠️ [addToScopeRef] Mensagem não adicionada: escopo inválido');
+      }
+    };
+    console.log('✅ [LIAContext] addToScopeRef.current inicializado');
+  }, [addMessageToScope]);
+
   // Limpar mensagens de um escopo
   const clearScopeMessages = useCallback((scopeKey: string) => {
     setMessagesByScope(prev => {

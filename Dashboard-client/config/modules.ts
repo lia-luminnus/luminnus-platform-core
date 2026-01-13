@@ -29,30 +29,56 @@ export const MODULE_REGISTRY: Record<ModuleId, ModuleDefinition> = {
 };
 
 // 2. Presets: Defines which modules are active by default for each profession
+// Keys match the normalized segment_keys used in Onboarding and database
 export const CATEGORY_PRESETS: Record<string, ModuleId[]> = {
-  technical_services: ['dashboard', 'lia', 'calendar', 'crm', 'files', 'financial', 'automations', 'plan', 'settings', 'support'],
+  // Serviços Técnicos
+  services_technical: ['dashboard', 'integrations', 'lia', 'calendar', 'crm', 'files', 'financial', 'automations', 'plan', 'settings', 'support'],
 
-  liberal_professionals: ['dashboard', 'lia', 'crm', 'calendar', 'files', 'financial', 'automations', 'reports', 'plan', 'settings', 'support'],
+  // Profissionais Liberais
+  professionals: ['dashboard', 'integrations', 'lia', 'crm', 'calendar', 'files', 'financial', 'automations', 'reports', 'plan', 'settings', 'support'],
 
-  health_wellness: ['dashboard', 'lia', 'calendar', 'medical_records', 'financial', 'files', 'crm', 'plan', 'settings', 'support'],
+  // Saúde & Bem-Estar
+  health_wellbeing: ['dashboard', 'integrations', 'lia', 'calendar', 'medical_records', 'financial', 'files', 'crm', 'plan', 'settings', 'support'],
 
-  real_estate: ['dashboard', 'lia', 'crm', 'properties', 'calendar', 'files', 'financial', 'automations', 'plan', 'settings', 'support'],
+  // Imobiliária & Construção
+  real_estate_construction: ['dashboard', 'integrations', 'lia', 'crm', 'properties', 'calendar', 'files', 'financial', 'automations', 'plan', 'settings', 'support'],
 
-  retail: ['dashboard', 'lia', 'stock', 'sales', 'financial', 'automations', 'team', 'plan', 'settings', 'support'],
+  // Comércio & Lojas
+  commerce_retail: ['dashboard', 'integrations', 'lia', 'stock', 'sales', 'financial', 'automations', 'team', 'plan', 'settings', 'support'],
 
-  food: ['dashboard', 'lia', 'stock', 'sales', 'financial', 'team', 'plan', 'settings', 'support'],
+  // Alimentação & Restaurantes
+  food_restaurants: ['dashboard', 'integrations', 'lia', 'stock', 'sales', 'financial', 'team', 'plan', 'settings', 'support'],
 
-  logistics: ['dashboard', 'lia', 'logistics', 'stock', 'financial', 'team', 'automations', 'plan', 'settings', 'support'],
+  // Transporte & Logística
+  transport_logistics: ['dashboard', 'integrations', 'lia', 'logistics', 'stock', 'financial', 'team', 'automations', 'plan', 'settings', 'support'],
 
-  tech: ['dashboard', 'lia', 'projects', 'automations', 'team', 'files', 'crm', 'plan', 'settings', 'support'],
+  // Tecnologia & Software
+  tech_software: ['dashboard', 'integrations', 'lia', 'projects', 'automations', 'team', 'files', 'crm', 'plan', 'settings', 'support'],
 
-  creative: ['dashboard', 'lia', 'projects', 'files', 'crm', 'calendar', 'plan', 'settings', 'support'],
+  // Conteúdo & Criativos
+  content_creatives: ['dashboard', 'integrations', 'lia', 'projects', 'files', 'crm', 'calendar', 'plan', 'settings', 'support'],
 
-  business_services: ['dashboard', 'lia', 'crm', 'financial', 'reports', 'files', 'team', 'automations', 'plan', 'settings', 'support'],
+  // Serviços Empresariais
+  business_services: ['dashboard', 'integrations', 'lia', 'crm', 'financial', 'reports', 'files', 'team', 'automations', 'plan', 'settings', 'support'],
 
-  education: ['dashboard', 'lia', 'calendar', 'files', 'crm', 'financial', 'plan', 'settings', 'support'],
+  // Educação & Treinamento
+  education_training: ['dashboard', 'integrations', 'lia', 'calendar', 'files', 'crm', 'financial', 'plan', 'settings', 'support'],
 
-  other: ['dashboard', 'lia', 'crm', 'calendar', 'files', 'financial', 'plan', 'settings', 'support'], // Generic default
+  // Outros (Personalizado)
+  custom_other: ['dashboard', 'integrations', 'lia', 'crm', 'calendar', 'files', 'financial', 'plan', 'settings', 'support'],
+
+  // Legacy keys (backward compatibility)
+  technical_services: ['dashboard', 'integrations', 'lia', 'calendar', 'crm', 'files', 'financial', 'automations', 'plan', 'settings', 'support'],
+  liberal_professionals: ['dashboard', 'integrations', 'lia', 'crm', 'calendar', 'files', 'financial', 'automations', 'reports', 'plan', 'settings', 'support'],
+  health_wellness: ['dashboard', 'integrations', 'lia', 'calendar', 'medical_records', 'financial', 'files', 'crm', 'plan', 'settings', 'support'],
+  real_estate: ['dashboard', 'integrations', 'lia', 'crm', 'properties', 'calendar', 'files', 'financial', 'automations', 'plan', 'settings', 'support'],
+  retail: ['dashboard', 'integrations', 'lia', 'stock', 'sales', 'financial', 'automations', 'team', 'plan', 'settings', 'support'],
+  food: ['dashboard', 'integrations', 'lia', 'stock', 'sales', 'financial', 'team', 'plan', 'settings', 'support'],
+  logistics: ['dashboard', 'integrations', 'lia', 'logistics', 'stock', 'financial', 'team', 'automations', 'plan', 'settings', 'support'],
+  tech: ['dashboard', 'integrations', 'lia', 'projects', 'automations', 'team', 'files', 'crm', 'plan', 'settings', 'support'],
+  creative: ['dashboard', 'integrations', 'lia', 'projects', 'files', 'crm', 'calendar', 'plan', 'settings', 'support'],
+  education: ['dashboard', 'integrations', 'lia', 'calendar', 'files', 'crm', 'financial', 'plan', 'settings', 'support'],
+  other: ['dashboard', 'integrations', 'lia', 'crm', 'calendar', 'files', 'financial', 'plan', 'settings', 'support'],
 };
 
 // Helper to get ordered module definitions based on a list of IDs

@@ -128,8 +128,8 @@ function replaceEmojiDescriptions(text) {
     cleaned = cleaned.replace(pattern, emoji);
   });
 
-  // Limpar espaços duplos
-  return cleaned.replace(/\s{2,}/g, ' ').trim();
+  // Limpar espaços duplicados (preservando quebras de linha)
+  return cleaned.replace(/[ \t]{2,}/g, ' ');
 }
 
 // ----------------------------------------------------------------------
@@ -253,14 +253,71 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
         };
       }
 
+      // =====================================================
+      // TRATAMENTO ESPECIAL PARA DASHBOARD ACTIONS (v3.0)
+      // Emite action para o frontend executar no DashboardContext
+      // =====================================================
+      if (toolCall.name.startsWith('dashboard') && function_result?.action) {
+        console.log(`🎯 [Realtime] Ação de dashboard: ${function_result.action}`);
+
+        const naturalReply = function_result.message || "Pronto, já preparei o dashboard para você!";
+
+        // Persistir mensagens
+        const { saveMessage } = await import("../config/supabase.js");
+        await saveMessage(conversationId, "user", userMessage, "voice");
+        await saveMessage(conversationId, "assistant", naturalReply, "voice");
+
+        // Retornar com action para o frontend
+        return {
+          voiceScript: naturalReply,
+          chatPayload: naturalReply,
+          text: naturalReply,
+          mode: "voice",
+          // CRÍTICO: Incluir action para o frontend processar
+          action: {
+            name: function_result.action,
+            arguments: JSON.stringify(function_result.params || {})
+          },
+          function_call: {
+            name: function_result.action,
+            arguments: JSON.stringify(function_result.params || {})
+          }
+        };
+      }
+
+      const isGmailRead = ['listGmailMessages', 'searchGmail'].includes(toolCall.name);
+
+      // =====================================================
+      // TRATAMENTO ESPECIAL PARA GMAIL READ (v3.4)
+      // Bypassa humanização e governança para preservar markdown
+      // =====================================================
+      if (isGmailRead && function_result?.success) {
+        console.log(`📧 [Realtime] Gmail Read detectado (H-F Bypass). Preservando markdown.`);
+
+        const gmailReply = function_result.message;
+
+        // Persistir mensagens
+        const { saveMessage } = await import("../config/supabase.js");
+        await saveMessage(conversationId, "user", userMessage, "voice");
+        await saveMessage(conversationId, "assistant", gmailReply, "voice");
+
+        return {
+          voiceScript: "Aqui estão os seus e-mails:",
+          chatPayload: gmailReply,
+          text: gmailReply,
+          mode: "voice",
+          isStructured: true, // Voltar para true para ativar cards/containers
+          table: function_result.table // Passar a tabela para o chamador emitir
+        };
+      }
+
       // Second GPT call with tool results (para outras ferramentas)
       const isJsonExplicit = OutputContracts.isJsonRequested(userMessage);
 
-      const humanizedPrompt = isJsonExplicit
-        ? `Resultado da ferramenta ${toolCall.name}: ${JSON.stringify(function_result)}\nEntregue o JSON conforme solicitado.`
-        : OutputContracts.buildHumanizedPrompt(userMessage, toolCall.name, function_result);
+      // v3.3: Prompt de humanização adaptativo
+      let humanizedPrompt = OutputContracts.buildHumanizedPrompt(userMessage, toolCall.name, function_result);
 
-      console.log(`🧠 [Realtime] Gerando resposta humanizada (JSON Explícito: ${isJsonExplicit})`);
+      console.log(`🧠 [Realtime] Gerando resposta humanizada (Tipo: Padrão, JSON: ${isJsonExplicit})`);
 
       const secondResponse = await runGpt4Mini(
         humanizedPrompt,
@@ -373,8 +430,27 @@ export function setupRealtime(io) {
     // Setup multimodal events
     setupMultimodalEvents(socket);
 
+    // v3.0: LIA Action Protocol - Respostas do frontend às ferramentas
+    socket.on("lia-action-response", async (response) => {
+      console.log(`🔌 [Realtime] Resposta de ação recebida: ${response.type} para conv ${response.conversationId}`);
 
-    // -----------------------------
+      if (response.type === 'DASHBOARD_SNAPSHOT') {
+        const snapshot = response.data;
+        const convId = response.conversationId || socket.conversationId;
+
+        // v3.1: Awareness do Dashboard - Adicionar contexto técnico invisível no histórico
+        const dashboardContext = `[CONTEXTO_SISTEMA: Widgets Atuais no Dashboard]\n${snapshot.widgets.map(w => `- ${w.title} (${w.type})`).join('\n')}\nTotal: ${snapshot.widgetCount} widgets.`;
+
+        try {
+          const { saveMessage } = await import("../config/supabase.js");
+          await saveMessage(convId, "system", dashboardContext, "snapshot");
+          console.log(`✅ [Realtime] Dashboard Awareness atualizado para conv: ${convId}`);
+        } catch (e) {
+          console.error('❌ Erro ao salvar context do dashboard:', e);
+        }
+      }
+    });
+
     // Personalidade da voz
     // -----------------------------
     socket.on("set-voice-personality", p => {
@@ -428,6 +504,19 @@ export function setupRealtime(io) {
         const respostaFiltrada = typeof resposta === 'string'
           ? replaceEmojiDescriptions(resposta)
           : (resposta.text ? { ...resposta, text: replaceEmojiDescriptions(resposta.text) } : resposta);
+
+        // v3.1: Emitir ação de dashboard se existir (Modo Texto/Socket)
+        if (resposta && typeof resposta === 'object') {
+          if (resposta.action) {
+            console.log(`🎯 [Realtime] Emitindo ação para o chat: ${resposta.action.name}`);
+            socket.emit("lia-dashboard-action", resposta.action);
+          }
+          if (resposta.table) {
+            console.log(`📊 [Realtime] Emitindo tabela para o chat`);
+            socket.emit("lia:render-table", resposta.table);
+          }
+        }
+
         socket.emit("lia-message", respostaFiltrada);
 
 
@@ -509,7 +598,7 @@ export function setupRealtime(io) {
         formData.append("file", wavBuffer, { filename: "audio.wav", contentType: "audio/wav" });
         formData.append("model", "whisper-1");
         formData.append("language", "pt");
-        formData.append("prompt", "Lia, Luminnus, inteligência artificial, assistente, Wendell, tecnologia.");
+        formData.append("prompt", "Lia, Luminnus, inteligência artificial, assistente, Wendell, tecnologia, dashboard, gráfico de pizza, gráfico de barras, ranking, tabela de dados, faturamento, despesas, trocar widget.");
 
         const resp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
           method: "POST",
@@ -559,7 +648,7 @@ export function setupRealtime(io) {
             const openaiVoice = getOpenAIVoice(socket.voicePersonality);
             const audioResp = await textToAudio(resposta.text || resposta, openaiVoice, { conversationId: convId });
             if (audioResp) {
-              socket.emit("audio-response", { audio: Array.from(audioResp), text: resposta.text || resposta });
+              socket.emit("audio-response", { audio: Array.from(audioResp), text: resposta.text || resposta, conversationId: convId, mode: "voice" });
             }
           } catch (e) { }
           return;
@@ -619,8 +708,8 @@ export function setupRealtime(io) {
             cleaned = cleaned.replace(pattern, emoji);
           });
 
-          // Limpar espaços duplos
-          return cleaned.replace(/\s{2,}/g, ' ').trim();
+          // Limpar espaços duplicados (preservando quebras de linha)
+          return cleaned.replace(/[ \t]{2,}/g, ' ').trim();
         };
 
         const textoParaChatLimpo = replaceEmojiDescriptionsWithEmojis(textoParaChat);
@@ -628,6 +717,18 @@ export function setupRealtime(io) {
         // ==============================================================
         // AJUSTE 1: Emitir TEXTO IMEDIATAMENTE (antes do áudio)
         // ==============================================================
+        // v3.1: Emitir ação de dashboard se existir (Modo Voz/WebRTC)
+        if (resposta && typeof resposta === 'object') {
+          if (resposta.action) {
+            console.log(`🎯 [Realtime] Emitindo ação para voz: ${resposta.action.name}`);
+            socket.emit("lia-dashboard-action", resposta.action);
+          }
+          if (resposta.table) {
+            console.log(`📊 [Realtime] Emitindo tabela para voz`);
+            socket.emit("lia:render-table", resposta.table);
+          }
+        }
+
         socket.emit("lia-message", textoParaChatLimpo);
         console.log("📝 [Realtime] Texto emitido para o chat");
 
@@ -660,8 +761,8 @@ export function setupRealtime(io) {
             cleaned = cleaned.replace(pattern, '');
           });
 
-          // Limpar espaços duplos e pontuação solta
-          return cleaned.replace(/\s{2,}/g, ' ').replace(/\s+([.,!?])/g, '$1').trim();
+          // Limpar espaços duplicados e pontuação solta (preservando quebras de linha para TTS se necessário, ou apenas limpando horizontal)
+          return cleaned.replace(/[ \t]{2,}/g, ' ').replace(/\s+([.,!?])/g, '$1').trim();
         };
 
         const textoLimpoParaTTS = removeEmojiDescriptions(textoParaTTS);
@@ -677,10 +778,13 @@ export function setupRealtime(io) {
             return;
           }
 
-          // Emitir apenas o áudio (texto já foi enviado antes)
+          // Emitir áudio COM o texto para legenda (v3.5.1)
+          // IMPORTANTE: conversationId e mode são OBRIGATÓRIOS para o frontend adicionar ao scope correto
           socket.emit("audio-response", {
             audio: Array.from(audioResp),
-            text: "" // Texto já foi enviado, não duplicar
+            text: textoLimpoParaTTS || textoParaChatLimpo,
+            conversationId: convId,
+            mode: "voice"
           });
 
           console.log("✅ Áudio enviado");

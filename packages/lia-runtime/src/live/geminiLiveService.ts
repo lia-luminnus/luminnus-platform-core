@@ -549,7 +549,11 @@ export class GeminiLiveService {
             if (this.isWaitingForTool && (window as any).DEBUG_LIA_LOGS) {
                 console.log('⏳ [Interrupção] Usuário falou durante Tool Call.');
             }
-            // v4.32: Revertido espaço manual - Gemini já envia espaços nos fragmentos
+            // v5.7: CORREÇÃO - Gemini NÃO envia espaços entre fragmentos de transcrição
+            // Adicionar espaço antes de cada chunk se o acumulador já tiver texto
+            if (this.accumulatedUserText.length > 0 && !this.accumulatedUserText.endsWith(' ')) {
+                this.accumulatedUserText += ' ';
+            }
             this.accumulatedUserText += inputText;
         }
 

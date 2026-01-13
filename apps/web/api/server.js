@@ -1018,7 +1018,11 @@ app.get("/api/integrations", async (req, res) => {
         provider: int.provider === 'google_workspace' ? 'google_workspace' : int.provider,
         services: int.services || [],
         status: int.status || 'active',
-        connected_at: int.connected_at
+        connected_at: int.connected_at,
+        expires_at: int.expires_at,
+        is_expired: int.expires_at ? new Date(int.expires_at) < new Date() : false,
+        has_refresh_token: !!int.refresh_token,
+        provider_email: int.google_email || int.provider_email
       }))
     });
   } catch (error) {

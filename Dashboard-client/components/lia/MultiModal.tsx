@@ -53,6 +53,8 @@ export function MultiModal() {
         isLiveActive,
         setDynamicContent,
         addDynamicContainer,
+        isProcessingDynamic,
+        liaStatus,
     } = useLIA();
 
     // Conversation management
@@ -115,9 +117,14 @@ export function MultiModal() {
     useEffect(() => {
         const textarea = textareaRef.current;
         if (textarea) {
-            textarea.style.height = "inherit";
+            // Se estiver vazio, resetar para altura padrão
+            if (!inputValue) {
+                textarea.style.height = "42px"; // Altura base para rows=1
+                return;
+            }
+            textarea.style.height = "auto";
             const scrollHeight = textarea.scrollHeight;
-            textarea.style.height = `${scrollHeight}px`;
+            textarea.style.height = `${Math.min(scrollHeight, 128)}px`; // Limitado a max-h-32 (128px)
         }
     }, [inputValue]);
 
@@ -231,22 +238,56 @@ export function MultiModal() {
             <div className="flex-1 flex gap-6 p-6 overflow-hidden min-h-0">
                 {/* Left: LIA Avatar (35%) */}
                 <div className="w-[35%] flex flex-col gap-4 min-h-0">
-                    <div className="flex-1 relative rounded-2xl overflow-hidden border border-white/5 bg-[#0D111C] shadow-2xl flex items-center justify-center p-4 min-h-0">
-                        <img src={LIA_FULL_URL} alt="LIA Full" className="max-h-full h-auto w-auto object-contain" />
+                    <div className={`flex-1 relative rounded-2xl overflow-hidden border transition-all duration-500 flex items-center justify-center p-4 min-h-0 ${liaStatus || isThinking ? 'border-cyan-500/50 bg-[#0D111C]' : 'border-white/5 bg-[#0D111C] shadow-2xl'}`}>
+                        {/* Avatar Image com Efeitos de Iluminação (WOW Effect) */}
+                        <img
+                            src={LIA_FULL_URL}
+                            alt="LIA Full"
+                            className={`max-h-full h-auto w-auto object-contain transition-all duration-700 ${isThinking ? 'scale-105 drop-shadow-[0_0_25px_rgba(168,85,247,0.4)] animate-pulse' :
+                                liaStatus ? 'scale-105 drop-shadow-[0_0_20px_rgba(34,211,238,0.3)]' :
+                                    'scale-100'
+                                }`}
+                        />
+
+                        {/* ORIGINAL Activity Overlay (Status Pill) - Restaurado conforme pedido do usuário */}
+                        {/* ORIGINAL Activity Overlay (Status Pill) - Restaurado conforme pedido do usuário */}
+                        {(liaStatus || isThinking || isSpeaking) && (
+                            <div className="absolute top-4 right-4 animate-in fade-in zoom-in duration-300 z-30">
+                                <div className={`backdrop-blur-md border rounded-full px-3 py-1 flex items-center gap-2 ${isThinking ? 'bg-purple-500/20 border-purple-500/50' : 'bg-cyan-500/20 border-cyan-500/50'
+                                    }`}>
+                                    <Loader2 className={`w-3 h-3 animate-spin ${isThinking ? 'text-purple-400' : 'text-cyan-400'}`} />
+                                    <span className={`text-[10px] font-bold uppercase tracking-widest leading-none ${isThinking ? 'text-purple-400' : 'text-cyan-400'}`}>
+                                        {isThinking ? 'LIA está pensando...' : (liaStatus ? liaStatus.replace('LIA: ', '') : 'LIA está falando')}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* v6.0: Premium Live Captions (Discretas na base) */}
+                        {liaStatus && (
+                            <div className="absolute inset-x-0 bottom-4 px-6 animate-in fade-in slide-in-from-bottom-2 duration-500 z-20">
+                                <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl px-6 py-2 shadow-[0_0_30px_rgba(0,0,0,0.5)] flex flex-col items-center gap-0.5">
+                                    <p className="text-xs font-medium text-white/90 text-center leading-relaxed drop-shadow-md">
+                                        {liaStatus.startsWith('LIA: ') ? liaStatus.substring(5) : liaStatus}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
                 {/* Right: Analysis & Chat (65%) */}
                 <div className="flex-1 min-w-0 flex flex-col gap-4 overflow-hidden min-h-0">
-                    {/* Analysis Area */}
-                    {(dynamicContainers.length > 0 || isProcessingUpload || isThinking) && (
+                    {/* Analysis Area - Só aparece se houver conteúdo real ou upload ativo */}
+                    {(dynamicContainers.length > 0 || isProcessingUpload) && (
                         <div className="h-[40%] rounded-2xl border border-white/10 bg-[#0D111C] p-4 shadow-xl overflow-hidden flex flex-col relative">
                             <h3 className="text-xs font-bold text-cyan-400 mb-2 tracking-widest uppercase flex items-center gap-2">
                                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
                                 Área de Trabalho Dinâmica
                             </h3>
 
-                            {isThinking && (
+                            {/* v6.5: Overlay de loading apenas se houver processamento real de conteúdo ou se solicitado explicitamente */}
+                            {(isThinking && (isProcessingUpload || isProcessingDynamic)) && (
                                 <div className="absolute inset-0 z-50 bg-[#0D111C]/80 backdrop-blur-sm flex items-center justify-center">
                                     <LuminnusLoading />
                                 </div>
@@ -376,7 +417,7 @@ export function MultiModal() {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }
 

@@ -15,6 +15,7 @@ interface AuthContextType {
     onboardingCompleted: boolean;
     refreshProfile: (initialUser?: User | null) => Promise<void>;
     signOut: () => Promise<void>;
+    setPlanName: (name: 'Start' | 'Plus' | 'Pro') => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,11 +33,11 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // Verificar onboarding também no estado local (permite funcionar sem autenticação)
     const localOnboardingCompleted = useAppStore((state) => state.onboarding_completed);
 
-    // Para o admin (Wendell), ignoramos o flag do banco para permitir testar o onboarding
-    const isAdminAccount = user?.email === "luminnus.lia.ai@gmail.com";
-    const onboardingCompleted = isAdminAccount
-        ? localOnboardingCompleted
-        : (profile?.onboarding_completed ?? localOnboardingCompleted ?? false);
+    // Lógica de onboarding:
+    // 1. O estado local (localStorage via Zustand) é a fonte PRIMÁRIA
+    // 2. O perfil do banco é complementar
+    // 3. Se o usuário completou onboarding localmente, ele deve persistir entre refreshes
+    const onboardingCompleted = localOnboardingCompleted || profile?.onboarding_completed || false;
 
     const refreshProfile = async (initialUser?: User | null) => {
         console.log('[DashboardAuth] Iniciando refreshProfile...');
@@ -59,10 +60,10 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
             console.log('[DashboardAuth] Carregando perfil do banco...');
 
-            // Timeout de segurança para a busca de perfil
+            // Timeout de segurança para a busca de perfil (tolerância aumentada para 15s)
             const profilePromise = getOrCreateProfile(currentUser.id, currentUser.email || '');
             const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), 7000)
+                setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), 15000)
             );
 
             let userProfile;
@@ -75,7 +76,7 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 userProfile = {
                     id: currentUser.id,
                     email: currentUser.email || '',
-                    onboarding_completed: false
+                    onboarding_completed: localOnboardingCompleted
                 } as any;
             }
 
@@ -86,17 +87,32 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             const userPlanName = (metadata.plan || metadata.claims?.plan || "Start") as string;
 
             // Forçar Pro se for admin/tester (luminnus.lia.ai@gmail.com) conforme requisito
+            // MAS respeitar o override se existir
             const isAdmin = currentUser.email === "luminnus.lia.ai@gmail.com";
-            const effectivePlan = isAdmin ? "Pro" : userPlanName;
 
-            setPlan({
-                name: effectivePlan,
-                id: effectivePlan.toLowerCase() + "-plan"
+            // Se já tiver um plano setado e for admin, mantemos o que está no estado (override)
+            // Se não, inicializamos
+            setPlan((prev: any) => {
+                if (isAdmin && prev?.name) return prev;
+                const effectivePlan = isAdmin ? "Pro" : userPlanName;
+                return {
+                    name: effectivePlan,
+                    id: effectivePlan.toLowerCase() + "-plan"
+                };
             });
-            console.log('[DashboardAuth] Plano configurado:', effectivePlan);
+
+            console.log('[DashboardAuth] Perfil e Plano inicializados');
         } catch (error) {
             console.error('[DashboardAuth] Erro fatal no refreshProfile:', error);
         }
+    };
+
+    const setPlanName = (name: 'Start' | 'Plus' | 'Pro') => {
+        setPlan({
+            name: name,
+            id: name.toLowerCase() + "-plan"
+        });
+        console.log('[DashboardAuth] Plano alterado manualmente para:', name);
     };
 
     useEffect(() => {
@@ -107,32 +123,27 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
-            console.log(`[DashboardAuth] Auth state changed: ${event}`, currentSession?.user?.email);
             setSession(currentSession);
-            setUser(currentSession?.user ?? null);
+            setUser(currentSession?.user || null);
             if (currentSession?.user) {
                 await refreshProfile(currentSession.user);
             } else {
                 setProfile(null);
                 setPlan(null);
             }
-            console.log('[DashboardAuth] Finalizando inicialização (setLoading: false, setInitialized: true)');
             setLoading(false);
             setInitialized(true);
         });
 
         supabase.auth.getSession().then(async ({ data: { session: initialSession } }) => {
-            console.log('[DashboardAuth] getSession finalizado. Usuário:', initialSession?.user?.email);
-            setSession(initialSession);
-            setUser(initialSession?.user ?? null);
             if (initialSession?.user) {
+                setSession(initialSession);
+                setUser(initialSession.user);
                 await refreshProfile(initialSession.user);
             }
-            console.log('[DashboardAuth] Initial session sync concluído.');
             setLoading(false);
             setInitialized(true);
         }).catch(err => {
-            console.error('[DashboardAuth] Erro inicial no getSession:', err);
             setLoading(false);
             setInitialized(true);
         });
@@ -180,7 +191,8 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             profile,
             onboardingCompleted,
             refreshProfile,
-            signOut
+            signOut,
+            setPlanName
         }}>
             {children}
             {showUpdateBanner && (

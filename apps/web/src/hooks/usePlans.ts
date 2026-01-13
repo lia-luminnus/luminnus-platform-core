@@ -50,6 +50,21 @@ export interface Plan {
   };
 }
 
+// Ordem fixa dos planos: Start=1, Plus=2, Pro=3
+const PLAN_ORDER: Record<string, number> = {
+  'Start': 1,
+  'Plus': 2,
+  'Pro': 3,
+};
+
+function sortPlans(plans: Plan[]): Plan[] {
+  return [...plans].sort((a, b) => {
+    const orderA = PLAN_ORDER[a.name] || 99;
+    const orderB = PLAN_ORDER[b.name] || 99;
+    return orderA - orderB;
+  });
+}
+
 /**
  * Converte plano do formato do banco para o formato do frontend
  */
@@ -57,11 +72,47 @@ function convertPlanFromDB(dbPlan: PlanFromDB): Plan {
   const gradientStart = dbPlan.gradient_start || '262.1 83.3% 57.8%';
   const gradientEnd = dbPlan.gradient_end || '330.4 81.2% 60.4%';
 
-  // Calcular desconto dinamicamente (não existe coluna discount no Supabase)
-  const numericPrice = parseFloat(dbPlan.price.replace(/[^0-9.,]/g, '').replace(',', '.'));
-  const numericAnnualPrice = dbPlan.annual_price
-    ? parseFloat(dbPlan.annual_price.replace(/[^0-9.,]/g, '').replace(',', '.'))
-    : numericPrice * 12;
+  // Função auxiliar para tratar preços com separadores europeus e brasileiros
+  const parsePrice = (priceStr: string | undefined): number => {
+    if (!priceStr) return 0;
+
+    // Remove tudo que não é dígito, ponto ou vírgula
+    let clean = priceStr.replace(/[^0-9.,]/g, '');
+
+    // Se não tiver nada, retorna 0
+    if (!clean) return 0;
+
+    // Detectar formato europeu: ponto como separador de milhar
+    // Ex: "1.411" onde o ponto é milhar (resultado: 1411)
+    // Mas "1.5" onde o ponto é decimal (resultado: 1.5)
+
+    // Se tiver vírgula E ponto: vírgula é decimal, pontos são milhares
+    if (clean.includes(',') && clean.includes('.')) {
+      clean = clean.replace(/\./g, '').replace(',', '.');
+    }
+    // Se tiver apenas vírgula: é decimal
+    else if (clean.includes(',')) {
+      clean = clean.replace(',', '.');
+    }
+    // Se tiver apenas ponto: verificar se é milhar ou decimal
+    else if (clean.includes('.')) {
+      // Ponto seguido de exatamente 3 dígitos no final = milhar (ex: 1.411, 9.564)
+      // Ponto seguido de 1-2 dígitos no final = decimal (ex: 1.5, 27.99)
+      const parts = clean.split('.');
+      const lastPart = parts[parts.length - 1];
+
+      if (lastPart.length === 3) {
+        // É milhar - remove os pontos
+        clean = clean.replace(/\./g, '');
+      }
+      // Se for 1-2 dígitos, mantém como decimal (padrão do parseFloat)
+    }
+
+    return parseFloat(clean) || 0;
+  };
+
+  const numericPrice = parsePrice(dbPlan.price);
+  const numericAnnualPrice = dbPlan.annual_price ? parsePrice(dbPlan.annual_price) : numericPrice * 12;
 
   // Desconto = ((Mensal * 12) - Anual) / (Mensal * 12) * 100
   const expectedAnnual = numericPrice * 12;
@@ -160,9 +211,9 @@ export function usePlans() {
 
       if (data && data.length > 0) {
         console.log(`✅ [usePlans] ${data.length} planos encontrados no banco`);
-        // Converter planos do formato do banco para o formato do frontend
+        // Converter e ordenar planos
         const convertedPlans = data.map(convertPlanFromDB);
-        setPlans(convertedPlans);
+        setPlans(sortPlans(convertedPlans)); // Ordenar Start, Plus, Pro
       } else {
         // Se não houver planos no banco, usar dados estáticos
         console.log('⚠️ [usePlans] Nenhum plano encontrado no Supabase, usando dados estáticos');

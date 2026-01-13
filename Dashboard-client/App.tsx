@@ -1,5 +1,5 @@
 
-import React, { useState, createContext, useEffect } from 'react';
+import React, { useState, createContext, useEffect, lazy, Suspense } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -68,11 +68,19 @@ export const LanguageContext = createContext<{
   t: (key: any) => key,
 });
 
+const DashboardProvider = lazy(() =>
+  import('./components/dashboard-engine').then(m => ({ default: m.DashboardProvider }))
+);
+
 const AppContent: React.FC = () => {
-  const { user, onboardingCompleted, loading, initialized } = useDashboardAuth();
+  const { user, onboardingCompleted, loading, initialized, plan: authPlan } = useDashboardAuth();
   const location = useLocation();
-  const { resetOnboarding } = useAppStore();
+  const navigate = useNavigate();
+  const { resetOnboarding, planType: storePlanType } = useAppStore();
   const [updateAvailable, setUpdateAvailable] = useState<{ version?: string, force?: boolean } | null>(null);
+
+  const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || '00000000-0000-0000-0000-000000000001';
+  const userPlan = (authPlan?.name?.toLowerCase() as 'start' | 'plus' | 'pro') || (storePlanType?.toLowerCase() as 'start' | 'plus' | 'pro') || 'pro';
 
   useEffect(() => {
     const handleUpdate = (e: any) => {
@@ -82,15 +90,20 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('lia-system-update' as any, handleUpdate);
   }, []);
 
-  // v4.1: O reset de onboarding agora é tratado no componente AuthBridge
-  // via parâmetro admin_access=true, garantindo SSOT com o Admin Panel.
-
   if (!initialized || loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#0A0F1A]">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-brand-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white/70 font-medium">Sincronizando Core LIA...</p>
+          <div className="relative mb-6 mx-auto w-20 h-20">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-primary/30 to-purple-500/30 flex items-center justify-center">
+              <div className="w-16 h-16 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-brand-primary rounded-full flex items-center justify-center animate-pulse">
+              <span className="text-xs">🧠</span>
+            </div>
+          </div>
+          <p className="text-white font-medium mb-1">🚀 LIA está inicializando...</p>
+          <p className="text-white/50 text-sm">Preparando seu ambiente personalizado</p>
         </div>
       </div>
     );
@@ -135,41 +148,50 @@ const AppContent: React.FC = () => {
       <div className="flex flex-1 overflow-hidden min-h-0">
         {location.pathname !== '/onboarding' && <Sidebar />}
         <main className="flex-1 flex flex-col min-w-0 relative min-h-0">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
-              className="h-full flex flex-col"
+          <Suspense fallback={<div className="flex-1" />}>
+            <DashboardProvider
+              tenantId={tenantId}
+              plan={userPlan}
+              onNavigate={(route) => navigate(route)}
+              onOpenIntegration={(provider) => navigate(`/integrations?provider=${provider}`)}
             >
-              <Routes location={location}>
-                <Route path="/auth-bridge" element={<AuthBridge />} />
-                <Route path="/onboarding" element={<Onboarding />} />
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/crm" element={<CRM />} />
-                <Route path="/lia/*" element={<LIAHub />} />
-                <Route path="/integrations" element={<Integrations />} />
-                <Route path="/calendar" element={<Calendar />} />
-                <Route path="/files" element={<Files />} />
-                <Route path="/automations" element={<Automations />} />
-                <Route path="/financial" element={<Financial />} />
-                <Route path="/team" element={<Team />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/plan" element={<Plan />} />
-                <Route path="/support" element={<Support />} />
-                <Route path="/stock" element={<Stock />} />
-                <Route path="/sales" element={<Sales />} />
-                <Route path="/logistics" element={<Logistics />} />
-                <Route path="/properties" element={<Properties />} />
-                <Route path="/records" element={<MedicalRecords />} />
-                <Route path="/projects" element={<PlaceholderModule title="Projetos" icon="rocket_launch" />} />
-                <Route path="/reports" element={<PlaceholderModule title="Relatórios" icon="bar_chart" />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </motion.div>
-          </AnimatePresence>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={location.pathname}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                  className="h-full flex flex-col"
+                >
+                  <Routes location={location}>
+                    <Route path="/auth-bridge" element={<AuthBridge />} />
+                    <Route path="/onboarding" element={<Onboarding />} />
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/crm" element={<CRM />} />
+                    <Route path="/lia/*" element={<LIAHub />} />
+                    <Route path="/integrations" element={<Integrations />} />
+                    <Route path="/calendar" element={<Calendar />} />
+                    <Route path="/files" element={<Files />} />
+                    <Route path="/automations" element={<Automations />} />
+                    <Route path="/financial" element={<Financial />} />
+                    <Route path="/team" element={<Team />} />
+                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/plan" element={<Plan />} />
+                    <Route path="/support" element={<Support />} />
+                    <Route path="/stock" element={<Stock />} />
+                    <Route path="/sales" element={<Sales />} />
+                    <Route path="/logistics" element={<Logistics />} />
+                    <Route path="/properties" element={<Properties />} />
+                    <Route path="/records" element={<MedicalRecords />} />
+                    <Route path="/projects" element={<PlaceholderModule title="Projetos" icon="rocket_launch" />} />
+                    <Route path="/reports" element={<PlaceholderModule title="Relatórios" icon="bar_chart" />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </motion.div>
+              </AnimatePresence>
+            </DashboardProvider>
+          </Suspense>
         </main>
       </div>
     </div>

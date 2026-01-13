@@ -10,18 +10,18 @@ import { completeOnboarding as completeOnboardingDB } from '../services/profileS
 import toast from 'react-hot-toast';
 
 const categories: BusinessCategory[] = [
-  { id: 'technical_services', title: 'Serviços Técnicos', description: 'Organize atendimentos, orçamentos e serviços em campo.', icon: 'build' },
-  { id: 'liberal_professionals', title: 'Profissionais Liberais', description: 'Gestão completa de processos, contratos e clientes.', icon: 'gavel' },
-  { id: 'health_wellness', title: 'Saúde & Bem-Estar', description: 'Controle agendas, pacientes e evoluções de tratamento.', icon: 'monitor_heart' },
-  { id: 'real_estate', title: 'Imobiliária & Construção', description: 'Gerencie imóveis, obras, propostas e clientes.', icon: 'apartment' },
-  { id: 'retail', title: 'Comércio & Lojas', description: 'Administre estoque, vendas e pedidos.', icon: 'storefront' },
-  { id: 'food', title: 'Alimentação & Restaurantes', description: 'Pedidos, cardápio, reservas e fluxo operacional.', icon: 'restaurant' },
-  { id: 'logistics', title: 'Transporte & Logística', description: 'Rotas, entregas, motoristas e acompanhamento.', icon: 'local_shipping' },
-  { id: 'tech', title: 'Tecnologia & Software', description: 'Projetos, tickets, documentação e clientes.', icon: 'terminal' },
-  { id: 'creative', title: 'Conteúdo & Criativos', description: 'Campanhas, arquivos, postagens e clientes.', icon: 'palette' },
+  { id: 'services_technical', title: 'Serviços Técnicos', description: 'Organize atendimentos, orçamentos e serviços em campo.', icon: 'build' },
+  { id: 'professionals', title: 'Profissionais Liberais', description: 'Gestão completa de processos, contratos e clientes.', icon: 'gavel' },
+  { id: 'health_wellbeing', title: 'Saúde & Bem-Estar', description: 'Controle agendas, pacientes e evoluções de tratamento.', icon: 'monitor_heart' },
+  { id: 'real_estate_construction', title: 'Imobiliária & Construção', description: 'Gerencie imóveis, obras, propostas e clientes.', icon: 'apartment' },
+  { id: 'commerce_retail', title: 'Comércio & Lojas', description: 'Administre estoque, vendas e pedidos.', icon: 'storefront' },
+  { id: 'food_restaurants', title: 'Alimentação & Restaurantes', description: 'Pedidos, cardápio, reservas e fluxo operacional.', icon: 'restaurant' },
+  { id: 'transport_logistics', title: 'Transporte & Logística', description: 'Rotas, entregas, motoristas e acompanhamento.', icon: 'local_shipping' },
+  { id: 'tech_software', title: 'Tecnologia & Software', description: 'Projetos, tickets, documentação e clientes.', icon: 'terminal' },
+  { id: 'content_creatives', title: 'Conteúdo & Criativos', description: 'Campanhas, arquivos, postagens e clientes.', icon: 'palette' },
   { id: 'business_services', title: 'Serviços Empresariais', description: 'Operações administrativas, financeiras e relatórios.', icon: 'domain' },
-  { id: 'education', title: 'Educação & Treinamento', description: 'Aulas, materiais, agenda e acompanhamento.', icon: 'school' },
-  { id: 'other', title: 'Outros (Personalizado)', description: 'Descreva seu negócio e a LIA montará o painel ideal.', icon: 'auto_awesome' },
+  { id: 'education_training', title: 'Educação & Treinamento', description: 'Aulas, materiais, agenda e acompanhamento.', icon: 'school' },
+  { id: 'custom_other', title: 'Outros (Personalizado)', description: 'Descreva seu negócio e a LIA montará o painel ideal.', icon: 'auto_awesome' },
 ];
 
 const Onboarding: React.FC = () => {
@@ -40,7 +40,7 @@ const Onboarding: React.FC = () => {
 
   // Step 1: Select Category
   const handleSelectCategory = (category: BusinessCategory) => {
-    if (category.id === 'other') {
+    if (category.id === 'custom_other') {
       setIsModalOpen(true);
     } else {
       proceedToModules(category.id, category.title);
@@ -62,7 +62,7 @@ const Onboarding: React.FC = () => {
   const handleCustomSubmit = () => {
     if (!customDescription.trim()) return;
     setIsModalOpen(false);
-    proceedToModules('other', customDescription);
+    proceedToModules('custom_other', customDescription);
   };
 
   // Step 2: Toggle Modules
@@ -85,10 +85,24 @@ const Onboarding: React.FC = () => {
     try {
       // Salvar no banco apenas se o usuário estiver autenticado
       if (user) {
+        const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || '00000000-0000-0000-0000-000000000001';
+
         await completeOnboardingDB(user.id, {
-          segment: selectedCategory || 'other',
+          segment: selectedCategory || 'custom_other',
           modules: tempModules
         });
+
+        // Instantiate modular dashboard
+        try {
+          await fetch(`/api/dashboard/tenant/${tenantId}/dashboard/instantiate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ segment_key: selectedCategory || 'custom_other' })
+          });
+        } catch (e) {
+          console.error('[Onboarding] Error instantiating dashboard:', e);
+        }
+
         await refreshProfile(user);
       }
 
@@ -136,7 +150,7 @@ const Onboarding: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-            {Object.values(MODULE_REGISTRY).filter(m => !m.isCore).map((module) => {
+            {Object.values(MODULE_REGISTRY).filter(m => !m.isCore || m.id === 'integrations').map((module) => {
               const isSelected = tempModules.includes(module.id);
               return (
                 <div
@@ -241,11 +255,26 @@ const Onboarding: React.FC = () => {
                   try {
                     const setupPromise = (async () => {
                       if (user) {
+                        const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || '00000000-0000-0000-0000-000000000001';
+
                         console.log('[Onboarding] Salvando perfil no banco...');
                         await completeOnboardingDB(user.id, {
-                          segment: selectedCategory || 'other',
+                          segment: selectedCategory || 'custom_other',
                           modules: tempModules
                         });
+
+                        // Instantiate modular dashboard
+                        try {
+                          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+                          await fetch(`${API_URL}/api/dashboard/tenant/${tenantId}/dashboard/instantiate`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ segment_key: selectedCategory || 'custom_other' })
+                          });
+                        } catch (e) {
+                          console.error('[Onboarding] Error instantiating dashboard:', e);
+                        }
+
                         console.log('[Onboarding] Atualizando perfil local...');
                         await refreshProfile(user);
                       }

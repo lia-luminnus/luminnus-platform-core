@@ -3,12 +3,34 @@ import { useNavigate } from 'react-router-dom';
 import { supabase, configError } from '../lib/supabase';
 import { useAppStore } from '../store/useAppStore';
 
+// Mensagens da LIA durante loading
+const LIA_LOADING_MESSAGES = [
+    '🔐 Autenticando sua sessão...',
+    '🧠 LIA está preparando seu ambiente...',
+    '📊 Montando seu dashboard personalizado...',
+    '✨ Carregando módulos de inteligência...',
+    '🚀 Finalizando configurações...',
+];
+
 const AuthBridge: React.FC = () => {
     const navigate = useNavigate();
     const { resetOnboarding } = useAppStore();
     const [error, setError] = useState<string | null>(configError);
-    const [status, setStatus] = useState('Capturando token...');
+    const [status, setStatus] = useState(LIA_LOADING_MESSAGES[0]);
+    const [messageIndex, setMessageIndex] = useState(0);
     const syncStarted = useRef(false);
+
+    // Animação de mensagens da LIA
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setMessageIndex(prev => {
+                const next = (prev + 1) % LIA_LOADING_MESSAGES.length;
+                setStatus(LIA_LOADING_MESSAGES[next]);
+                return next;
+            });
+        }, 1500);
+        return () => clearInterval(interval);
+    }, []);
 
     useEffect(() => {
         if (syncStarted.current) return;
@@ -16,36 +38,30 @@ const AuthBridge: React.FC = () => {
         const syncSession = async () => {
             console.log('[AuthBridge] ===== Sincronizando Acesso Admin =====');
 
-            // 1. Extração robusta de tokens (Sempre fazemos isso primeiro)
             const extractParams = () => {
+                const searchParams = new URLSearchParams(window.location.search);
                 const hash = window.location.hash;
-                const queryString = hash.includes('?') ? hash.substring(hash.indexOf('?') + 1) : '';
-                const urlParams = new URLSearchParams(queryString || window.location.search);
+                const hashSearchParams = new URLSearchParams(hash.includes('?') ? hash.split('?')[1] : '');
 
                 return {
-                    access: urlParams.get('access_token'),
-                    refresh: urlParams.get('refresh_token'),
-                    adminAccess: urlParams.get('admin_access') === 'true'
+                    access: searchParams.get('access_token') || hashSearchParams.get('access_token'),
+                    refresh: searchParams.get('refresh_token') || hashSearchParams.get('refresh_token'),
+                    adminAccess: searchParams.get('admin_access') === 'true' || hashSearchParams.get('admin_access') === 'true'
                 };
             };
 
             const { access: accessToken, refresh: refreshToken, adminAccess } = extractParams();
 
-            // 2. Se vier do admin, forçamos o reset IMEDIATO do onboarding
-            // Fazemos isso antes do check de erro para garantir que o estado local mude
             if (adminAccess) {
-                console.log('[AuthBridge] Flag admin_access detectada. Resetando onboarding local...');
+                console.log('[AuthBridge] Flag admin_access detectada. Forçando reset do onboarding para teste...');
                 resetOnboarding();
             }
 
-            // 3. Agora verificamos erros de configuração
             if (configError || !supabase) {
                 console.error('[AuthBridge] Erro de configuração:', configError || 'Supabase não inicializado');
                 setError(configError || 'Configuração do Supabase incompleta.');
                 syncStarted.current = true;
 
-                // Se for admin e falhou a config, redirecionamos para o dashboard (mock) 
-                // após 3s para que ele veja o onboarding que acabamos de resetar.
                 if (adminAccess) {
                     setTimeout(() => {
                         console.log('[AuthBridge] Redirecionando admin para modo mock...');
@@ -64,8 +80,6 @@ const AuthBridge: React.FC = () => {
                 return;
             }
 
-            setStatus('Sincronizando com Supabase...');
-
             try {
                 const { data, error: syncError } = await supabase.auth.setSession({
                     access_token: accessToken,
@@ -76,18 +90,15 @@ const AuthBridge: React.FC = () => {
                 if (!data?.session) throw new Error('Falha ao criar sessão.');
 
                 console.log('[AuthBridge] ✓ Sessão sincronizada para:', data.session.user?.email);
-                setStatus('Pronto! Entrando...');
+                setStatus('✅ Pronto! LIA está te levando para o dashboard...');
 
-                // Pequeno delay para garantir que o estado do AuthContext atualize
                 setTimeout(() => {
                     navigate('/', { replace: true });
-                }, 500);
+                }, 800);
 
             } catch (err: any) {
                 console.error('[AuthBridge] Falha na sincronização:', err.message);
                 setError(`Erro ao sincronizar sessão: ${err.message}`);
-
-                // Em caso de erro, tenta ir para o dashboard mesmo assim em 2s
                 setTimeout(() => navigate('/'), 2000);
             }
         };
@@ -113,11 +124,31 @@ const AuthBridge: React.FC = () => {
 
     return (
         <div className="flex h-screen w-screen flex-col items-center justify-center bg-[#0A0F1A] text-white">
-            <div className="w-16 h-16 border-4 border-brand-primary border-t-transparent rounded-full animate-spin mb-6"></div>
-            <p className="text-gray-400 font-medium animate-pulse">{status}</p>
+            {/* Avatar da LIA animado */}
+            <div className="relative mb-8">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-primary/30 to-purple-500/30 flex items-center justify-center">
+                    <div className="w-16 h-16 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-brand-primary rounded-full flex items-center justify-center animate-pulse">
+                    <span className="text-xs">🧠</span>
+                </div>
+            </div>
+
+            {/* Mensagem animada */}
+            <p className="text-lg font-medium text-white mb-2 transition-all duration-300">{status}</p>
+            <p className="text-sm text-gray-500">LIA está preparando tudo para você</p>
+
+            {/* Barra de progresso */}
+            <div className="mt-8 w-64 h-1 bg-gray-800 rounded-full overflow-hidden">
+                <div
+                    className="h-full bg-gradient-to-r from-brand-primary to-purple-500 rounded-full transition-all duration-300"
+                    style={{ width: `${((messageIndex + 1) / LIA_LOADING_MESSAGES.length) * 100}%` }}
+                />
+            </div>
+
             <div className="mt-8 flex items-center gap-2 text-[10px] text-white/20 font-mono tracking-widest uppercase">
                 <span className="w-2 h-2 rounded-full bg-brand-primary animate-ping"></span>
-                LIA Auth Bridge v1.0
+                LIA Auth Bridge v2.0
             </div>
         </div>
     );

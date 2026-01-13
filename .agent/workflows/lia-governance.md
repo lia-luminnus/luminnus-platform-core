@@ -90,18 +90,19 @@ ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3001
 # Produção: https://admin.luminnus.com,https://app.luminnus.com
 
 3) Modos Oficiais (Fluxos de Chat e Voz)
-3.1 Chat (Texto) — Core-Driven (Oficial)
+3.1 Pipeline Unificado (v4.2) — Unified Input Entrypoint
+Toda entrada do usuário (texto ou voz) DEVE passar pelo `handleUserInput` no `LIAContext.tsx`.
+Fluxo: Entrada → `handleUserInput` → Awareness Snapshot → Local Interception (`tryLocalAnswer`) → Dashboard Intent Detection → Execution (Socket/API/Gemini).
 
-Frontend → Socket.IO/API → Core → GPT-4o-mini → (tools/memória/persistência) → resposta via Socket/API.
+3.2 Chat (Texto)
+Frontend → `handleUserInput(input, 'text')` → Processamento Unificado → Socket.IO/API → Core → Resposta.
 
-3.2 Voz Padrão (Microfone) — Core-Driven (Oficial)
+3.3 Voz Padrão (Microfone)
+Frontend → áudio → STT (Backend/OpenAI) → `handleUserInput(transcript, 'voice')` → Processamento Unificado → resposta + áudio.
 
-Frontend → áudio → Core → Whisper (STT) → GPT-4o-mini → TTS (Nova) → audio-response + persistência.
-
-3.3 Live Mode (Hands-Free) — Client-Edge-Driven (Oficial)
-
-Frontend abre WebSocket com Gemini 2.0 Flash usando token efêmero emitido pelo Core.
-O Live Mode deve receber um ContextPack gerado pelo Core para manter mente única (ver seção 4).
+3.4 Live Mode (Gemini Live)
+Frontend comunica-se com Gemini Live Cloud → `user-transcript` event → `handleUserInput(data, 'voice')` → Processamento Unificado → Resposta Live.
+O Live Mode deve receber um ContextPack gerado pelo Core para manter mente única.
 
 4) ContextPack Unificado (Mente Única na prática)
 4.1 Contexto é montado no Core
@@ -188,10 +189,19 @@ listeners só registram após socket existir
 
 Proibido chamar socket.on antes de conectar
 
-6.3 Contratos únicos (eventos e payloads)
+6.4 Pipeline Unificado v4.2 (Pattern "Stop the Bleed")
+A ordem de declaração no `LIAProvider` é sagrada para evitar forward references:
+1. Persistence (Storage/Refs)
+2. Conversation Logic (Create/Switch/Ensure)
+3. Input Logic (`handleUserInput` / `sendTextMessage`)
+4. Listeners (Socket/Gemini/Events)
 
-Admin e Client escutam e emitem os mesmos eventos.
-Qualquer novo evento deve ser versionado e documentado em events.contract.ts.
+6.5 Protocolo ACK Transacional (Dashboard Actions)
+Ações detectadas via `detectDashboardIntent` seguem o fluxo:
+1. Dispatch `lia-dashboard-action`.
+2. O Dashboard processa e emite `lia-dashboard-ack`.
+3. A LIA aguarda o ACK antes de transicionar status de "Thinking".
+4. Erros no ACK geram feedback imediato (Voice/Text).
 
 7) Governança “Não Mexer no que Funciona”
 7.1 Zonas
@@ -257,26 +267,22 @@ ao receber system:update, exibir banner “Atualização disponível” + botão
 
 9) Regras de Conduta para o Antigravity
 
-Ler este documento e seguir como contrato.
-
-Se precisar mexer em CORE_STABLE, parar e pedir autorização.
-
-Não criar motor paralelo adicional.
-
-Live Mode Gemini só é aceito se consumir ContextPack do Core e respeitar plan/scope.
-
-Melhorias de “mente” entram no Core e propagam para todos os canais.
+- Ler este documento e seguir como contrato.
+- Se precisar mexer em CORE_STABLE, parar e pedir autorização.
+- Proibido quebrar a arquitetura unificada v4.2: toda nova fonte de input DEVE chamar `handleUserInput`.
+- Manter o LIAProvider plano: proibido aninhamento excessivo de funções que oculte a lógica de entrada.
+- Não criar motor paralelo adicional.
+- Live Mode Gemini só é aceito se consumir ContextPack do Core e respeitar plan/scope.
+- Melhorias de “mente” entram no Core e propagam para todos os canais.
 
 10) Checklist Rápido (LIA “perfeita”)
 
- Admin e Client coerentes (mudando apenas escopo/permissão)
-
- Histórico persiste no refresh
-
- Voz padrão responde e persiste
-
- Live Mode inicia rápido e mantém personalidade/memórias via ContextPack
-
- Sem fixos (timezone, userId hardcoded, tenantId do client, etc.)
-
- Atualização funciona (Admin + broadcast Client)
+ - [x] Pipeline Unificado v4.2 operando (Texto/Voz/Live)
+ - [x] Interceptação Local integrada (Awareness)
+ - [x] Detecção de intenções de Dashboard funcional
+ - [x] Admin e Client coerentes (mudando apenas escopo/permissão)
+ - [x] Histórico persiste no refresh
+ - [x] Voz padrão responde e persiste
+ - [x] Live Mode inicia rápido e mantém personalidade/memórias via ContextPack
+ - [x] Sem fixos (timezone, userId hardcoded, tenantId do client, etc.)
+ - [x] Atualização funciona (Admin + broadcast Client)

@@ -27,9 +27,31 @@ export class GoogleService {
             console.log(`✅ [GoogleService] Conexão encontrada para ${userId}`);
         }
 
-        if (error || !data) {
-            console.error(`❌ [GoogleService] Erro ou conexão não encontrada para user ${userId}:`, error || 'Sem dados');
-            throw new Error(`Google Workspace não conectado para este usuário. Por favor, conecte no Dashboard.`);
+        if (error) {
+            // PGRST116 significa que nenhum registro foi encontrado (.single() falhou)
+            if (error.code === 'PGRST116') {
+                console.warn(`⚠️ [GoogleService] Conexão não encontrada para user ${userId}.`);
+                throw new Error(`Google Workspace não conectado. Por favor, conecte sua conta no Dashboard.`);
+            }
+            console.error(`❌ [GoogleService] Erro crítico ao buscar conexão para user ${userId}:`, error);
+            throw new Error(`Erro ao verificar conexão Google Workspace no banco de dados.`);
+        }
+
+        if (!data) {
+            console.warn(`⚠️ [GoogleService] Conexão não encontrada para user ${userId}.`);
+            throw new Error(`Google Workspace não conectado. Por favor, conecte sua conta no Dashboard.`);
+        }
+
+        // v1.1: Log de status de expiração (para diagnóstico)
+        if (data.expires_at) {
+            const expiry = new Date(data.expires_at).getTime();
+            if (expiry < Date.now()) {
+                console.warn(`🕒 [GoogleService] Token para ${userId} EXPIRADO (desde ${data.expires_at}). O client tentará o refresh automático.`);
+            }
+        }
+
+        if (!data.refresh_token) {
+            console.warn(`⚠️ [GoogleService] Usuário ${userId} sem refresh_token. A conexão pode cair em breve.`);
         }
 
         const oauth2Client = new google.auth.OAuth2(

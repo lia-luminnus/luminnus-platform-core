@@ -32,11 +32,27 @@ export { supabase };
 export async function saveConversation(conversation) {
     if (!supabase) return;
     try {
+        const userId = conversation.userId || '00000000-0000-0000-0000-000000000001';
+
+        // v1.2: Proteção Crítica contra Perda de Histórico (Data Loss Prevention)
+        // Se a conversa já existe, não permitimos que ela mude de dono (userId)
+        // Isso impede que um refresh rápido sem auth carregado "sequestre" a conversa para o guest.
+        const { data: existing } = await supabase
+            .from("conversations")
+            .select("user_id")
+            .eq("id", conversation.id)
+            .maybeSingle();
+
+        if (existing && existing.user_id !== userId && userId === '00000000-0000-0000-0000-000000000001') {
+            console.warn(`🛑 [saveConversation] Bloqueada tentativa de mover conversa ${conversation.id} para GUEST.`);
+            return;
+        }
+
         const { error } = await supabase.from("conversations").upsert({
             id: conversation.id,
             title: conversation.title,
             mode: conversation.mode,
-            user_id: conversation.userId || '00000000-0000-0000-0000-000000000001',
+            user_id: userId,
             updated_at: new Date().toISOString()
         }, { onConflict: 'id' });
 
@@ -44,6 +60,7 @@ export async function saveConversation(conversation) {
             console.error("❌ [saveConversation] Erro ao salvar metadados:", error);
             throw error;
         }
+        console.log(`✅ [saveConversation] Metadados da conversa ${conversation.id} salvos com sucesso.`);
     } catch (err) {
         console.error("❌ [saveConversation] Exceção:", err);
     }

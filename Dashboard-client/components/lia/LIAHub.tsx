@@ -98,6 +98,37 @@ function LIAHubContent() {
         userPlanLevel
     });
 
+    // v4.5: AUTO-REFRESH ROBUSTO - Múltiplas fontes de trigger
+    useEffect(() => {
+        // Em dev mode, sempre tenta carregar (localStorage tem a sessão)
+        // Em prod, aguarda user?.id do DashboardAuth
+        const shouldRefresh = user?.id || isDev || lia.userId;
+
+        if (!shouldRefresh) {
+            console.log('⏳ [LIAHub] Aguardando autenticação para carregar conversas...');
+            return;
+        }
+
+        const doRefresh = async () => {
+            console.log('📥 [LIAHub] Iniciando carregamento de conversas...', { userId: user?.id, liaUserId: lia.userId, isDev });
+            const count = await lia.refreshConversations?.() || 0;
+
+            // Se não carregou nenhuma conversa (e não é o primeiro load), tentar novamente após delay
+            if (count === 0) {
+                console.log('⏳ [LIAHub] Nenhuma conversa encontrada no servidor, tentando novamente em 5s...');
+                setTimeout(async () => {
+                    await lia.refreshConversations?.();
+                }, 5000);
+            }
+        };
+
+        // Pequeno delay para garantir que o localStorage já foi lido pelo backendService
+        setTimeout(doRefresh, 300);
+    }, [user?.id, isDev, lia.userId]);
+
+
+
+
     // Verificar acesso ao modo
     const handleSync = async () => {
         console.log('🔄 [LIAHub] Sincronizando LIA...');
@@ -119,7 +150,7 @@ function LIAHubContent() {
         return userPlanLevel >= PLAN_LEVELS[tab.requiredPlan];
     };
 
-    // Filtrar conversas do modo atual
+    // Filtrar conversas por modo (v4.4: Restaurado isolamento solicitado pelo usuário)
     const conversationsForMode = useMemo(() => {
         return Object.values(lia.conversations)
             .filter(c => c.mode === activeMode)
@@ -142,8 +173,11 @@ function LIAHubContent() {
         }
     }, [activeMode, lia.isInitialLoadDone]);
 
-    // Definir escopo ativo
+    // Definir escopo e modo ativo
     useEffect(() => {
+        // v4.5: Sincronizar modo e escopo na mente central (LIAContext)
+        lia.setActiveMode(activeMode);
+
         if (activeConversationId) {
             const scopeKey = lia.getScopeKey(activeMode, activeConversationId);
             lia.setActiveScope(scopeKey);

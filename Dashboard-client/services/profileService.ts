@@ -24,7 +24,7 @@ export async function getProfile(userId: string): Promise<UserProfile | null> {
     if (!supabase) return null;
 
     const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('DB_TIMEOUT')), 5000)
+        setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000)
     );
 
     try {
@@ -61,8 +61,12 @@ export async function getProfile(userId: string): Promise<UserProfile | null> {
             created_at: profile.created_at || new Date().toISOString(),
             updated_at: profile.updated_at || new Date().toISOString()
         };
-    } catch (err) {
-        console.error('[ProfileService] Timeout ou erro fatal:', err);
+    } catch (err: any) {
+        if (err.message === 'DB_TIMEOUT') {
+            console.log('[ProfileService] Timeout silencioso na busca de perfil (usando fallback)');
+        } else {
+            console.error('[ProfileService] Erro fatal no perfil:', err);
+        }
         return null; // Fallback para não travar o AuthContext
     }
 }
@@ -73,14 +77,15 @@ export async function createProfile(userId: string, email: string): Promise<User
 
     const { data, error } = await supabase
         .from('profiles')
-        .insert({
+        .upsert({
             id: userId,
             email: email,
             full_name: email.split('@')[0],
             role: 'client',
             onboarding_completed: false,
             onboarding_integrations_done: false,
-            modules: []
+            modules: [],
+            updated_at: new Date().toISOString()
         })
         .select()
         .single();
@@ -88,8 +93,29 @@ export async function createProfile(userId: string, email: string): Promise<User
     if (error) {
         console.error('[ProfileService] Erro ao criar perfil:', error);
         if (error.code === '23505') {
-            const existing = await getProfile(userId);
-            if (existing) return existing;
+            // Se houver conflito, tentamos buscar o perfil novamente sem timeout curto
+            const { data: retryData } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', userId)
+                .single();
+
+            if (retryData) {
+                const profile = retryData as any;
+                return {
+                    id: profile.id,
+                    email: profile.email || null,
+                    full_name: profile.full_name || null,
+                    role: profile.role || 'client',
+                    segment: profile.segment || null,
+                    modules: profile.modules || null,
+                    onboarding_completed: profile.onboarding_completed ?? false,
+                    onboarding_integrations_done: profile.onboarding_integrations_done ?? false,
+                    integrations_selected: profile.integrations_selected || [],
+                    created_at: profile.created_at || new Date().toISOString(),
+                    updated_at: profile.updated_at || new Date().toISOString()
+                };
+            }
         }
         throw error;
     }

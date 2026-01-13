@@ -635,6 +635,7 @@ interface GmailMessage {
 interface GmailListResponse extends GoogleActionResponse {
     emails?: GmailMessage[];
     count?: number;
+    table?: any;
 }
 
 /**
@@ -714,28 +715,35 @@ export async function listGmailMessages(
         await AuditService.log(userId, tenantId, 'google', 'execution_success', 'success', `Listados ${emails.length} e-mails.`);
 
         // Criar mensagem formatada no padrão CARD VISUAL (Protocolo v2.0)
-        let formattedMessage = `Aqui estão os e-mails importantes que encontrei:\n\n`;
+        let formattedMessage = `Aqui estão os e-mails importantes que encontrei:\n\n\n`;
 
         emails.forEach((email, index) => {
-            const emoji = index === 0 ? '🚨' : '📝';
-            formattedMessage += `### ${index + 1}. ${emoji} ${email.subject}\n`;
-            formattedMessage += `> **De:** ${email.from}\n`;
-            formattedMessage += `> **Data:** ${email.date}\n`;
-            formattedMessage += `>\n`;
+            const emoji = index === 0 ? '🚨' : '📩';
+            formattedMessage += `### ${index + 1}. ${emoji} ${email.subject}\n\n`;
+            formattedMessage += `**De:** ${email.from}\n`;
+            formattedMessage += `**Data:** ${email.date}\n\n`;
             formattedMessage += `> **Resumo:**\n`;
-            formattedMessage += `> ${email.snippet.substring(0, 150)}${email.snippet.length > 150 ? '...' : ''}\n`;
-            formattedMessage += `>\n`;
-            formattedMessage += `> 🔗 **[Abrir E-mail no Gmail](${email.link})**\n\n`;
-            formattedMessage += `---\n\n`;
+            formattedMessage += `> ${email.snippet.substring(0, 150)}${email.snippet.length > 150 ? '...' : ''}\n\n`;
+            formattedMessage += `🔗 **[Acessar este e-mail no Gmail](${email.link})**\n\n`;
+            formattedMessage += `***\n\n\n`;
         });
 
-        formattedMessage += `Quer que eu responda algum desses, arquive ou resuma alguma conversa?`;
+        formattedMessage += `\n\nQuer que eu responda algum desses, arquive ou resuma alguma conversa?`;
 
         return {
             success: true,
             message: formattedMessage,
             emails,
-            count: emails.length
+            count: emails.length,
+            table: {
+                columns: ['Assunto', 'De', 'Data', 'Ação'],
+                rows: emails.map(e => [
+                    e.subject,
+                    e.from,
+                    e.date,
+                    `[Abrir](${e.link})`
+                ])
+            }
         };
     } catch (error: any) {
         console.error('[GoogleWorkspace] Erro ao listar e-mails:', error);

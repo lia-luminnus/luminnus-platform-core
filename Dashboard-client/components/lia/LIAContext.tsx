@@ -11,6 +11,11 @@ import { backendService, Memory } from './services/backendService';
 import { geminiLiveService, GeminiLiveSession, GeminiLiveEvent } from './services/geminiLiveService';
 import { dynamicContentManager, DynamicContainer } from './services/dynamicContentManager';
 import { useDashboardAuth } from '../../contexts/DashboardAuthContext';
+// LIA Action Handler - Dashboard Control Integration (NEW)
+import { mapFunctionCallToLiaAction } from './services/liaDashboardPrompt';
+import { detectDashboardIntent } from './services/liaIntentDetector';
+// v8.2: LOCAL ANSWER SERVICE - Import estático para interceptação síncrona
+import { tryLocalAnswer, isLocalQuery } from './services/localAnswerService';
 
 // ======================================================================
 // TYPES
@@ -26,6 +31,7 @@ export interface Message {
         type: 'image' | 'document' | 'video' | 'audio' | 'other';
         url?: string;
     }[];
+    metadata?: Record<string, any>;
 }
 
 // ======================================================================
@@ -96,12 +102,14 @@ export interface LIAState {
     switchConversation: (id: string, mode?: 'chat' | 'multimodal' | 'live') => Promise<void>;
     renameConversation: (id: string, title: string) => void;
     deleteConversation: (id: string) => void;
-    refreshConversations: () => Promise<void>;
+    refreshConversations: () => Promise<number>;
     getCurrentMessages: () => Message[];
 
     // ======================================================================
     // SISTEMA DE MENSAGENS POR ESCOPO (mode:conversationId)
     // ======================================================================
+    activeMode: 'chat' | 'multimodal' | 'live';
+    setActiveMode: (mode: 'chat' | 'multimodal' | 'live') => void;
     activeScope: string | null; // Formato: "live:conv_123" ou "multimodal:conv_456"
     messagesByScope: Record<string, Message[]>; // Mensagens isoladas por escopo
 
@@ -150,6 +158,8 @@ export interface LIAState {
     clearDynamicContent: () => void;
     clearDynamicContainers: () => void;
     setIsProcessingUpload: (processing: boolean) => void;
+    liaStatus: string | null;
+    setLiaStatus: (status: string | null) => void;
 
     // Métodos de Mensagem
     addMessage: (message: Message, scopeKey?: string) => void;
@@ -214,6 +224,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
     const [isCameraActive, setIsCameraActive] = useState(false);
     const [dynamicContent, setDynamicContent] = useState<DynamicContent | null>(null);
     const [dynamicContainers, setDynamicContainers] = useState<DynamicContainer[]>([]);
+    const [liaStatus, setLiaStatus] = useState<string | null>(null);
 
     // Sincronizar com DynamicContentManager
     useEffect(() => {
@@ -268,6 +279,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
     // ======================================================================
     const [messagesByScope, setMessagesByScope] = useState<Record<string, Message[]>>({});
     const [activeScope, setActiveScopeState] = useState<string | null>(null);
+    const [activeMode, setActiveModeState] = useState<'chat' | 'multimodal' | 'live'>('chat');
+    const activeModeRef = useRef<'chat' | 'multimodal' | 'live'>('chat');
 
     // Refs para evitar closures desatualizadas
     const messagesRef = useRef<Message[]>([]);
@@ -277,6 +290,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
     const messagesByScopeRef = useRef<Record<string, Message[]>>({});
     const activeScopeRef = useRef<string | null>(null);
     const creatingRef = useRef<Record<string, boolean>>({}); // Trava de criação concorrente
+    const lastMessageSentRef = useRef<{ text: string, timestamp: number } | null>(null);
 
     // CRITICAL: Refs for functions to stabilize useEffect dependencies
     const addToScopeRef = useRef<((message: Message, mode?: 'chat' | 'multimodal' | 'live', convId?: string) => void) | null>(null);
@@ -299,10 +313,11 @@ export function LIAProvider({ children }: LIAProviderProps) {
                     const uId = authData.user?.id || null;
                     const userPlan = authData.user?.app_metadata?.plan || null;
                     if (uId) {
+                        const activePlan = authPlan || user?.app_metadata?.plan || userPlan;
                         setUserId(uId);
-                        setTenantId(uId); // Em dev usamos o mesmo ID para tenant
-                        setPlanState(userPlan);
-                        console.log('👤 [LIAContext] Usuário sincronizado:', uId, 'Plano:', userPlan);
+                        setTenantId(uId);
+                        setPlanState(activePlan);
+                        console.log('👤 [LIAContext] Sincronizado via AuthContext:', uId, 'Plano:', activePlan);
 
                         // Sincronizar com o socket para voz/realtime (usando import estático)
                         if (currentIdRef.current) {
@@ -357,212 +372,88 @@ export function LIAProvider({ children }: LIAProviderProps) {
         tenantIdRef.current = tenantId;
     }, [tenantId]);
 
+    const setActiveMode = useCallback((mode: 'chat' | 'multimodal' | 'live') => {
+        setActiveModeState(mode);
+        activeModeRef.current = mode;
+        const activeId = activeIdsByModeRef.current[mode];
+        if (activeId) {
+            setCurrentConversationId(activeId);
+            currentIdRef.current = activeId;
+            setActiveScopeState(activeId);
+            activeScopeRef.current = activeId;
+        }
+        console.log(`🎯 [LIAContext] Modo alterado para: ${mode} (Conv: ${activeId})`);
+    }, []);
+
     // ======================================================================
     // API DE MENSAGENS POR ESCOPO
     // ======================================================================
 
-    // Criar scopeKey no formato "mode:conversationId"
-    const getScopeKey = useCallback((mode: 'chat' | 'multimodal' | 'live', convId: string): string => {
-        return `${mode}:${convId}`;
-    }, []);
+    // ======================================================================
+    // API DE MENSAGENS E PERSISTÊNCIA
+    // ======================================================================
 
-    // Obter mensagens de um escopo específico
-    const getMessagesForScope = useCallback((scopeKey: string): Message[] => {
-        return messagesByScopeRef.current[scopeKey] || [];
-    }, []);
+    const getScopeKey = useCallback((_mode: 'chat' | 'multimodal' | 'live', convId: string): string => convId, []);
 
-    // Adicionar mensagem a um escopo
+    const getMessagesForScope = useCallback((scopeKey: string): Message[] => messagesByScopeRef.current[scopeKey] || [], []);
+
     const addMessageToScope = useCallback((scopeKey: string, message: Message) => {
         setMessagesByScope(prev => {
             const scopeMessages = prev[scopeKey] || [];
             const updated = { ...prev, [scopeKey]: [...scopeMessages, message] };
-
-            // Salvar no localStorage por escopo
-            try {
-                localStorage.setItem(`lia_scope_${scopeKey}`, JSON.stringify(updated[scopeKey]));
-            } catch (e) {
-                console.error('Erro ao salvar mensagens do escopo:', e);
-            }
-
+            try { localStorage.setItem(`lia_scope_${scopeKey}`, JSON.stringify(updated[scopeKey])); } catch (e) { }
             return updated;
         });
-        console.log(`💬 [Scope] Mensagem adicionada ao escopo: ${scopeKey}`);
     }, []);
 
-    // Limpar mensagens de um escopo
+    // v4.4: CRITICAL FIX - Atribuir addMessageToScope à ref para os handlers de socket usarem
+    useEffect(() => {
+        addToScopeRef.current = (message: Message, mode?: 'chat' | 'multimodal' | 'live', convId?: string) => {
+            const scopeKey = convId || activeScopeRef.current || '';
+            if (scopeKey) {
+                addMessageToScope(scopeKey, message);
+            }
+        };
+    }, [addMessageToScope]);
+
+
     const clearScopeMessages = useCallback((scopeKey: string) => {
         setMessagesByScope(prev => {
             const updated = { ...prev };
             delete updated[scopeKey];
-
-            // Limpar localStorage
-            try {
-                localStorage.removeItem(`lia_scope_${scopeKey}`);
-            } catch (e) {
-                console.error('Erro ao limpar escopo:', e);
-            }
-
+            try { localStorage.removeItem(`lia_scope_${scopeKey}`); } catch (e) { }
             return updated;
         });
-        console.log(`🗑️ [Scope] Mensagens limpas do escopo: ${scopeKey}`);
     }, []);
 
-    // Definir escopo ativo (modo:conversa atual)
-    const setActiveScope = useCallback((scopeKey: string | null) => {
-        setActiveScopeState(scopeKey);
-        activeScopeRef.current = scopeKey;
-
-        // Carregar mensagens deste escopo se existirem em localStorage
-        if (scopeKey) {
-            try {
-                const stored = localStorage.getItem(`lia_scope_${scopeKey}`);
-                if (stored) {
-                    const msgs = JSON.parse(stored);
-                    setMessagesByScope(prev => ({ ...prev, [scopeKey]: msgs }));
-                    console.log(`📂 [Scope] ${msgs.length} mensagens carregadas do escopo: ${scopeKey}`);
-                }
-            } catch (e) {
-                console.error('Erro ao carregar escopo:', e);
-            }
-        }
-    }, []);
-
-    const refreshConversations = useCallback(async () => {
-        if (!userId) {
-            setIsInitialLoadDone(true);
-            return;
-        }
-
-        setIsInitialLoadDone(false);
-
-        try {
-            console.log('🔄 [LIAContext] Buscando conversas do servidor...');
-            const serverConvs = await backendService.getConversations();
-
-            if (serverConvs && serverConvs.length > 0) {
-                const convsMap: { [id: string]: Conversation } = {};
-
-                // Converter formato do banco para o formato do App
-                serverConvs.forEach(c => {
-                    convsMap[c.id] = {
-                        id: c.id,
-                        title: c.title,
-                        mode: c.mode || 'chat',
-                        messages: [], // Serão carregadas sob demanda ou já filtradas
-                        createdAt: c.createdAt || Date.now(),
-                        updatedAt: c.updatedAt || Date.now()
-                    };
-                });
-
-                setConversations(convsMap);
-                conversationsRef.current = convsMap;
-
-                // Definir conversa ativa inicial por modo (baseado na última atualizada)
-                const activeIds = { ...activeIdsByModeRef.current };
-                Object.values(convsMap).forEach(c => {
-                    const m = c.mode as 'chat' | 'multimodal' | 'live';
-                    if (!activeIds[m] || c.updatedAt > (convsMap[activeIds[m]!]?.updatedAt || 0)) {
-                        activeIds[m] = c.id;
-                    }
-                });
-
-                setActiveConversationIdByMode(activeIds);
-                activeIdsByModeRef.current = activeIds;
-
-                // Se houver uma conversa de chat ativa, carregar mensagens dela
-                if (activeIds.chat && !messagesByScopeRef.current[`chat:${activeIds.chat}`]) {
-                    const msgs = await backendService.getMessages(activeIds.chat);
-                    const scopeKey = `chat:${activeIds.chat}`;
-                    const formattedMsgs: Message[] = msgs.map(m => ({
-                        id: m.id,
-                        type: (m.role === 'assistant' ? 'lia' : 'user') as 'lia' | 'user',
-                        content: m.content,
-                        timestamp: new Date(m.created_at).getTime(),
-                        attachments: m.attachments
-                    }));
-
-                    setMessagesByScope(prev => ({ ...prev, [scopeKey]: formattedMsgs }));
-                    messagesByScopeRef.current = { ...messagesByScopeRef.current, [scopeKey]: formattedMsgs };
-                    setCurrentConversationId(activeIds.chat);
-                    currentIdRef.current = activeIds.chat;
-                    setActiveScope(scopeKey);
-                }
-
-                console.log(`✅ ${serverConvs.length} conversas sincronizadas do servidor.`);
-            }
-
-            // Fallback para LocalStorage se falhar ou não houver usuário (dentro do try/catch principal)
-            const stored = localStorage.getItem('lia_conversations_v4');
-            if (stored && Object.keys(conversationsRef.current).length === 0) {
-                const parsed = JSON.parse(stored);
-                // ... aplicar fallback se necessário (opcional se o backend for soberano)
-            }
-
-        } catch (error) {
-            console.error('❌ Erro ao sincronizar com servidor:', error);
-        } finally {
-            setIsInitialLoadDone(true);
-        }
-    }, [userId]);
-
-    useEffect(() => {
-        refreshConversations();
-    }, [refreshConversations]);
-
-    // Função para salvar no localStorage e Backend
     const saveToStorage = useCallback(async (
         convs: { [id: string]: Conversation },
         currentId: string | null,
-        activeIds: Record<'chat' | 'multimodal' | 'live', string | null>
+        activeIds: Record<'chat' | 'multimodal' | 'live', string | null>,
+        specificConvId?: string
     ) => {
         try {
-            // LocalStorage (Sempre imediato)
-            localStorage.setItem('lia_conversations_v4', JSON.stringify({
-                conversations: convs,
-                currentId: currentId,
-                activeIdsByMode: activeIds
-            }));
-
-            // Backend (Opcional/Sync) - Apenas se houver ID atual e modo
-            if (currentId && convs[currentId]) {
-                const conv = convs[currentId];
-                backendService.saveConversation({
-                    id: conv.id,
-                    title: conv.title,
-                    mode: conv.mode as any,
-                    userId: userIdRef.current || undefined
-                }).catch(console.error);
+            localStorage.setItem('lia_conversations_v4', JSON.stringify({ conversations: convs, currentId: currentId, activeIdsByMode: activeIds }));
+            const targetId = specificConvId || currentId;
+            const uId = userIdRef.current;
+            if (targetId && convs[targetId] && uId && uId !== 'null') {
+                backendService.saveConversation({ id: convs[targetId].id, title: convs[targetId].title, mode: convs[targetId].mode as any, userId: uId }).catch(() => { });
             }
-
-        } catch (error) {
-            console.error('Erro ao salvar:', error);
-        }
+        } catch (e) { }
     }, []);
 
-    // Salvar conversa atual (atualiza mensagens no objeto)
-    const saveCurrentConversation = useCallback((mode?: 'chat' | 'multimodal' | 'live') => {
+    const saveCurrentConversation = useCallback((modeToSave?: 'chat' | 'multimodal' | 'live') => {
         const activeIds = activeIdsByModeRef.current;
         const currentConvs = conversationsRef.current;
-        const messagesByScope = messagesByScopeRef.current;
-
+        const msgsByScope = messagesByScopeRef.current;
         let updatedConvs = { ...currentConvs };
         let hasChanges = false;
+        const modes = modeToSave ? [modeToSave] : (['chat', 'multimodal', 'live'] as const);
 
-        // Se informou modo, salvar apenas esse modo
-        // Caso contrário, tenta salvar todos os ativos
-        const modesToSave = mode ? [mode] : (['chat', 'multimodal', 'live'] as const);
-
-        modesToSave.forEach(m => {
+        modes.forEach(m => {
             const convId = activeIds[m];
             if (convId && currentConvs[convId]) {
-                const scopeKey = `${m}:${convId}`;
-                const scopeMsgs = messagesByScope[scopeKey] || [];
-
-                updatedConvs[convId] = {
-                    ...currentConvs[convId],
-                    messages: scopeMsgs,
-                    updatedAt: Date.now()
-                };
+                updatedConvs[convId] = { ...currentConvs[convId], messages: msgsByScope[convId] || [], updatedAt: Date.now() };
                 hasChanges = true;
             }
         });
@@ -571,255 +462,298 @@ export function LIAProvider({ children }: LIAProviderProps) {
             setConversations(updatedConvs);
             conversationsRef.current = updatedConvs;
             saveToStorage(updatedConvs, currentIdRef.current, activeIds);
-            console.log(`💾 Conversas ativas salvas.`);
         }
     }, [saveToStorage]);
 
-    // Salvar ao desmontar ou mudar de aba
-    useEffect(() => {
-        const handleBeforeUnload = () => {
-            saveCurrentConversation();
-        };
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => {
-            window.removeEventListener('beforeunload', handleBeforeUnload);
-            saveCurrentConversation();
-        };
-    }, [saveCurrentConversation]);
+    const setActiveScope = useCallback((scopeKey: string | null) => {
+        setActiveScopeState(scopeKey);
+        activeScopeRef.current = scopeKey;
+        if (scopeKey) {
+            try {
+                const stored = localStorage.getItem(`lia_scope_${scopeKey}`);
+                if (stored) {
+                    const msgs = JSON.parse(stored);
+                    setMessagesByScope(prev => ({ ...prev, [scopeKey]: msgs }));
+                }
+            } catch (e) { }
+        }
+    }, []);
 
-    // Criar nova conversa (Mente única, histórico isolado por modo)
-    const createConversation = useCallback(async (mode: 'chat' | 'multimodal' | 'live') => {
-        if (creatingRef.current[mode]) return; // Já criando este modo
-        creatingRef.current[mode] = true;
+    const ensureConversationExists = useCallback(async (modeForConv: 'chat' | 'multimodal' | 'live'): Promise<string | null> => {
+        const activeIds = activeIdsByModeRef.current;
+        if (activeIds[modeForConv]) return activeIds[modeForConv];
 
-        // Salvar conversa atual do modo (se houver)
-        saveCurrentConversation(mode);
-
-        const now = Date.now();
-        const title = `Conversa ${new Date(now).toLocaleDateString('pt-BR')} ${new Date(now).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-
+        const title = `Conversa ${new Date().toLocaleString('pt-BR')}`;
         try {
-            // Tentar criar no backend primeiro para ter persistência
             const resp = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/conversations`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode, title, userId: userIdRef.current })
+                body: JSON.stringify({ mode: modeForConv, title, userId: userIdRef.current })
             });
+            const data = await resp.json();
+            const newId = data.conversation?.id || `conv_${Date.now()}`;
+            const newConv: Conversation = { id: newId, mode: modeForConv, title, messages: [], createdAt: Date.now(), updatedAt: Date.now() };
+            const updated = { ...conversationsRef.current, [newId]: newConv };
+            setConversations(updated);
+            conversationsRef.current = updated;
+            setActiveConversationIdByMode(prev => {
+                const next = { ...prev, [modeForConv]: newId };
+                activeIdsByModeRef.current = next;
+                return next;
+            });
+            socketService.registerConversation(newId);
+            setActiveScope(newId);
+            saveToStorage(updated, currentIdRef.current, activeIdsByModeRef.current);
+            return newId;
+        } catch (e) { return null; }
+    }, [setActiveScope, saveToStorage]);
+
+    const refreshConversations = useCallback(async () => {
+        // v4.7: TIMING FIX - Garantir ID em Dev Mode
+        const localStorageUserId = backendService.getAuthContext().userId;
+        const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const devGuestUUID = '00000000-0000-0000-0000-000000000001';
+
+        // Fallback robusto para Dev Mode
+        let effectiveUserId = userId || localStorageUserId;
+        if (!effectiveUserId && isDev) {
+            effectiveUserId = devGuestUUID;
+        }
+
+        const isGuestId = effectiveUserId === devGuestUUID;
+        const isValidUserId = effectiveUserId && effectiveUserId !== 'null' && (!isGuestId || isDev);
+
+        if (!isValidUserId) {
+            console.warn('⏳ [RefreshConv] Aguardando userId válido...', { stateUserId: userId, lsUserId: localStorageUserId, isDev });
+            setIsInitialLoadDone(true);
+            return;
+        }
+
+
+        console.log('📥 [RefreshConv] Iniciando com userId:', effectiveUserId);
+        setIsInitialLoadDone(false);
+        try {
+            const serverConvs = await backendService.getConversations();
+            console.log('📥 [RefreshConv] Conversas recebidas:', serverConvs?.length || 0);
+            if (serverConvs?.length > 0) {
+
+                const convsMap: { [id: string]: Conversation } = {};
+                serverConvs.forEach(c => {
+                    convsMap[c.id] = { id: c.id, title: c.title, mode: c.mode || 'chat', messages: [], createdAt: c.createdAt || Date.now(), updatedAt: c.updatedAt || Date.now() };
+                });
+                setConversations(convsMap);
+                conversationsRef.current = convsMap;
+                const activeIds = { ...activeIdsByModeRef.current };
+                Object.values(convsMap).forEach(c => {
+                    const m = c.mode as any;
+                    if (!activeIds[m] || c.updatedAt > (convsMap[activeIds[m]!]?.updatedAt || 0)) activeIds[m] = c.id;
+                });
+                setActiveConversationIdByMode(activeIds);
+                activeIdsByModeRef.current = activeIds;
+
+                // v4.3: PERSISTÊNCIA - Carregar mensagens das conversas ativas após o refresh
+                const loadPromises = Object.entries(activeIds).map(async ([mode, convId]) => {
+                    if (!convId) return;
+                    const scopeKey = convId; // getScopeKey simplificado
+                    try {
+                        const msgs = await backendService.getMessages(convId);
+                        if (msgs?.length > 0) {
+                            const formatted: Message[] = msgs.map(m => ({
+                                id: m.id,
+                                type: (m.role === 'assistant' ? 'lia' : 'user') as 'lia' | 'user',
+                                content: m.content,
+                                timestamp: new Date(m.created_at).getTime(),
+                                attachments: m.attachments || undefined
+                            }));
+                            setMessagesByScope(prev => ({ ...prev, [scopeKey]: formatted }));
+                            messagesByScopeRef.current = { ...messagesByScopeRef.current, [scopeKey]: formatted };
+                            console.log(`📥 [RefreshConv] Carregadas ${formatted.length} mensagens para ${mode}:${convId}`);
+                        }
+                    } catch (e) {
+                        console.warn(`⚠️ [RefreshConv] Falha ao carregar msgs de ${convId}:`, e);
+                    }
+                });
+                await Promise.all(loadPromises);
+                return serverConvs.length;
+            }
+            return 0;
+        } catch (e) {
+            console.error('❌ [RefreshConv] Erro geral:', e);
+            return 0;
+        }
+        finally { setIsInitialLoadDone(true); }
+    }, [userId]);
+
+
+    const createConversation = useCallback(async (mode: 'chat' | 'multimodal' | 'live') => {
+        if (creatingRef.current[mode]) return;
+        creatingRef.current[mode] = true;
+
+        // Salvar conversa atual antes de criar nova
+        saveCurrentConversation(mode);
+
+        // v4.4: FORÇAR criação de nova conversa (não reutilizar existente)
+        const title = `Conversa ${new Date().toLocaleString('pt-BR')}`;
+        const effectiveUserId = userId || backendService.getAuthContext().userId;
+
+        try {
+            console.log('🆕 [CreateConv] Criando nova conversa para modo:', mode);
+            const resp = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/conversations`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode, title, userId: effectiveUserId })
+            });
+
+            if (!resp.ok) {
+                console.error('❌ [CreateConv] Falha ao criar conversa:', resp.status);
+                creatingRef.current[mode] = false;
+                return undefined;
+            }
 
             const data = await resp.json();
-            const newConvId = data.conversation?.id || `conv_${now}_${Math.random().toString(36).substr(2, 9)}`;
+            const newId = data.conversation?.id || `conv_${Date.now()}`;
+            console.log('✅ [CreateConv] Conversa criada com ID:', newId);
 
-            const newConv: Conversation = {
-                id: newConvId,
-                mode,
-                title: title,
-                messages: [],
-                createdAt: now,
-                updatedAt: now
-            };
+            const newConv: Conversation = { id: newId, mode, title, messages: [], createdAt: Date.now(), updatedAt: Date.now() };
+            const updated = { ...conversationsRef.current, [newId]: newConv };
+            setConversations(updated);
+            conversationsRef.current = updated;
 
-            const updatedConvs = { ...conversationsRef.current, [newConv.id]: newConv };
-            setConversations(updatedConvs);
-            conversationsRef.current = updatedConvs;
-
-            // Atualizar ID ativo para o modo específico
             setActiveConversationIdByMode(prev => {
-                const updated = { ...prev, [mode]: newConv.id };
-                activeIdsByModeRef.current = updated;
-
-                if (mode === 'chat') {
-                    setCurrentConversationId(newConv.id);
-                    currentIdRef.current = newConv.id;
-                }
-
-                return updated;
+                const next = { ...prev, [mode]: newId };
+                activeIdsByModeRef.current = next;
+                return next;
             });
 
-            // Registrar no socket
-            socketService.registerConversation(newConv.id);
+            socketService.registerConversation(newId);
+            setActiveScope(newId);
+            saveToStorage(updated, newId, activeIdsByModeRef.current);
 
-            const scopeKey = `${mode}:${newConv.id}`;
-            setActiveScope(scopeKey);
-
-            saveToStorage(updatedConvs, currentIdRef.current, activeIdsByModeRef.current);
-            console.log(`✅ Nova conversa criada para ${mode}: ${newConv.title}`);
-
-            return newConv;
-
-        } catch (err) {
-            console.error('❌ Erro ao criar conversa no backend:', err);
-            // Fallback local se backend falhar
-            const localId = `conv_${now}_${Math.random().toString(36).substr(2, 9)}`;
-            const newConv: Conversation = {
-                id: localId,
-                mode,
-                title,
-                messages: [],
-                createdAt: now,
-                updatedAt: now
-            };
-            // ... resto da lógica de fallback se necessário, mas fetch acima é preferível
-            return newConv;
-        } finally {
             creatingRef.current[mode] = false;
+            return newConv;
+        } catch (e) {
+            console.error('❌ [CreateConv] Erro:', e);
+            creatingRef.current[mode] = false;
+            return undefined;
         }
-    }, [saveCurrentConversation, saveToStorage, setActiveScope, userId]);
+    }, [saveCurrentConversation, userId, setActiveScope, saveToStorage]);
 
-    // Trocar de conversa
+
     const switchConversation = useCallback(async (id: string, mode?: 'chat' | 'multimodal' | 'live') => {
         const conv = conversationsRef.current[id];
         if (!conv) return;
-
         const targetMode = mode || conv.mode;
-
-        // PRIMEIRO: Salvar conversa atual do modo
         saveCurrentConversation(targetMode);
-
-        // SEGUNDO: Carregar mensagens do backend se as mensagens locais estiverem vazias
-        const scopeKey = `${targetMode}:${id}`;
+        const scopeKey = getScopeKey(targetMode, id);
         if ((messagesByScopeRef.current[scopeKey] || []).length === 0) {
             try {
-                console.log(`🔄 [LIAContext] Carregando histórico remoto para conversa ${id}...`);
                 const msgs = await backendService.getMessages(id);
-                if (msgs && msgs.length > 0) {
-                    const formattedMsgs: Message[] = msgs.map(m => ({
-                        id: m.id,
-                        type: (m.role === 'assistant' ? 'lia' : 'user') as 'lia' | 'user',
-                        content: m.content,
-                        timestamp: new Date(m.created_at).getTime(),
-                        attachments: m.attachments
-                    }));
-                    setMessagesByScope(prev => ({ ...prev, [scopeKey]: formattedMsgs }));
-                    messagesByScopeRef.current = { ...messagesByScopeRef.current, [scopeKey]: formattedMsgs };
+                if (msgs?.length > 0) {
+                    const formatted: Message[] = msgs.map(m => ({ id: m.id, type: (m.role === 'assistant' ? 'lia' : 'user'), content: m.content, timestamp: new Date(m.created_at).getTime() }));
+                    setMessagesByScope(prev => ({ ...prev, [scopeKey]: formatted }));
+                    messagesByScopeRef.current = { ...messagesByScopeRef.current, [scopeKey]: formatted };
                 }
-            } catch (e) {
-                console.error('❌ Erro ao carregar mensagens do backend na troca:', e);
-            }
+            } catch (e) { }
         }
-
         setActiveConversationIdByMode(prev => {
-            const updated = { ...prev, [targetMode]: id };
-            activeIdsByModeRef.current = updated;
-
-            // v2.6: SENPRE atualizar ID atual/global para que outros serviços (como Gemini Live)
-            // saibam qual é a conversa visível na tela no momento
+            const next = { ...prev, [targetMode]: id };
+            activeIdsByModeRef.current = next;
             setCurrentConversationId(id);
             currentIdRef.current = id;
-
-            return updated;
+            return next;
         });
-
         setActiveScope(scopeKey);
-
-        // Registrar no socket
         socketService.registerConversation(id);
-
         saveToStorage(conversationsRef.current, currentIdRef.current, activeIdsByModeRef.current);
-
-        // v2.6: Sincronizar com o serviço Gemini Live se ele estiver ativo
-        // Isso garante que a LIA saiba que mudamos de contexto
         geminiLiveService.setSessionConversationId(id);
         geminiLiveService.setUIMode(targetMode);
+    }, [saveCurrentConversation, saveToStorage, setActiveScope, getScopeKey]);
 
-        console.log(`📖 Conversa trocada em ${targetMode}: ${conv.title}`);
-
-    }, [saveCurrentConversation, saveToStorage, setActiveScope]);
-
-    // Renomear conversa
     const renameConversation = useCallback((id: string, title: string) => {
-        const updatedConvs = {
-            ...conversationsRef.current,
-            [id]: { ...conversationsRef.current[id], title }
-        };
-        setConversations(updatedConvs);
-        conversationsRef.current = updatedConvs;
-        saveToStorage(updatedConvs, currentIdRef.current, activeIdsByModeRef.current);
-        console.log(`✏️ Conversa renomeada: ${title}`);
+        const updated = { ...conversationsRef.current, [id]: { ...conversationsRef.current[id], title } };
+        setConversations(updated);
+        conversationsRef.current = updated;
+        saveToStorage(updated, currentIdRef.current, activeIdsByModeRef.current, id);
     }, [saveToStorage]);
 
-    // Deletar conversa
     const deleteConversation = useCallback((id: string) => {
         const { [id]: deleted, ...rest } = conversationsRef.current;
         setConversations(rest);
         conversationsRef.current = rest;
-
-        // Se era a conversa ativa, limpar
-        if (currentIdRef.current === id) {
-            setCurrentConversationId(null);
-            currentIdRef.current = null;
-            setMessages([]);
-            messagesRef.current = [];
-        }
-
-        // Remover dos activeIdsByMode se for o ID ativo em algum modo
+        if (currentIdRef.current === id) { setCurrentConversationId(null); currentIdRef.current = null; }
         setActiveConversationIdByMode(prev => {
-            let updated = { ...prev };
-            let changed = false;
-            for (const modeKey in updated) {
-                if (updated[modeKey as keyof typeof updated] === id) {
-                    updated = { ...updated, [modeKey]: null };
-                    changed = true;
-                }
-            }
-            if (changed) {
-                activeIdsByModeRef.current = updated;
-                return updated;
-            }
-            return prev;
+            let next = { ...prev };
+            for (const k in next) if (next[k as any] === id) next[k as any] = null;
+            activeIdsByModeRef.current = next;
+            return next;
         });
-
-        // Limpar mensagens do escopo se existirem
-        const convToDelete = deleted;
-        if (convToDelete) {
-            const scopeKey = `${convToDelete.mode}:${id}`;
-            clearScopeMessages(scopeKey);
-        }
-
+        if (deleted) clearScopeMessages(getScopeKey(deleted.mode, id));
         saveToStorage(rest, currentIdRef.current, activeIdsByModeRef.current);
-        backendService.deleteConversation(id).catch(e => console.error('❌ Erro ao deletar no backend:', e));
-        console.log(`🗑️ Conversa deletada: ${id}`);
-    }, [saveToStorage, clearScopeMessages]);
+        backendService.deleteConversation(id).catch(() => { });
+    }, [saveToStorage, clearScopeMessages, getScopeKey]);
 
-    // Obter mensagens da conversa atual
-    const getCurrentMessages = useCallback((): Message[] => {
-        return messagesRef.current;
-    }, [messages]);
+    const getCurrentMessages = useCallback((): Message[] => messagesRef.current, []);
 
-    // ========================================
-    // ENSURE CONVERSATION EXISTS - Cria automaticamente se não existir
-    // Deve ser chamado ANTES de adicionar qualquer mensagem
-    // ========================================
-    const ensureConversationExists = useCallback((mode: 'chat' | 'multimodal' | 'live') => {
-        const activeIds = activeIdsByModeRef.current;
+    /**
+     * UNIFIED ENTRYPOINT - Único ponto de entrada para texto e voz
+     * v4.2 STOP THE BLEED
+     */
+    const handleUserInput = useCallback(async (input: string, source: 'text' | 'voice', targetModeOverride?: 'chat' | 'multimodal' | 'live'): Promise<void> => {
+        const text = input.trim();
+        if (!text) return;
 
-        if (!activeIds[mode]) {
-            console.log(`📝 AUTO-CREATE: Criando conversa para ${mode}...`);
-            const now = Date.now();
-            const newConv: Conversation = {
-                id: `conv_${now}_${Math.random().toString(36).substr(2, 9)}`,
-                mode,
-                title: `Conversa ${new Date(now).toLocaleDateString('pt-BR')} ${new Date(now).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
-                messages: [],
-                createdAt: now,
-                updatedAt: now
-            };
+        let targetMode: 'chat' | 'multimodal' | 'live' = targetModeOverride || activeModeRef.current || 'chat';
 
-            const updatedConvs = { ...conversationsRef.current, [newConv.id]: newConv };
-            setConversations(updatedConvs);
-            conversationsRef.current = updatedConvs;
-
-            setActiveConversationIdByMode(prev => {
-                const updated = { ...prev, [mode]: newConv.id };
-                activeIdsByModeRef.current = updated;
-                return updated;
-            });
-
-            saveToStorage(updatedConvs, currentIdRef.current, activeIdsByModeRef.current);
-            console.log(`✅ Conversa AUTO-CRIADA para ${mode}: ${newConv.title}`);
-            return newConv.id;
+        let targetConvId = activeIdsByModeRef.current[targetMode];
+        if (!targetConvId) targetConvId = await ensureConversationExists(targetMode) || undefined;
+        if (!targetConvId) {
+            console.error('❌ Não foi possível obter conversa ativa');
+            return;
         }
-        return activeIds[mode];
-    }, [saveToStorage]);
+
+        const scopeKey = getScopeKey(targetMode, targetConvId);
+        const userMsg: Message = { id: `user_${Date.now()}`, type: 'user', content: text, timestamp: Date.now() };
+        addMessageToScope(scopeKey, userMsg);
+        backendService.saveMessage(targetConvId, 'user', text, source).catch(() => { });
+
+        const cleanedText = text.replace(/^(lia|hey|olá|oi|ei|e|então|mas)\s+/i, '').trim();
+        window.dispatchEvent(new CustomEvent('lia-request-snapshot'));
+        const freshSnapshot = (window as any).__liaLastSnapshot;
+        const localRes = tryLocalAnswer(cleanedText, { snapshot: freshSnapshot });
+
+        if (localRes.answered && localRes.response) {
+            addMessageToScope(scopeKey, { id: `lia_${Date.now()}`, type: 'lia', content: localRes.response, timestamp: Date.now() });
+            if (source === 'text') return;
+        }
+
+        const intent = detectDashboardIntent(cleanedText);
+        if (intent) {
+            window.dispatchEvent(new CustomEvent('lia-dashboard-action', { detail: { type: intent.action, payload: intent.payload, pre_hash: freshSnapshot?.hash || '', action_id: `act_${Date.now()}` } }));
+            if (targetMode === 'live' && source === 'voice' && intent.action === 'DASHBOARD_ADD_WIDGET') {
+                setLiaStatus(`Adicionando ${intent.payload.type || 'widget'}...`);
+                setTimeout(() => setLiaStatus(null), 3000);
+            }
+        }
+
+        if (source === 'text') {
+            if (lastMessageSentRef.current?.text === text && Date.now() - lastMessageSentRef.current.timestamp < 2000) return;
+            lastMessageSentRef.current = { text, timestamp: Date.now() };
+            // @ts-ignore - TS sometimes confuses the number of arguments even when they match the service
+            socketService.sendTextMessage(text, targetConvId);
+        }
+    }, [getScopeKey, addMessageToScope, ensureConversationExists]);
+
+    /**
+     * Envia uma mensagem de texto (Legacy Wrapper)
+     */
+    const sendTextMessage = useCallback(async (text: string, mode?: 'chat' | 'multimodal' | 'live') => {
+        await handleUserInput(text, 'text', mode);
+    }, [handleUserInput]);
+
+
+    // v3.5: Sync addToScopeRef for Gemini Live events
+    // CRÍTICO: Usar o escopo ATIVO (definido pelo painel atual) para que mensagens apareçam no chat
+    // v4.2: Blocos duplicados removidos para unificação no topo do componente
 
     // Refs
     const audioPlayingRef = useRef<HTMLAudioElement | null>(null);
@@ -915,27 +849,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         }
     }, []);
 
-    // Helper para adicionar mensagem a um escopo específico ou ao ativo
-    const addToScope = useCallback((message: Message, mode?: 'chat' | 'multimodal' | 'live', convId?: string) => {
-        let scopeKey: string | null = null;
-        if (mode && convId) {
-            scopeKey = `${mode}:${convId}`;
-        } else {
-            scopeKey = activeScopeRef.current;
-        }
-        if (scopeKey) {
-            addMessageToScope(scopeKey, message);
-        } else {
-            console.warn('⚠️ [Scope] Mensagem recebida mas nenhum escopo definido!');
-            setMessages(prev => [...prev, message]);
-        }
-    }, [addMessageToScope]);
-
-    // CRITICAL: Sync function refs to ensure socket handlers have current versions
-    useEffect(() => {
-        addToScopeRef.current = addToScope;
-    }, [addToScope]);
-
+    // Sincronizar refs
     useEffect(() => {
         playAudioRef.current = playAudio;
     }, [playAudio]);
@@ -1171,15 +1085,79 @@ export function LIAProvider({ children }: LIAProviderProps) {
         };
 
         const processLIAResponse = (payload: any) => {
+            console.log('📬 [LIAContext] LIA-MESSAGE/AUDIO-RESPONSE recebido:', {
+                hasPayload: !!payload,
+                type: typeof payload,
+                scope: activeScopeRef.current
+            });
+
             const scopeKey = activeScopeRef.current;
             if (scopeKey) setTypingByScope(prev => ({ ...prev, [scopeKey]: false }));
             setIsTyping(false);
             setIsSpeaking(false);
+            setIsThinking(false);
+            setLiaStatus(null); // Limpar qualquer status pendente
 
             const text = typeof payload === 'string' ? payload : (payload.text || payload.reply || '');
             const convId = payload.conversationId || payload.convId || null;
             const mode = payload.mode || null;
             const audio = payload.audio || null;
+            const functionCall = payload.function_call || payload.action || null;
+
+            // ============================================
+            // LIA-ACTION PROTOCOL: Dashboard Control (NEW)
+            // Se o backend retornou uma função de controle, dispatch para o dashboard
+            // ============================================
+            if (functionCall) {
+                try {
+                    const liaAction = mapFunctionCallToLiaAction({
+                        name: functionCall.name || 'modify_dashboard',
+                        arguments: typeof functionCall.arguments === 'string'
+                            ? functionCall.arguments
+                            : JSON.stringify(functionCall.arguments || functionCall)
+                    });
+
+                    if (liaAction) {
+                        console.log('🎯 [LIA-Action] Dispatching dashboard action:', liaAction);
+
+                        // Feedback visual de status (APENAS SE ESTIVER EM CHAMADA DE VOZ/LIVE)
+                        if (isLiveActive || isSpeaking || isListening) {
+                            if (liaAction.type === 'DASHBOARD_REPLACE_WIDGET') {
+                                setLiaStatus('Substituindo widget...');
+                            } else if (liaAction.type === 'DASHBOARD_SET_PERIOD') {
+                                setLiaStatus('Alterando período...');
+                            } else if (liaAction.type === 'DASHBOARD_ADD_WIDGET') {
+                                setLiaStatus('Adicionando widget...');
+                            } else if (liaAction.type === 'DASHBOARD_GET_SNAPSHOT') {
+                                setLiaStatus('Analisando dashboard...');
+                            }
+                        }
+
+                        // Dispatch via custom event (DashboardContext escuta se estiver montado)
+                        window.dispatchEvent(new CustomEvent('lia-dashboard-action', {
+                            detail: liaAction
+                        }));
+
+                        // TAMBÉM enfileirar no Zustand store para cross-page (Dashboard não montado)
+                        try {
+                            // Acesso síncrono ao store Zustand
+                            const store = (window as any).__LUMINNUS_STORE__;
+                            if (store?.queueDashboardAction) {
+                                store.queueDashboardAction({
+                                    type: liaAction.type,
+                                    payload: liaAction.payload,
+                                    timestamp: Date.now()
+                                });
+                                console.log('📦 [LIA-Action] Ação enfileirada para Dashboard:', liaAction.type);
+                            }
+                        } catch (queueError) {
+                            console.warn('⚠️ [LIA-Action] Falha ao enfileirar ação:', queueError);
+                        }
+                    }
+                } catch (e) {
+                    console.error('❌ [LIA-Action] Failed to dispatch:', e);
+                }
+            }
 
             if (!text && !audio) return;
 
@@ -1203,8 +1181,37 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 }
             }
 
+            // v5.9: Suporte a tabelas no payload (Container visual)
+            if (payload.table) {
+                console.log('📋 [LIAContext] Tabela recebida no payload, renderizando...');
+                dynamicContentManager.addDynamicContent('table', payload.table);
+                setDynamicContent({
+                    type: 'table',
+                    title: payload.table.title || 'Tabela de Dados',
+                    data: payload.table,
+                    timestamp: Date.now()
+                });
+            }
+            // v6.0: Descrição por Voz para Multi-Modal/Chat
+            if (audio && audio.length > 0 && text) {
+                setLiaStatus(`LIA: ${text}`);
+                // Limpar legenda após um tempo razoável (ou quando o áudio acabar se tivéssemos o callback)
+                // O playAudio define isSpeaking=false ao terminar, o que ajuda na UI
+            }
+
+            // v8.4: SNAPSHOT ROUNDTRIP CONSUMER
+            // Se o conteúdo é um placeholder de análise, marcar para substituição futura
+            const isPlaceholder = finalContent.includes('estou visualizando') || finalContent.includes('ver como está');
+
             // 2. Chat update
-            const newMessage: Message = { id: `lia_${Date.now()}`, type: 'lia', content: finalContent, timestamp: Date.now(), attachments };
+            const newMessage: Message = {
+                id: `lia_${Date.now()}`,
+                type: 'lia',
+                content: finalContent,
+                timestamp: Date.now(),
+                attachments,
+                metadata: isPlaceholder ? { pending_snapshot: true } : undefined
+            };
             const currentScopeMessages = messagesByScopeRef.current[scopeKey || ''] || [];
             const lastMsg = currentScopeMessages[currentScopeMessages.length - 1];
 
@@ -1221,6 +1228,73 @@ export function LIAProvider({ children }: LIAProviderProps) {
         const handleLIAMessage = (payload: any) => processLIAResponse(payload);
         const handleAudioResponse = (payload: any) => processLIAResponse(payload);
 
+        // v3.0: Handler para quando o dashboard gera um snapshot (awareness)
+        const handleSnapshotReady = (event: any) => {
+            const snapshot = event.detail;
+            console.log('📦 [LIAContext] Dashboard snapshot pronto:', snapshot);
+
+            if (!snapshot || !snapshot.widgets) {
+                console.warn('⚠️ [LIAContext] Snapshot vazio ou inválido');
+                return;
+            }
+
+            // v7.4: Construir lista detalhada de widgets
+            const widgetList = snapshot.widgets
+                .map((w: any, i: number) => `${i + 1}. **${w.title || 'Sem título'}** (tipo: \`${w.type}\`)`)
+                .join('\n');
+
+            const factualContent = `📊 **Análise do seu Dashboard**\n\nIdentifiquei **${snapshot.widgetCount} widgets** ativos:\n\n${widgetList}\n\n---\n*Tipos ativos: ${snapshot.active_widget_types?.join(', ') || 'N/A'}*`;
+
+            // v8.4: Tentar substituir placeholder pendente no escopo atual
+            const targetScope = activeScopeRef.current
+                || activeIdsByModeRef.current.multimodal
+                || activeIdsByModeRef.current.chat;
+
+            if (targetScope) {
+                // v8.5: Se estiver em Multi-Modal, garantir que o targetScope seja o ID desse modo especificamente
+                console.log(`📦 [LIAContext] Adicionando awareness ao escopo: ${targetScope}`);
+
+                // Se houver placeholder, vamos substituir. Caso contrário, adiciona nova.
+                const currentMsgs = messagesByScopeRef.current[targetScope] || [];
+                const placeholderIdx = [...currentMsgs].reverse().findIndex(m => m.metadata?.pending_snapshot);
+
+                if (placeholderIdx !== -1) {
+                    const actualIdx = currentMsgs.length - 1 - placeholderIdx;
+                    console.log('🔄 [LIAContext] Substituindo placeholder factual no índice:', actualIdx);
+
+                    setMessagesByScope(prev => {
+                        const newMsgs = [...(prev[targetScope] || [])];
+                        newMsgs[actualIdx] = {
+                            ...newMsgs[actualIdx],
+                            id: `lia_fact_${Date.now()}`,
+                            content: factualContent,
+                            metadata: { ...newMsgs[actualIdx].metadata, pending_snapshot: false }
+                        };
+                        return { ...prev, [targetScope]: newMsgs };
+                    });
+                } else {
+                    // Fallback: Adiciona nova mensagem
+                    addMessageToScope(targetScope, {
+                        id: `lia_snapshot_${Date.now()}`,
+                        type: 'lia',
+                        content: factualContent,
+                        timestamp: Date.now(),
+                    });
+                }
+            } else {
+                console.warn('⚠️ [LIAContext] Nenhum escopo ativo para adicionar awareness');
+            }
+
+            if (socket.connected) {
+                // v8.5: Usar explicitamente o convId do targetScope em vez de currentIdRef genérico
+                socket.emit('lia-action-response', {
+                    type: 'DASHBOARD_SNAPSHOT',
+                    conversationId: targetScope,
+                    data: snapshot
+                });
+            }
+        };
+
         // Bind events
         socket.on('connect', handleConnect);
         socket.on('disconnect', handleDisconnect);
@@ -1228,7 +1302,13 @@ export function LIAProvider({ children }: LIAProviderProps) {
         socket.on('lia-stop-typing', handleLIAStopTyping);
         socket.on('lia-message', handleLIAMessage);
         socket.on('audio-response', handleAudioResponse);
+        socket.on('lia:render-table', (table: any) => {
+            console.log('📊 [LIAContext] Evento lia:render-table recebido');
+            processLIAResponse({ table });
+        });
         socket.on('audio-ack', () => console.log('✅ Áudio ACK'));
+
+        window.addEventListener('lia-dashboard-snapshot-ready', handleSnapshotReady);
 
         return () => {
             socket.off('connect', handleConnect);
@@ -1238,26 +1318,21 @@ export function LIAProvider({ children }: LIAProviderProps) {
             socket.off('lia-message', handleLIAMessage);
             socket.off('audio-response', handleAudioResponse);
             socket.off('audio-ack');
+            window.removeEventListener('lia-dashboard-snapshot-ready', handleSnapshotReady);
         };
-    }, [authInitialized]); // Removido isConnected das dependências para evitar loops ou reinicializações desnecessárias
+    }, [authInitialized, isConnected]); // Restaurado isConnected para re-registrar listeners após conexão
 
     // ======================================================================
     // EVENTOS GEMINI LIVE (PARIDADE REAL)
     // ======================================================================
     useEffect(() => {
         const handleGeminiEvent = (event: GeminiLiveEvent) => {
-            // v2.6.2: ESCALABILIDADE DE ESCOPO - Extrair modo e ID do escopo ativo atual
-            let scopeKey = activeScopeRef.current || 'live:' + (currentIdRef.current || 'default');
-            let [mode, convId] = scopeKey.split(':');
+            // CRÍTICO: Usar o escopo ATIVO (onde o usuário está) para que transcrições apareçam no chat correto
+            const convId = activeScopeRef.current || currentIdRef.current || activeIdsByModeRef.current.multimodal || 'default';
+            const scopeKey = convId; // Sem prefixo de modo - usa o escopo ativo diretamente
+            const mode = 'live';
 
-            // Se ainda não temos uma conversa válida, usar o fallback 'live'
-            if (!convId || convId === 'default' || convId === 'null') {
-                mode = 'live';
-                convId = currentIdRef.current || activeIdsByModeRef.current.live || 'default';
-                scopeKey = `${mode}:${convId}`;
-            }
-
-            console.log(`📡 [LIAContext] Evento Gemini: ${event.type} | Escopo: ${scopeKey}`);
+            console.log(`📡 [LIAContext] Evento Gemini: ${event.type} | Escopo Ativo: ${scopeKey}`);
 
             switch (event.type) {
                 case 'connected':
@@ -1265,14 +1340,19 @@ export function LIAProvider({ children }: LIAProviderProps) {
                     setIsConnected(true);
                     break;
                 case 'end':
+                case 'error':
+                    // v5.7: Sincronizar botão de voz em erros também
                     setIsLiveActive(false);
                     setIsListening(false);
                     setIsSpeaking(false);
+                    setIsThinking(false);
+                    setLiaStatus(null);
                     break;
                 case 'listening':
                     setIsListening(true);
                     setIsSpeaking(false);
                     setIsThinking(false);
+                    setLiaStatus(null); // v6.2: Limpar legenda ao começar a ouvir
                     break;
                 case 'speaking':
                     setIsSpeaking(true);
@@ -1282,30 +1362,22 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 case 'generating-start':
                     setIsThinking(true);
                     setIsProcessingUpload(true);
+                    setLiaStatus('LIA está processando...');
                     break;
                 case 'generating-end':
                     setIsThinking(false);
                     setIsProcessingUpload(false);
+                    setLiaStatus(null);
                     break;
                 case 'user-transcript':
-                    if (typeof event.data === 'string' && addToScopeRef.current) {
-                        addToScopeRef.current({
-                            id: `user_${Date.now()}`,
-                            type: 'user',
-                            content: event.data,
-                            timestamp: Date.now()
-                        }, mode as any, convId);
-
-                        // Validar convId antes de persistir - UUIDs tem 36 chars
-                        if (convId && convId.length >= 32 && convId !== 'default' && convId !== 'null') {
-                            backendService.saveMessage(convId, 'user', event.data as string, 'voice').catch(e => console.error('❌ Erro ao persistir transcrição de usuário:', e));
-                        } else {
-                            console.warn('⚠️ [GeminiLive] Transcrição de usuário não persistida - convId inválido:', convId);
-                        }
+                    if (typeof event.data === 'string') {
+                        // v4.2: UNIFIED ENTRYPOINT para voz
+                        handleUserInput(event.data, 'voice');
                     }
                     break;
                 case 'lia-transcript':
                     if (typeof event.data === 'string' && addToScopeRef.current) {
+                        setLiaStatus(`LIA: ${event.data}`);
                         addToScopeRef.current({
                             id: `lia_${Date.now()}`,
                             type: 'lia',
@@ -1318,6 +1390,35 @@ export function LIAProvider({ children }: LIAProviderProps) {
                             backendService.saveMessage(convId, 'assistant', event.data as string, 'voice').catch(e => console.error('❌ Erro ao persistir transcrição da LIA:', e));
                         } else {
                             console.warn('⚠️ [GeminiLive] Transcrição da LIA não persistida - convId inválido:', convId);
+                        }
+
+                        // ============================================
+                        // LIA-ACTION: Detectar intenções de dashboard no texto da voz
+                        // Gemini Live não retorna function_call, então detectamos pelo texto
+                        // ============================================
+                        const detectedIntent = detectDashboardIntent(event.data as string);
+                        if (detectedIntent) {
+                            console.log('🎯 [LIA-Action] Intenção de voz detectada:', detectedIntent);
+
+                            // Feedback de status
+                            const statusMap: Record<string, string> = {
+                                'DASHBOARD_ADD_WIDGET': 'Adicionando widget...',
+                                'DASHBOARD_REMOVE_WIDGET': 'Removendo widget...',
+                                'DASHBOARD_UPDATE_WIDGET': 'Atualizando widget...',
+                                'DASHBOARD_REPLACE_WIDGET': 'Substituindo widget...',
+                                'DASHBOARD_SET_PERIOD': 'Alterando período...',
+                                'DASHBOARD_REORGANIZE': 'Reorganizando layout...'
+                            };
+
+                            setLiaStatus(statusMap[detectedIntent.action] || 'Atualizando dashboard...');
+                            setTimeout(() => setLiaStatus(null), 4000);
+
+                            window.dispatchEvent(new CustomEvent('lia-dashboard-action', {
+                                detail: {
+                                    type: detectedIntent.action,
+                                    payload: detectedIntent.payload
+                                }
+                            }));
                         }
                     }
                     break;
@@ -1435,7 +1536,9 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 } catch (e) { }
             }
 
-            const response = await fetch('/api/vision/generate', {
+            // v4.5: Usar URL absoluta do backend
+            const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+            const response = await fetch(`${backendUrl}/api/vision/generate`, {
                 method: 'POST',
                 headers: authHeaders,
                 body: JSON.stringify({
@@ -1489,61 +1592,6 @@ export function LIAProvider({ children }: LIAProviderProps) {
         }
     }, []);
 
-    /**
-     * Envia mensagem de texto para o backend (USANDO ESCOPO ATIVO)
-     */
-    /**
-     * Envia mensagem de texto para o backend (ISOLADO POR MODO/CONVERSA)
-     */
-    const sendTextMessage = useCallback(async (text: string, mode?: 'chat' | 'multimodal' | 'live') => {
-        if (!text.trim()) return;
-
-        // Determinar modo e conversa
-        const targetMode = mode || (activeScopeRef.current?.split(':')[0] as any) || 'chat';
-        let convId = activeIdsByModeRef.current[targetMode as keyof typeof activeConversationIdByMode];
-
-        // Se não houver conversa ativa para o modo, garantir uma
-        if (!convId) {
-            convId = ensureConversationExists(targetMode as any);
-        }
-
-        const scopeKey = `${targetMode}:${convId}`;
-        console.log(`📤 [sendTextMessage] Modo: ${targetMode}, Conv: ${convId}, Scope: ${scopeKey}`);
-
-        // Adicionar mensagem do usuário AO ESCOPO correto
-        const userMessage: Message = {
-            id: `user_${Date.now()}`,
-            type: 'user',
-            content: text,
-            timestamp: Date.now(),
-        };
-
-        addMessageToScope(scopeKey, userMessage);
-
-        // Detectar se é pedido de geração visual
-        const visualRequest = detectVisualRequest(text);
-        if (visualRequest) {
-            setIsProcessingUpload(true); // Overlay apenas para geração visual
-            await generateVisualContent(visualRequest.type, visualRequest.prompt);
-            setIsProcessingUpload(false);
-            return;
-        }
-
-        // Mensagem normal - enviar via Socket.IO
-        // NOTA: NÃO setIsTyping aqui! O typing só é ativado pelo evento 'lia-typing' do backend
-
-        // v4.0.0: MENTE ÚNICA - Contexto de data/hora é injetado pelo backend (memoryService)
-        // Não precisamos mais injetar hardcoded no frontend.
-        const fullText = text;
-
-        try {
-            // Enviar via Socket.IO com ID explícito
-            socketService.registerConversation(convId!);
-            socketService.sendTextMessage(fullText, convId!);
-        } catch (error) {
-            console.error('❌ Erro ao enviar mensagem:', error);
-        }
-    }, [generateVisualContent, addMessageToScope, ensureConversationExists]);
 
     /**
      * Adiciona uma mensagem diretamente ao chat
@@ -1557,16 +1605,18 @@ export function LIAProvider({ children }: LIAProviderProps) {
      */
     const sendMessageWithFiles = useCallback(async (
         text: string,
-        files: { file: File; preview?: string }[]
+        files: { file: File; preview?: string }[],
+        mode?: 'chat' | 'multimodal' | 'live'
     ) => {
         if (files.length === 0) {
-            // Sem arquivos, envia como texto normal
-            return sendTextMessage(text, 'multimodal');
+            await handleUserInput(text, 'text', mode || 'multimodal');
+            return;
         }
 
         // Garantir que conversa exista e obter scopeKey
-        const convId = ensureConversationExists('multimodal');
-        const scopeKey = `multimodal:${convId}`;
+        const targetMode = mode || 'multimodal';
+        const convId = await ensureConversationExists(targetMode);
+        const scopeKey = getScopeKey('multimodal', convId!);
 
         const file = files[0]; // Por enquanto, processar primeiro arquivo
         const isImage = file.file.type.startsWith('image/');
@@ -1589,6 +1639,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
         // 2. Ativar loading para fase de UPLOAD (animação Luminnus)
         setIsProcessingUpload(true);
+        setIsThinking(true); // v6.2: Ativar feedback de "pensando"
 
         try {
             // 3. Converter arquivo para base64
@@ -1806,9 +1857,15 @@ export function LIAProvider({ children }: LIAProviderProps) {
             let uiMode: any = 'live';
 
             if (activeScopeRef.current && activeScopeRef.current !== 'default') {
-                const [mode, id] = activeScopeRef.current.split(':');
-                uiMode = mode;
-                activeId = id;
+                // v5.8: Mente Única - Se o scope for um UUID, usar diretamente
+                if (activeScopeRef.current.includes(':')) {
+                    const [mode, id] = activeScopeRef.current.split(':');
+                    uiMode = mode;
+                    activeId = id;
+                } else {
+                    activeId = activeScopeRef.current;
+                    uiMode = 'live'; // Fallback mode
+                }
             }
 
             if (!activeId || activeId === 'default') {
@@ -1826,7 +1883,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 authStorageKey: 'sb-dashboard-client-auth'
             });
 
-            setActiveScope(`${uiMode}:${activeId}`);
+            // v5.8: Mente Única - O escopo é apenas o ID
+            setActiveScope(activeId);
 
             await geminiLiveService.startSession();
         } catch (error: any) {
@@ -1841,6 +1899,14 @@ export function LIAProvider({ children }: LIAProviderProps) {
             await geminiLiveService.stopSession();
         } catch (error) {
             console.error('❌ Erro ao parar Gemini Live:', error);
+        } finally {
+            // SEMPRE resetar estados, mesmo se stopSession falhar
+            // Isso garante que o botão sincronize corretamente
+            setIsLiveActive(false);
+            setIsListening(false);
+            setIsSpeaking(false);
+            setIsThinking(false);
+            console.log('✅ Estados de voz resetados');
         }
     }, []);
 
@@ -1996,6 +2062,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
         getCurrentMessages,
 
         // Sistema de Mensagens por Escopo
+        activeMode,
+        setActiveMode,
         activeScope,
         messagesByScope,
         getMessagesForScope,
@@ -2031,6 +2099,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
         addDynamicContainer: (t, d) => dynamicContentManager.addDynamicContent(t, d),
         removeDynamicContainer: (id) => dynamicContentManager.removeContainer(id),
         clearDynamicContainers: () => dynamicContentManager.clearAll(),
+        liaStatus,
+        setLiaStatus,
         sendTextMessage,
         addMessage,
         sendMessageWithFiles,

@@ -1,11 +1,13 @@
 import React, { useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ThemeContext, LanguageContext } from '../App';
 import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 
 const Header: React.FC<{ title?: string }> = ({ title }) => {
   const { isDark, toggleTheme } = useContext(ThemeContext);
   const { t } = useContext(LanguageContext);
-  const { user, plan } = useDashboardAuth();
+  const { user, plan, setPlanName } = useDashboardAuth();
+  const navigate = useNavigate();
 
   const handleAction = (action: string) => {
     alert(`${t('featureComingSoon')} (${action})`);
@@ -33,19 +35,35 @@ const Header: React.FC<{ title?: string }> = ({ title }) => {
         </div>
 
         {/* Plan Badge */}
-        <div className="hidden lg:flex items-center gap-2 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 px-3 py-1.5 rounded-xl text-sm shadow-sm">
+        <div className="hidden lg:flex items-center gap-2 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 px-3 py-1.5 rounded-xl text-sm shadow-sm hover:border-brand-primary/30 transition-colors">
           <span className="text-gray-500 dark:text-gray-300">
             {t('planLabel')}{' '}
-            <strong className="text-gray-800 dark:text-white">
-              {plan?.name || (user?.email && ["luminnus.lia.ai@gmail.com"].includes(user.email) ? "Pro" : "Start")}
-            </strong>
+            {user?.email === "luminnus.lia.ai@gmail.com" ? (
+              <select
+                value={plan?.name || "Pro"}
+                onChange={(e) => {
+                  setPlanName(e.target.value as any);
+                }}
+                className="bg-transparent font-black text-gray-800 dark:text-white border-none focus:ring-0 cursor-pointer p-0"
+              >
+                <option value="Start" className="bg-white dark:bg-slate-900">Start</option>
+                <option value="Plus" className="bg-white dark:bg-slate-900">Plus</option>
+                <option value="Pro" className="bg-white dark:bg-slate-900">Pro</option>
+              </select>
+            ) : (
+              <strong className="text-gray-800 dark:text-white">
+                {plan?.name || (user?.email && ["luminnus.lia.ai@gmail.com"].includes(user.email) ? "Pro" : "Start")}
+              </strong>
+            )}
           </span>
-          <button
-            onClick={() => handleAction(t('upgrade'))}
-            className="ml-2 text-xs font-semibold py-1 px-3 rounded-lg bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 text-white hover:opacity-90 transition-opacity"
-          >
-            {t('upgrade')}
-          </button>
+          {plan?.name !== 'Pro' && (
+            <button
+              onClick={() => handleAction(t('upgrade'))}
+              className="ml-2 text-xs font-semibold py-1 px-3 rounded-lg bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 text-white hover:opacity-90 transition-opacity"
+            >
+              {t('upgrade')}
+            </button>
+          )}
         </div>
 
         {/* Theme Toggle */}
@@ -64,8 +82,17 @@ const Header: React.FC<{ title?: string }> = ({ title }) => {
           <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-dark-bg"></span>
         </button>
 
-        {/* Profile */}
+        {/* Profile & Settings */}
         <div className="flex items-center gap-3">
+          {/* Settings Gear */}
+          <button
+            onClick={() => navigate('/settings')}
+            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-gray-300 transition-colors"
+            title="Configurações"
+          >
+            <span className="material-symbols-outlined">settings</span>
+          </button>
+
           <button onClick={() => handleAction('Profile')} className="focus:outline-none">
             <img
               src="https://picsum.photos/seed/kathryn/200"
@@ -80,6 +107,7 @@ const Header: React.FC<{ title?: string }> = ({ title }) => {
           >
             <span className="material-symbols-outlined">auto_awesome</span>
           </button>
+
         </div>
       </div>
     </header>

@@ -171,6 +171,38 @@ Sua missão é diagnosticar falhas, analisar logs e propor correções técnicas
           });
         }
 
+        // =====================================================
+        // TRATAMENTO ESPECIAL PARA DASHBOARD ACTIONS (v3.0)
+        // Retorna ação para o frontend executar no DashboardContext
+        // =====================================================
+        if (function_call.name.startsWith('dashboard') && function_result?.action) {
+          console.log(`🎯 [Chat] Ação de dashboard: ${function_result.action}`);
+
+          // Persistir mensagens
+          try {
+            const { saveMessage } = await import('../config/supabase.js');
+            await saveMessage(conversationId, 'user', message, 'text');
+            await saveMessage(conversationId, 'assistant', function_result.message || `Dashboard atualizado com ${function_result.action}`, 'text');
+          } catch (dbErr) {
+            console.error('⚠️ Falha ao persistir:', dbErr);
+          }
+
+          return res.json({
+            ok: true,
+            reply: function_result.message || 'Dashboard atualizado!',
+            // CRÍTICO: Enviar action para o frontend processar 
+            action: {
+              name: function_result.action,
+              arguments: JSON.stringify(function_result.params || {})
+            },
+            function_call: {
+              name: function_result.action,
+              arguments: JSON.stringify(function_result.params || {})
+            },
+            savedMemories: autoSavedMemories
+          });
+        }
+
         // Loop de segunda chamada para responder ao resultado de OUTRAS ferramentas
         if (!replyText || replyText === '...') {
           const isJsonExplicit = OutputContracts.isJsonRequested(message);
