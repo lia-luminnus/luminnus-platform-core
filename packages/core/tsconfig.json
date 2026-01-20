@@ -15,9 +15,10 @@
         "declaration": true,
         "declarationMap": true,
         "composite": true,
+        "baseUrl": ".",
         "paths": {
             "@luminnus/shared": [
-                "../shared/src"
+                "../shared/dist"
             ]
         }
     },
