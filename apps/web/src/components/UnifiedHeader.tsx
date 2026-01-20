@@ -3,6 +3,7 @@ import { Menu, X, User, LogOut, Shield } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUserPlan } from "@/hooks/useUserPlan";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -13,6 +14,7 @@ const UnifiedHeader = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { t } = useLanguage();
   const { user, signOut, role } = useAuth();
+  const { hasActivePlan } = useUserPlan();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -203,23 +205,25 @@ const UnifiedHeader = () => {
 
                   {user ? (
                     <>
-                      <Link
-                        to={role === 'admin' ? "/admin-dashboard" : "/dashboard"}
-                        className="bg-gradient-to-r from-[#6A00FF] to-[#00C2FF] text-white font-semibold px-5 py-3 rounded-md shadow-md hover:shadow-lg transition-all duration-300 text-center flex items-center justify-center gap-2"
-                        onClick={() => setMobileMenuOpen(false)}
-                      >
-                        {role === 'admin' ? (
-                          <>
-                            <Shield className="w-4 h-4" />
-                            {t('admin_panel')}
-                          </>
-                        ) : (
-                          <>
-                            <User className="w-4 h-4" />
-                            {t('client_area')}
-                          </>
-                        )}
-                      </Link>
+                      {role === 'admin' ? (
+                        <Link
+                          to="/admin-dashboard"
+                          className="bg-gradient-to-r from-[#6A00FF] to-[#00C2FF] text-white font-semibold px-5 py-3 rounded-md shadow-md hover:shadow-lg transition-all duration-300 text-center flex items-center justify-center gap-2"
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          <Shield className="w-4 h-4" />
+                          {t('admin_panel')}
+                        </Link>
+                      ) : hasActivePlan ? (
+                        <Link
+                          to="/dashboard"
+                          className="bg-gradient-to-r from-[#6A00FF] to-[#00C2FF] text-white font-semibold px-5 py-3 rounded-md shadow-md hover:shadow-lg transition-all duration-300 text-center flex items-center justify-center gap-2"
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          <User className="w-4 h-4" />
+                          {t('client_area')}
+                        </Link>
+                      ) : null}
                       <button
                         onClick={handleLogout}
                         className="bg-white/10 hover:bg-white/20 text-foreground font-semibold px-5 py-3 rounded-md shadow-md hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 border border-border"

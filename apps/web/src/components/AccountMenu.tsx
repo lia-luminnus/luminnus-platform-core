@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { User, LogOut, Settings, UserCircle, Shield } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useUserPlan } from '@/hooks/useUserPlan';
 
 
 /**
@@ -19,6 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 const AccountMenu = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { user, signOut, role } = useAuth();
+  const { hasActivePlan } = useUserPlan();
   const navigate = useNavigate();
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -108,7 +110,7 @@ const AccountMenu = () => {
                 <Shield className="w-5 h-5 text-[#00C2FF]" />
                 <span>Painel Admin</span>
               </Link>
-            ) : (
+            ) : hasActivePlan ? (
               <button
                 onClick={async () => {
                   handleMenuClick();
@@ -128,7 +130,7 @@ const AccountMenu = () => {
                 <User className="w-5 h-5 text-[#00C2FF]" />
                 <span>Área do Cliente</span>
               </button>
-            )}
+            ) : null}
 
             {/* DIVISOR */}
             <div className="my-2 border-t border-white/10"></div>
