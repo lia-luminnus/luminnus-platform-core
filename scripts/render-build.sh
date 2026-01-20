@@ -1,24 +1,20 @@
 #!/usr/bin/env bash
-# Script de build para o Render (Static Site)
+# Script de build para o Render (Static Site) - Standalone Frontend
 set -e
 
 # 1. Instalar pnpm
 echo "Installing pnpm..."
 npm install -g pnpm@9.0.0
 
-# 2. Instalar dependências de todo o monorepo
-echo "Installing dependencies..."
+# 2. Navegar para o diretório do frontend
+cd apps/web
+
+# 3. Instalar dependências apenas do frontend
+echo "Installing frontend dependencies..."
 pnpm install
 
-# 3. Buildar pacotes internos na ordem correta (SEQUENCIAL)
-echo "Building @luminnus/shared..."
-cd packages/shared && pnpm build && cd ../..
-
-echo "Building @luminnus/core..."
-cd packages/core && pnpm build && cd ../..
-
 # 4. Buildar o frontend
-echo "Building @luminnus/web..."
-cd apps/web && pnpm build && cd ../..
+echo "Building frontend..."
+pnpm build
 
 echo "Build complete!"

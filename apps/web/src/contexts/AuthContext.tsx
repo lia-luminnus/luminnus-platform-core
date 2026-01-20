@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import type { Company, Plan } from '@luminnus/shared';
+import type { Company, Plan } from '@/types/shared';
 
 const ADMIN_EMAILS = ["luminnus.lia.ai@gmail.com"];
 

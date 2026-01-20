@@ -26,12 +26,6 @@
     "paths": {
       "@/*": [
         "./src/*"
-      ],
-      "@luminnus/shared": [
-        "../../packages/shared/src"
-      ],
-      "@luminnus/core": [
-        "../../packages/core/src"
       ]
     }
   },
