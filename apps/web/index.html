@@ -52,30 +52,5 @@
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
-<!-- Luminnus Site → App Bubble Integration -->
-<script>
-  const baseURL = "https://luminnus-lia-saas.bubbleapps.io"; // Trocar pelo domínio real do Bubble
-
-  const links = {
-    login: `${baseURL}/login`,
-    signup: `${baseURL}/signup`,
-    planos: `${baseURL}/servicos`,
-    faleComLia: `${baseURL}/mensagens`,
-    painel: `${baseURL}/painel`
-  };
-
-  document.addEventListener("DOMContentLoaded", () => {
-    document.querySelectorAll("[data-luminnus]").forEach(btn => {
-      const type = btn.getAttribute("data-luminnus");
-      if (links[type]) btn.addEventListener("click", () => window.open(links[type], "_blank"));
-    });
-  });
-</script>
-
-<button data-luminnus="login">Login</button>
-<button data-luminnus="signup">Criar Conta</button>
-<button data-luminnus="planos">Planos</button>
-<button data-luminnus="faleComLia">Fale com a Lia</button>
-<button data-luminnus="painel">Painel</button>
 
 </html>
