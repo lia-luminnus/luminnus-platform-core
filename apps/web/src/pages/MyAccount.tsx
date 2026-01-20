@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { User, Mail, CreditCard, ArrowLeft, Loader2, Save, Edit2 } from 'lucide-react';
+import { User, Mail, CreditCard, ArrowLeft, Loader2, Save, Edit2, Bot, Check, CheckCircle2, Zap, Clock, ShieldCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -165,136 +165,231 @@ const MyAccount = () => {
           </p>
         </div>
 
-        {/* CARD PRINCIPAL - INFORMAÇÕES PESSOAIS */}
-        <Card className="bg-white/5 backdrop-blur-lg border border-white/10 shadow-xl mb-6">
-          <CardHeader className="border-b border-white/10">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <User className="w-5 h-5 text-[#00C2FF]" />
-                <CardTitle className="text-white">Informações Pessoais</CardTitle>
-              </div>
-              {!isEditing && (
-                <Button
-                  onClick={() => setIsEditing(true)}
-                  variant="ghost"
-                  size="sm"
-                  className="text-[#00C2FF] hover:text-[#00C2FF]/80 hover:bg-white/10"
-                >
-                  <Edit2 className="w-4 h-4 mr-2" />
-                  Editar
-                </Button>
-              )}
-            </div>
-            <CardDescription className="text-white/60">
-              Seus dados pessoais
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-6 space-y-4">
-            {/* NOME COMPLETO */}
-            <div>
-              <Label htmlFor="fullName" className="text-white/80 mb-2 block">
-                Nome Completo
-              </Label>
-              {isEditing ? (
-                <Input
-                  id="fullName"
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="bg-white/10 border-white/20 text-white placeholder:text-white/40"
-                  placeholder="Digite seu nome completo"
-                />
-              ) : (
-                <div className="flex items-center gap-3 p-4 bg-white/5 rounded-lg border border-white/10">
-                  <User className="w-5 h-5 text-[#00C2FF]" />
-                  <p className="text-white font-medium">{userName}</p>
+        {/* GRID DE INFORMAÇÕES */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* COLUNA ESQUERDA - PERFIL E STATS */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* CARD PERFIL */}
+            <Card className="bg-white/5 backdrop-blur-xl border-white/10 shadow-2xl overflow-hidden group">
+              <div className="h-24 bg-gradient-to-r from-[#6A00FF] to-[#00C2FF] relative">
+                <div className="absolute -bottom-12 left-1/2 -translate-x-1/2">
+                  <div className="w-24 h-24 rounded-full bg-[#1a1a2e] border-4 border-[#0B0B0F] flex items-center justify-center overflow-hidden shadow-xl">
+                    <User className="w-12 h-12 text-white/20" />
+                  </div>
                 </div>
-              )}
-            </div>
-
-            {/* EMAIL (READ-ONLY) */}
-            <div>
-              <Label htmlFor="email" className="text-white/80 mb-2 block">
-                E-mail
-              </Label>
-              <div className="flex items-center gap-3 p-4 bg-white/5 rounded-lg border border-white/10">
-                <Mail className="w-5 h-5 text-[#00C2FF]" />
-                <p className="text-white font-medium">{userEmail}</p>
               </div>
-              <p className="text-white/40 text-xs mt-1">O e-mail não pode ser alterado</p>
-            </div>
+              <CardContent className="pt-16 pb-6 text-center">
+                <h2 className="text-xl font-bold text-white mb-1">{userName}</h2>
+                <p className="text-white/40 text-sm mb-4">{userEmail}</p>
+                <div className={`inline-flex items-center px-3 py-1 rounded-full border text-xs font-bold uppercase tracking-wider ${statusColor}`}>
+                  {statusDisplay}
+                </div>
+              </CardContent>
+            </Card>
 
-            {/* BOTÕES DE AÇÃO - MODO EDIÇÃO */}
-            {isEditing && (
-              <div className="flex gap-3 pt-4">
-                <Button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="flex-1 bg-gradient-to-r from-[#6A00FF] to-[#00C2FF] hover:opacity-90"
-                >
-                  {saving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Salvar Alterações
-                    </>
+            {/* MINI STATS / DASHBOARD FEEL */}
+            <Card className="bg-white/5 backdrop-blur-xl border-white/10 shadow-xl overflow-hidden">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold text-white/80 uppercase tracking-wider">Status da Conta</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2 text-white/60">
+                    <Clock className="w-4 h-4 text-[#00C2FF]" />
+                    <span>Membro desde</span>
+                  </div>
+                  <span className="text-white font-medium">
+                    {new Date(user.created_at).toLocaleDateString('pt-BR')}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2 text-white/60">
+                    <ShieldCheck className="w-4 h-4 text-[#6A00FF]" />
+                    <span>Verificação</span>
+                  </div>
+                  <span className="text-green-400 font-medium">E-mail Confirmado</span>
+                </div>
+                <div className="pt-2">
+                  <div className="flex justify-between text-xs text-white/40 mb-1">
+                    <span>Perfil Completo</span>
+                    <span>80%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-[#6A00FF] to-[#00C2FF] w-[80%]" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* COLUNA DIREITA - DETALHES E PLANOS */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* CARD INFORMAÇÕES PESSOAIS */}
+            <Card className="bg-white/5 backdrop-blur-xl border-white/10 shadow-xl">
+              <CardHeader className="border-b border-white/5 pb-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-[#00C2FF]/10 text-[#00C2FF]">
+                      <Edit2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-white">Dados do Perfil</CardTitle>
+                      <CardDescription className="text-white/40">Gerencie como você aparece na plataforma</CardDescription>
+                    </div>
+                  </div>
+                  {!isEditing && (
+                    <Button
+                      onClick={() => setIsEditing(true)}
+                      variant="outline"
+                      size="sm"
+                      className="border-white/10 text-white hover:bg-white/5"
+                    >
+                      Editar Dados
+                    </Button>
                   )}
-                </Button>
-                <Button
-                  onClick={handleCancel}
-                  variant="outline"
-                  className="flex-1 bg-white/5 border-white/20 text-white hover:bg-white/10"
-                >
-                  Cancelar
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-4">
+                <div>
+                  <Label className="text-white/50 text-xs uppercase font-bold tracking-widest mb-1.5 block">Nome Completo</Label>
+                  {isEditing ? (
+                    <Input
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="bg-white/5 border-white/10 text-white focus:border-[#00C2FF]/50"
+                      placeholder="Seu nome"
+                    />
+                  ) : (
+                    <p className="text-white font-medium text-lg px-0.5">{userName}</p>
+                  )}
+                </div>
 
-        {/* CARD - INFORMAÇÕES DO PLANO */}
-        <Card className="bg-white/5 backdrop-blur-lg border border-white/10 shadow-xl">
-          <CardHeader className="border-b border-white/10">
-            <div className="flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-[#00C2FF]" />
-              <CardTitle className="text-white">Plano e Assinatura</CardTitle>
-            </div>
-            <CardDescription className="text-white/60">
-              Informações sobre seu plano atual
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-6 space-y-4">
-            {/* NOME DO PLANO */}
-            <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
-              <div>
-                <p className="text-white/60 text-sm">Plano Atual</p>
-                <p className="text-white font-medium text-lg">{planName}</p>
-              </div>
-              <div className={`px-4 py-2 rounded-full border ${statusColor} font-semibold`}>
-                {statusDisplay}
-              </div>
-            </div>
+                <div>
+                  <Label className="text-white/50 text-xs uppercase font-bold tracking-widest mb-1.5 block">Endereço de E-mail</Label>
+                  <p className="text-white/80 font-medium px-0.5">{userEmail}</p>
+                  <p className="text-white/20 text-[10px] mt-1 italic">O e-mail é usado para autenticação e não pode ser alterado</p>
+                </div>
 
-            {/* MENSAGEM PARA USUÁRIOS SEM PLANO */}
-            {!userPlan && (
-              <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                <p className="text-yellow-400 text-sm">
-                  Você ainda não possui um plano ativo. Conheça nossos planos e escolha o melhor para você!
-                </p>
-                <Button
-                  onClick={() => navigate('/planos')}
-                  className="mt-3 bg-gradient-to-r from-[#6A00FF] to-[#00C2FF] hover:opacity-90"
-                >
-                  Ver Planos
-                </Button>
-              </div>
+                {isEditing && (
+                  <div className="flex gap-3 pt-4 border-t border-white/5 mt-6">
+                    <Button onClick={handleSave} disabled={saving} className="flex-1 bg-gradient-to-r from-[#6A00FF] to-[#00C2FF] text-white">
+                      {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar Alterações"}
+                    </Button>
+                    <button onClick={handleCancel} className="flex-1 px-4 py-2 rounded-md border border-white/10 text-white hover:bg-white/5 transition-all">
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* CARD PLANO E ASSINATURA */}
+            {userPlan ? (
+              <Card className="bg-white/5 backdrop-blur-xl border-white/10 shadow-xl overflow-hidden">
+                <div className="absolute top-0 right-0 p-4">
+                  <div className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${statusColor}`}>
+                    {statusDisplay}
+                  </div>
+                </div>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-[#6A00FF]/10 text-[#6A00FF]">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-white">Seu Plano: {planName}</CardTitle>
+                      <CardDescription className="text-white/40">Sua assinatura está ativa e configurada</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-white/5 rounded-xl p-4 border border-white/5 mb-6">
+                    <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mb-4">O que seu plano inclui:</h4>
+                    <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                      {[
+                        'Atendimento Ilimitado',
+                        'Integração com WhatsApp',
+                        'Inteligência Cognitiva LIA',
+                        'Dashboards em Tempo Real',
+                        'Suporte Prioritário',
+                        'Voz Viva LIA'
+                      ].map((feature, i) => (
+                        <li key={i} className="flex items-center gap-2 text-white/80">
+                          <CheckCircle2 className="w-4 h-4 text-green-400" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <Button
+                    onClick={() => navigate('/planos')}
+                    variant="outline"
+                    className="w-full border-white/10 text-white hover:bg-white/5 hover:border-[#6A00FF]/50"
+                  >
+                    Gerenciar ou Alterar Plano
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              /* SEÇÃO "ESCOLHA SEU CAMINHO" PARA NOVOS CLIENTES */
+              <Card className="bg-gradient-to-br from-[#1a1a2e] to-[#0B0B0F] border-white/10 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-[#6A00FF]/10 rounded-full blur-[80px] -mr-32 -mt-32" />
+                <CardHeader className="relative z-10">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#6A00FF] to-[#00C2FF] flex items-center justify-center p-0.5">
+                      <div className="w-full h-full bg-[#1a1a2e] rounded-[10px] flex items-center justify-center">
+                        <Zap className="w-6 h-6 text-[#00C2FF]" />
+                      </div>
+                    </div>
+                    <div>
+                      <CardTitle className="text-2xl text-white">Escolha seu Caminho</CardTitle>
+                      <CardDescription className="text-white/60">Você está a um passo de automatizar seu negócio</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="relative z-10 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[
+                      { title: 'IA Viva 24/7', icon: Bot, color: 'text-purple-400' },
+                      { title: 'Voz Contextual', icon: Mail, color: 'text-blue-400' },
+                      { title: 'WhatsApp Web', icon: Save, color: 'text-green-400' },
+                      { title: 'Insights Reais', icon: Edit2, color: 'text-yellow-400' }
+                    ].map((item, i) => (
+                      <div key={i} className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/5 hover:border-white/10 transition-all">
+                        <item.icon className={`w-5 h-5 ${item.color}`} />
+                        <span className="text-white/80 text-sm font-medium">{item.title}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* LIA QUOTE SECTION */}
+                  <div className="p-5 bg-[#0B0B0F]/50 rounded-2xl border border-[#6A00FF]/20 relative group">
+                    <div className="absolute -top-3 left-6 px-3 py-1 bg-gradient-to-r from-[#6A00FF] to-[#00C2FF] rounded-full text-[10px] font-bold text-white uppercase tracking-widest">
+                      LIA diz:
+                    </div>
+                    <div className="flex gap-4 items-start">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#6A00FF] to-[#00C2FF] flex-shrink-0 flex items-center justify-center p-0.5 mt-1">
+                        <div className="w-full h-full bg-[#0a0e1a] rounded-full flex items-center justify-center overflow-hidden">
+                          <Bot className="w-6 h-6 text-white" />
+                        </div>
+                      </div>
+                      <p className="text-white/90 text-sm leading-relaxed italic">
+                        "Olá {userName}, percebi que você ainda não ativou meu núcleo cognitivo para sua empresa. Estou pronta para começar a aprender seus processos hoje mesmo! Qual plano combina melhor com seu futuro?"
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={() => navigate('/planos')}
+                    className="w-full h-14 bg-gradient-to-r from-[#6A00FF] to-[#00C2FF] hover:shadow-[0_0_30px_rgba(0,194,255,0.3)] text-lg font-bold transition-all hover:scale-[1.01]"
+                  >
+                    Ativar minha Inteligência Cognitiva
+                  </Button>
+                </CardContent>
+              </Card>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );
