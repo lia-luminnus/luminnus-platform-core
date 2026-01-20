@@ -42,7 +42,7 @@
 
       if ((code || error) && isAtRoot) {
         console.log('[OAuth Redirect] Detectado callback na raiz, redirecionando...');
-        window.location.href = window.location.origin + '/oauth-callback' + window.location.search;
+        window.location.href = window.location.origin + '/auth-callback' + window.location.search;
       }
     })();
   </script>

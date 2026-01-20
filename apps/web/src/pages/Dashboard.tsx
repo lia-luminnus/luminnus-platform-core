@@ -71,8 +71,9 @@ const Dashboard = () => {
             navigate('/dashboard/start');
           }
         } else {
-          // Sem plano ativo, redireciona para Start (padrão)
-          navigate('/dashboard/start');
+          // Sem plano ativo, redireciona para a página principal
+          console.log('[Dashboard] Usuário sem plano ativo, redirecionando para home');
+          navigate('/');
         }
       }
     }
