@@ -5,7 +5,7 @@
 // Os painéis são apenas interfaces diferentes para a mesma mente
 // ======================================================================
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef, useMemo } from 'react';
 import { socketService } from './services/socketService';
 import { backendService, Memory } from './services/backendService';
 import { geminiLiveService, GeminiLiveSession, GeminiLiveEvent } from './services/geminiLiveService';
@@ -306,7 +306,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
     // v2.6: MENTE ÚNICA - Sincronizar Usuário e Autenticação do multi-tenant
     useEffect(() => {
         const syncUser = () => {
-            const storedAuth = localStorage.getItem('sb-dashboard-client-auth');
+            const storedAuth = localStorage.getItem('sb-dashboard-auth');
             if (storedAuth) {
                 try {
                     const authData = JSON.parse(storedAuth);
@@ -400,6 +400,19 @@ export function LIAProvider({ children }: LIAProviderProps) {
     const addMessageToScope = useCallback((scopeKey: string, message: Message) => {
         setMessagesByScope(prev => {
             const scopeMessages = prev[scopeKey] || [];
+
+            // v9.0: DEDUPLICAÇÃO - Evitar mensagens idênticas em curto intervalo
+            const lastMsg = scopeMessages[scopeMessages.length - 1];
+            const isDuplicate = lastMsg &&
+                lastMsg.content === message.content &&
+                lastMsg.type === message.type &&
+                (Math.abs(message.timestamp - lastMsg.timestamp) < 2000);
+
+            if (isDuplicate) {
+                console.log(`♻️ [LIAContext] Ignorando duplicata no escopo ${scopeKey}:`, message.content.substring(0, 30));
+                return prev;
+            }
+
             const updated = { ...prev, [scopeKey]: [...scopeMessages, message] };
             try { localStorage.setItem(`lia_scope_${scopeKey}`, JSON.stringify(updated[scopeKey])); } catch (e) { }
             return updated;
@@ -972,7 +985,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
     // ======================================================================
     useEffect(() => {
         const syncAuth = () => {
-            const storedAuth = localStorage.getItem('supabase.auth.token');
+            const storedAuth = localStorage.getItem('sb-dashboard-auth') || localStorage.getItem('supabase.auth.token');
             if (storedAuth) {
                 try {
                     const authData = JSON.parse(storedAuth);
@@ -1011,7 +1024,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
             // Tentar pegar token
             let token = '';
             try {
-                const storedAuth = localStorage.getItem('supabase.auth.token') || localStorage.getItem('sb-dashboard-client-auth');
+                const storedAuth = localStorage.getItem('supabase.auth.token') || localStorage.getItem('sb-dashboard-auth');
                 if (storedAuth) {
                     const parsed = JSON.parse(storedAuth);
                     token = parsed.access_token || parsed.token || '';
@@ -1468,8 +1481,27 @@ export function LIAProvider({ children }: LIAProviderProps) {
         };
 
         geminiLiveService.addEventListener(handleGeminiEvent);
+
+        // v5.8: SYNC VOZ - Recuperar estado da sessão se o componente remontar (troca de aba/app)
+        const activeSession = geminiLiveService.getSession();
+        if (activeSession && activeSession.isActive) {
+            console.log('🔄 [LIAContext] Sessão de voz ativa detectada! Sincronizando interface...');
+            setIsLiveActive(true);
+            setIsListening(activeSession.isListening);
+            setIsSpeaking(activeSession.isSpeaking);
+
+            // O listener já foi atachado acima, então as transcrições serão processadas
+
+            // Sincronizar ID da conversa se disponível
+            if (activeSession.id && activeSession.id.startsWith('conv_')) {
+                setCurrentConversationId(activeSession.id);
+                currentIdRef.current = activeSession.id;
+                setActiveScope(activeSession.id);
+            }
+        }
+
         return () => geminiLiveService.removeEventListener(handleGeminiEvent);
-    }, []);
+    }, [setActiveScope]);
 
     // ======================================================================
     // MÉTODOS DE MENSAGEM
@@ -1527,7 +1559,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
             setIsThinking(true);
 
             // v2.6: MENTE ÚNICA - Incluir token de autenticação
-            const storedAuth = localStorage.getItem('supabase.auth.token');
+            const storedAuth = localStorage.getItem('sb-dashboard-auth') || localStorage.getItem('supabase.auth.token');
             let authHeaders: any = { 'Content-Type': 'application/json' };
             if (storedAuth) {
                 try {
@@ -1616,7 +1648,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         // Garantir que conversa exista e obter scopeKey
         const targetMode = mode || 'multimodal';
         const convId = await ensureConversationExists(targetMode);
-        const scopeKey = getScopeKey('multimodal', convId!);
+        const scopeKey = getScopeKey(targetMode, convId!);
 
         const file = files[0]; // Por enquanto, processar primeiro arquivo
         const isImage = file.file.type.startsWith('image/');
@@ -1739,6 +1771,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         } finally {
             setTypingForScope(scopeKey, false);
             setIsProcessingUpload(false);
+            setIsThinking(false); // v4.12: Garantir reset do indicador de "pensando"
         }
     }, [ensureConversationExists, sendTextMessage, addMessageToScope, setTypingForScope]);
 
@@ -1880,7 +1913,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
             geminiLiveService.updateConfig({
                 userId: userIdRef.current || undefined,
                 tenantId: tenantIdRef.current || undefined,
-                authStorageKey: 'sb-dashboard-client-auth'
+                authStorageKey: 'sb-dashboard-auth'
             });
 
             // v5.8: Mente Única - O escopo é apenas o ID
@@ -1964,7 +1997,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
             formData.append('userId', userIdRef.current || '');
             formData.append('tenantId', tenantIdRef.current || '');
 
-            const storedAuth = localStorage.getItem('supabase.auth.token');
+            const storedAuth = localStorage.getItem('sb-dashboard-auth') || localStorage.getItem('supabase.auth.token');
             let authHeaders: any = {};
             if (storedAuth) {
                 try {
@@ -2046,7 +2079,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
     // PROVIDER VALUE
     // ======================================================================
 
-    const value: LIAState = {
+    const value: LIAState = useMemo(() => ({
         isConnected,
         conversationId,
 
@@ -2096,8 +2129,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
         clearDynamicContent: () => dynamicContentManager.clearAll(),
         setIsProcessingUpload,
         dynamicContainers,
-        addDynamicContainer: (t, d) => dynamicContentManager.addDynamicContent(t, d),
-        removeDynamicContainer: (id) => dynamicContentManager.removeContainer(id),
+        addDynamicContainer: (t: any, d: any) => dynamicContentManager.addDynamicContent(t, d),
+        removeDynamicContainer: (id: string) => dynamicContentManager.removeContainer(id),
         clearDynamicContainers: () => dynamicContentManager.clearAll(),
         liaStatus,
         setLiaStatus,
@@ -2120,7 +2153,24 @@ export function LIAProvider({ children }: LIAProviderProps) {
         plan,
         clearMessages,
         isTyping,
-    };
+    }), [
+        isConnected, conversationId, conversations, activeConversationIdByMode,
+        currentConversationId, createConversation, switchConversation,
+        renameConversation, deleteConversation, refreshConversations,
+        getCurrentMessages, activeMode, setActiveMode, activeScope,
+        messagesByScope, getMessagesForScope, addMessageToScope,
+        clearScopeMessages, setActiveScope, getScopeKey, messages,
+        typingByScope, isGeneratingImageByScope, getTypingForScope,
+        setTypingForScope, setGeneratingImageForScope, voicePersonality,
+        isSpeaking, isListening, isLiveActive, isInitialLoadDone,
+        isThinking, isProcessingUpload, isProcessingDynamic, isCameraActive,
+        memories, dynamicContent, dynamicContainers, liaStatus,
+        sendTextMessage, addMessage, sendMessageWithFiles, sendAudioMessage,
+        transcribeAndFillInput, analyzeFile, setVoicePersonality,
+        startListening, stopListening, startLiveMode, stopLiveMode,
+        loadMemories, saveMemory, deleteMemory, userId, tenantId,
+        plan, clearMessages, isTyping
+    ]);
 
     return <LIAContext.Provider value={value}>{children}</LIAContext.Provider>;
 }

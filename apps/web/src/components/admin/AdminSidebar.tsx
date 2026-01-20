@@ -18,6 +18,7 @@ import {
   BarChart3,
   Headphones,
   Sparkles,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -40,6 +41,7 @@ const menuItems: MenuItem[] = [
   { id: "overview", label: "Visão Geral", icon: LayoutDashboard },
   { id: "lia-viva", label: "LIA (Painel Completo)", icon: Sparkles, badge: "Premium" },
   { id: "users", label: "Gerenciar Usuários", icon: Users },
+  { id: "whatsapp-admin", label: "WhatsApp (Admin)", icon: MessageCircle },
   { id: "companies", label: "Empresas", icon: Building2, badge: "Novo" },
   { id: "lia-core-updates", label: "LIA Core Updates", icon: Sparkles, badge: "Novo" },
   { id: "tools", label: "Ferramentas e Testes", icon: Wrench },

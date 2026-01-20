@@ -5,6 +5,11 @@
  * Todos os outros arquivos (Registry, Manifest, ActionHandler) devem importar daqui.
  */
 
+import { WIDGET_METRIC_DEFAULTS } from '../../../packages/lia-runtime/system/systemManifest';
+
+// Re-exportando para acesso nomeado
+export { WIDGET_METRIC_DEFAULTS };
+
 // ============================================
 // CANONICAL WIDGET TYPES
 // ============================================
@@ -27,7 +32,7 @@ export const WIDGET_TYPES = [
 ] as const;
 
 export type WidgetType = typeof WIDGET_TYPES[number];
-export type WidgetCategory = 'kpi' | 'chart' | 'table' | 'other';
+export type WidgetCategory = 'kpi' | 'chart' | 'table' | 'special' | 'other';
 
 // ============================================
 // WIDGET METADATA - Category + Display Info
@@ -36,27 +41,155 @@ export type WidgetCategory = 'kpi' | 'chart' | 'table' | 'other';
 export interface WidgetMeta {
     type: WidgetType;
     name: string;
-    category: WidgetCategory;
+    category: 'kpi' | 'chart' | 'table' | 'special' | 'other';
     description: string;
     icon: string;
-    planRequired?: 'start' | 'plus' | 'pro';
+    plan_min: 'start' | 'plus' | 'pro';
+    default_config: Record<string, any>;
+    supported_metrics: string[];
 }
 
 export const WIDGET_METADATA: Record<WidgetType, WidgetMeta> = {
-    kpi_card: { type: 'kpi_card', name: 'Cartão de Métrica', category: 'kpi', description: 'Métrica principal com comparação', icon: 'trending_up' },
-    line_timeseries: { type: 'line_timeseries', name: 'Gráfico de Linha', category: 'chart', description: 'Tendências temporais', icon: 'show_chart' },
-    bar_grouped: { type: 'bar_grouped', name: 'Gráfico de Barras', category: 'chart', description: 'Comparação entre categorias', icon: 'bar_chart' },
-    bar_horizontal: { type: 'bar_horizontal', name: 'Barras Horizontais', category: 'chart', description: 'Comparação horizontal', icon: 'align_horizontal_left' },
-    donut_breakdown: { type: 'donut_breakdown', name: 'Gráfico de Rosca', category: 'chart', description: 'Distribuição percentual', icon: 'donut_large' },
-    pie_chart: { type: 'pie_chart', name: 'Gráfico de Pizza', category: 'chart', description: 'Distribuição em fatias', icon: 'pie_chart' },
-    area_timeseries: { type: 'area_timeseries', name: 'Gráfico de Área', category: 'chart', description: 'Volume ao longo do tempo', icon: 'area_chart' },
-    heatmap_calendar: { type: 'heatmap_calendar', name: 'Mapa de Calor', category: 'chart', description: 'Frequência em calendário', icon: 'calendar_today' },
-    funnel: { type: 'funnel', name: 'Funil de Conversão', category: 'chart', description: 'Etapas de conversão', icon: 'filter_alt' },
-    gauge: { type: 'gauge', name: 'Velocímetro', category: 'chart', description: 'Progresso ou meta', icon: 'speed' },
-    radar_multidim: { type: 'radar_multidim', name: 'Gráfico Radar', category: 'chart', description: 'Comparação multidimensional', icon: 'radar', planRequired: 'plus' },
-    table_rank: { type: 'table_rank', name: 'Tabela de Ranking', category: 'table', description: 'Top N de uma métrica', icon: 'leaderboard' },
-    table_transactions: { type: 'table_transactions', name: 'Tabela de Transações', category: 'table', description: 'Lista detalhada', icon: 'receipt_long' },
-    alerts_list: { type: 'alerts_list', name: 'Lista de Alertas', category: 'other', description: 'Notificações e alertas', icon: 'notifications', planRequired: 'pro' },
+    kpi_card: {
+        type: 'kpi_card',
+        name: 'Cartão KPI',
+        description: 'Exibe valor de métrica com delta vs período anterior',
+        category: 'kpi',
+        icon: 'trending_up',
+        plan_min: 'start',
+        default_config: { showTrend: true, showPrevious: true, formatType: 'currency' },
+        supported_metrics: ['cash_in', 'cash_out', 'net_cash', 'transaction_count', 'deals_count', 'deals_value', 'invoices_pending', 'contacts_count'],
+    },
+    line_timeseries: {
+        type: 'line_timeseries',
+        name: 'Gráfico de Linha',
+        description: 'Série temporal com linha ou área',
+        category: 'chart',
+        icon: 'show_chart',
+        plan_min: 'start',
+        default_config: { chartType: 'line', showArea: false, showPoints: true, smoothCurve: true },
+        supported_metrics: ['cash_in', 'cash_out', 'net_cash', 'transaction_count', 'revenue_by_category'],
+    },
+    bar_grouped: {
+        type: 'bar_grouped',
+        name: 'Barras Agrupadas',
+        description: 'Gráfico de barras por categoria ou canal',
+        category: 'chart',
+        icon: 'bar_chart',
+        plan_min: 'start',
+        default_config: { orientation: 'vertical', showLabels: true, stacked: false },
+        supported_metrics: ['revenue_by_category', 'expenses_by_category', 'deals_by_stage'],
+    },
+    bar_horizontal: {
+        type: 'bar_horizontal',
+        name: 'Barras Horizontais',
+        description: 'Gráfico de barras horizontais para comparação',
+        category: 'chart',
+        icon: 'align_horizontal_left',
+        plan_min: 'start',
+        default_config: { showLabels: true },
+        supported_metrics: ['revenue_by_category', 'expenses_by_category', 'deals_by_stage'],
+    },
+    donut_breakdown: {
+        type: 'donut_breakdown',
+        name: 'Gráfico de Rosca',
+        description: 'Gráfico donut com breakdown por dimensão',
+        category: 'chart',
+        icon: 'donut_large',
+        plan_min: 'start',
+        default_config: { showLegend: true, showPercentage: true, innerRadius: 40 },
+        supported_metrics: ['expenses_by_category', 'revenue_by_category', 'deals_by_stage', 'contacts_by_type'],
+    },
+    pie_chart: {
+        type: 'pie_chart',
+        name: 'Gráfico de Pizza',
+        description: 'Gráfico de pizza clássico (Legado)',
+        category: 'chart',
+        icon: 'pie_chart',
+        plan_min: 'start',
+        default_config: { showLegend: true },
+        supported_metrics: ['expenses_by_category', 'revenue_by_category'],
+    },
+    area_timeseries: {
+        type: 'area_timeseries',
+        name: 'Série Temporal (Área)',
+        description: 'Gráfico de área para evolução de métricas',
+        category: 'chart',
+        icon: 'area_chart',
+        plan_min: 'start',
+        default_config: { showTrend: true },
+        supported_metrics: ['cash_in', 'cash_out', 'net_cash'],
+    },
+    heatmap_calendar: {
+        type: 'heatmap_calendar',
+        name: 'Mapa de Calor',
+        description: 'Calendário com intensidade por dia',
+        category: 'chart',
+        icon: 'calendar_month',
+        plan_min: 'plus',
+        default_config: { colorScheme: 'green', showTooltip: true },
+        supported_metrics: ['transaction_count', 'cash_in', 'cash_out'],
+    },
+    funnel: {
+        type: 'funnel',
+        name: 'Funil de Vendas',
+        description: 'Visualização de pipeline/funil CRM',
+        category: 'special',
+        icon: 'filter_alt',
+        plan_min: 'plus',
+        default_config: { showPercentages: true, showValues: true, colorScheme: 'gradient' },
+        supported_metrics: ['deals_funnel'],
+    },
+    gauge: {
+        type: 'gauge',
+        name: 'Medidor de Meta',
+        description: 'Gauge circular mostrando progresso vs meta',
+        category: 'kpi',
+        icon: 'speed',
+        plan_min: 'start',
+        default_config: { min: 0, max: 100, target: 80, showTarget: true },
+        supported_metrics: ['goal_progress', 'conversion_rate', 'satisfaction_score'],
+    },
+    radar_multidim: {
+        type: 'radar_multidim',
+        name: 'Gráfico Radar',
+        description: 'Análise multidimensional (ex: Satisfação, Desempenho)',
+        category: 'chart',
+        icon: 'hexagon',
+        plan_min: 'plus',
+        default_config: { showLegend: true },
+        supported_metrics: ['revenue_by_category', 'expenses_by_category', 'deals_by_stage'],
+    },
+    table_rank: {
+        type: 'table_rank',
+        name: 'Tabela Ranking',
+        description: 'Top N itens ordenados por métrica',
+        category: 'table',
+        icon: 'leaderboard',
+        plan_min: 'start',
+        default_config: { limit: 5, showRank: true, showChange: false },
+        supported_metrics: ['top_categories', 'top_customers', 'top_products'],
+    },
+    table_transactions: {
+        type: 'table_transactions',
+        name: 'Transações Recentes',
+        description: 'Lista detalhada',
+        category: 'table',
+        icon: 'receipt_long',
+        plan_min: 'start',
+        default_config: { pageSize: 10, showFilters: true, columns: ['date', 'description', 'category', 'amount'] },
+        supported_metrics: ['transactions_recent'],
+    },
+    alerts_list: {
+        type: 'alerts_list',
+        name: 'Lista de Alertas',
+        description: 'Notificações e alertas',
+        category: 'special',
+        icon: 'notifications',
+        plan_min: 'pro',
+        default_config: { maxItems: 5, showTimestamp: true, groupByType: false },
+        supported_metrics: ['insights', 'alerts', 'recommendations'],
+    },
 };
 
 // ============================================

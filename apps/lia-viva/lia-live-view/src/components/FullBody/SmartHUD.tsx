@@ -133,7 +133,7 @@ export function SmartHUD({
 
     // Labels e cores por estado
     const stateConfig = {
-        standby: { label: 'STANDBY', color: 'text-[rgba(224,247,255,0.5)]', bg: 'bg-[rgba(0,0,0,0.3)]' },
+        standby: { label: 'EM ESPERA', color: 'text-[rgba(224,247,255,0.5)]', bg: 'bg-[rgba(0,0,0,0.3)]' },
         listening: { label: 'OUVINDO', color: 'text-[#ff00ff]', bg: 'bg-[rgba(255,0,255,0.15)]' },
         presenting_lia: { label: 'APRESENTANDO', color: 'text-[#00f3ff]', bg: 'bg-[rgba(0,243,255,0.15)]' },
         presenting_content: { label: 'CONTEÚDO', color: 'text-[#bc13fe]', bg: 'bg-[rgba(188,19,254,0.15)]' },

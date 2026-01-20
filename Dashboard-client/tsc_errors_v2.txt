@@ -1,0 +1,1 @@
+components/dashboard-engine/widgets/LineTimeseries.tsx(80,65): error TS2345: Argument of type '"noDataForPeriod"' is not assignable to parameter of type '"active" | "paused" | "error" | "completed" | "pending" | "failed" | "dashboard" | "crm" | "lia" | "calendar" | "files" | "automations" | "financial" | "team" | "stock" | "projects" | ... 276 more ... | "color_pink"'.

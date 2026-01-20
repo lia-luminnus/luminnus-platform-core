@@ -18,9 +18,6 @@ export class SecurityService {
         // 3. Mask Phone Numbers (keep last 4 digits)
         masked = masked.replace(/(\+?\d{1,4})?[\s-]?(\(?\d{3}\)?)?[\s-]?\d{3}[\s-]?\d{4}/g, '***-***-$&'.slice(-4));
 
-        // 4. Mask Long IDs / Hex codes (v1.1.1)
-        masked = masked.replace(/\b([a-f0-9]{4})[a-f0-9]{12,}([a-f0-9]{4})\b/gi, '$1...$2');
-
         return masked;
 
     }

@@ -22,6 +22,9 @@
       ],
       "@lia/*": [
         "./new-panels/lia-viva/*"
+      ],
+      "@luminnus/lia-runtime/*": [
+        "../../../packages/lia-runtime/*"
       ]
     },
     "allowImportingTsExtensions": true,

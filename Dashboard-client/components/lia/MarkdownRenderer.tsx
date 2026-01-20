@@ -31,7 +31,7 @@ export function MarkdownRenderer({ content: rawContent, className = '' }: Markdo
         const parts = text.split(urlRegex);
 
         return (
-            <p key={key} className="whitespace-pre-wrap mb-4 last:mb-0">
+            <p key={key} className="whitespace-pre-wrap mb-4 last:mb-0 text-sm leading-relaxed">
                 {parts.map((part, i) => {
                     if (urlRegex.test(part)) {
                         urlRegex.lastIndex = 0;

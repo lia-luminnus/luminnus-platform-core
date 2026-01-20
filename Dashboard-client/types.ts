@@ -67,10 +67,20 @@ export interface Deal {
   clientName: string;
   company: string;
   value: number;
-  stage: 'lead' | 'contacted' | 'proposal' | 'negotiation' | 'closed';
+  stage: 'lead' | 'contacted' | 'proposal' | 'negotiation' | 'closed' | 'lost';
   email: string;
   phone: string;
   lastContact: string;
+  // Expanded fields
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  probability: number; // 0-100
+  expectedCloseDate: string | null;
+  source: string;
+  tags: string[];
+  notes: string;
+  assignedTo: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Product {
@@ -113,7 +123,8 @@ export type ModuleId =
   | 'reports'
   | 'settings'
   | 'plan'
-  | 'support';
+  | 'support'
+  | 'whatsapp_agent';
 
 export interface ModuleDefinition {
   id: ModuleId;

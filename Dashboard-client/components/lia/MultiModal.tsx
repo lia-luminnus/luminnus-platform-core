@@ -10,7 +10,8 @@
  */
 
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Mic, MicOff, X, FileText, ImageIcon, Video, File, Loader2, Paperclip } from "lucide-react";
+import { Send, Mic, MicOff, X, FileText, ImageIcon, Video, File, Loader2, Paperclip, Download } from "lucide-react";
+import { motion, AnimatePresence } from 'framer-motion';
 import { useLIA } from "./LIAContext";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { DynamicContentRenderer } from "./DynamicContentRenderer";
@@ -18,6 +19,7 @@ import { StartVoiceButton } from "./StartVoiceButton";
 import { LuminnusLoading } from "./LuminnusLoading";
 
 const LIA_FULL_URL = "/images/lia-full.png";
+const LIA_AVATAR_URL = "/images/lia-bust.png";
 
 function getFileIcon(type: string) {
     switch (type) {
@@ -100,6 +102,7 @@ export function MultiModal() {
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [attachedFiles, setAttachedFiles] = useState<{ file: File; preview?: string; displayName?: string }[]>([]);
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
 
     // Refs
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -221,24 +224,12 @@ export function MultiModal() {
 
     return (
         <div className="relative h-full w-full flex flex-col bg-[#050810] overflow-hidden min-h-0" onPaste={handlePaste}>
-            {/* Header */}
-            <header className="flex-none flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#0A0F1A]">
-                <h1 className="text-xl font-bold tracking-wide flex items-center gap-3">
-                    <span className="text-cyan-400 drop-shadow-[0_0_15px_rgba(34,211,238,0.5)]">LIA VIVA</span>
-                    <span className="text-gray-600">|</span>
-                    <span className="text-purple-500 drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]">Multi-Modal</span>
-                </h1>
-                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10">
-                    <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" : "bg-red-500"}`} />
-                    <span className="text-xs font-medium text-gray-400">{isConnected ? "Online" : "Offline"}</span>
-                </div>
-            </header>
 
-            {/* Main Content Area - 35/65 Layout */}
-            <div className="flex-1 flex gap-6 p-6 overflow-hidden min-h-0">
-                {/* Left: LIA Avatar (35%) */}
-                <div className="w-[35%] flex flex-col gap-4 min-h-0">
-                    <div className={`flex-1 relative rounded-2xl overflow-hidden border transition-all duration-500 flex items-center justify-center p-4 min-h-0 ${liaStatus || isThinking ? 'border-cyan-500/50 bg-[#0D111C]' : 'border-white/5 bg-[#0D111C] shadow-2xl'}`}>
+            {/* Main Content Area - 28/72 Layout */}
+            <div className="flex-1 flex gap-4 p-4 overflow-hidden min-h-0">
+                {/* Left: LIA Avatar (28%) */}
+                <div className="w-[28%] flex flex-col gap-3 min-h-0">
+                    <div className={`flex-1 relative rounded-xl overflow-hidden border transition-all duration-500 flex items-center justify-center p-2 min-h-0 ${liaStatus || isThinking ? 'border-cyan-500/50 bg-[#0D111C]' : 'border-white/5 bg-[#0D111C]'}`}>
                         {/* Avatar Image com Efeitos de Iluminação (WOW Effect) */}
                         <img
                             src={LIA_FULL_URL}
@@ -309,9 +300,14 @@ export function MultiModal() {
                             ) : (
                                 messages.map((msg) => (
                                     <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                        <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${msg.type === 'user'
-                                            ? 'bg-indigo-600 text-white rounded-br-none shadow-lg shadow-indigo-600/20'
-                                            : 'bg-white/5 border border-white/10 text-gray-100 rounded-bl-none'
+                                        {msg.type === 'lia' && (
+                                            <div className="w-8 h-8 rounded-full overflow-hidden mr-2 flex-shrink-0 border border-cyan-500/30">
+                                                <img src={LIA_AVATAR_URL} alt="LIA" className="w-full h-full object-cover scale-[1.4] origin-top" />
+                                            </div>
+                                        )}
+                                        <div className={`max-w-[85%] rounded-xl px-3 py-2 ${msg.type === 'user'
+                                            ? 'bg-indigo-600/80 text-white'
+                                            : 'text-gray-100'
                                             }`}>
                                             <div className="text-sm">
                                                 {msg.type === 'lia' ? (
@@ -326,12 +322,7 @@ export function MultiModal() {
                                                         att.type === 'image' && att.url ? (
                                                             <button
                                                                 key={i}
-                                                                onClick={() => addDynamicContainer('image', {
-                                                                    url: att.url,
-                                                                    alt: att.name || 'Imagem',
-                                                                    caption: att.name,
-                                                                    prompt: att.name
-                                                                })}
+                                                                onClick={() => setPreviewImage(att.url || null)}
                                                                 className="relative group cursor-pointer hover:scale-105 transition-transform"
                                                                 title="Clique para expandir"
                                                             >
@@ -412,12 +403,66 @@ export function MultiModal() {
                             </button>
 
                             {/* Voice Call Button - After Send Button (Parity with Admin) */}
-                            <StartVoiceButton size="md" />
+                            <StartVoiceButton size="sm" />
                         </div>
                     </div>
                 </div>
             </div>
-        </div >
+
+            {/* v7.0: Image Preview Modal */}
+            <AnimatePresence>
+                {previewImage && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setPreviewImage(null)}
+                        className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 md:p-12"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="relative max-w-4xl w-full max-h-full flex flex-col items-center gap-4"
+                        >
+                            {/* Actions Header */}
+                            <div className="absolute -top-12 right-0 flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = previewImage;
+                                        link.download = `lia_image_${Date.now()}.png`;
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                    }}
+                                    className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white transition-all backdrop-blur-md"
+                                    title="Baixar imagem"
+                                >
+                                    <Download className="w-5 h-5" />
+                                </button>
+                                <button
+                                    onClick={() => setPreviewImage(null)}
+                                    className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white transition-all backdrop-blur-md"
+                                    title="Fechar"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            <div className="bg-black/40 p-2 rounded-2xl border border-white/10 shadow-2xl">
+                                <img
+                                    src={previewImage}
+                                    alt="Preview"
+                                    className="max-w-full max-h-[80vh] object-contain rounded-xl"
+                                />
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
     );
 }
 

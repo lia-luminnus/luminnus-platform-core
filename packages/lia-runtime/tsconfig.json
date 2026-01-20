@@ -2,7 +2,7 @@
     "compilerOptions": {
         "target": "ES2020",
         "module": "ESNext",
-        "moduleResolution": "bundler",
+        "moduleResolution": "node",
         "lib": [
             "ES2020",
             "DOM"
@@ -17,7 +17,7 @@
         "rootDir": "./src",
         "resolveJsonModule": true,
         "baseUrl": ".",
-        "composite": true,
+        "composite": false,
         "paths": {
             "@luminnus/shared": [
                 "../shared/src/index.ts"

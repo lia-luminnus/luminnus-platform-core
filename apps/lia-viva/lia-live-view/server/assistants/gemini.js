@@ -78,19 +78,21 @@ export async function runGemini(userText, options = {}) {
 
         // Check for function calls
         const calls = response.candidates?.[0]?.content?.parts?.filter(p => p.functionCall);
-        let function_call = null;
+        // v4.0: Suporte a múltiplas chamadas de ferramentas
+        let function_calls = [];
         if (calls && calls.length > 0) {
-            function_call = {
-                name: calls[0].functionCall.name,
-                arguments: JSON.stringify(calls[0].functionCall.args)
-            };
+            function_calls = calls.map(call => ({
+                name: call.functionCall.name,
+                arguments: JSON.stringify(call.functionCall.args)
+            }));
         }
 
         const text = response.text() || "";
 
         return {
             text,
-            function_call
+            function_calls,
+            function_call: function_calls.length > 0 ? function_calls[0] : null // Retrocompatibilidade
         };
     } catch (error) {
         console.error("❌ [runGemini] Erro:", error);

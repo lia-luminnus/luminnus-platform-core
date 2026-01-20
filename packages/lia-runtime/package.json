@@ -35,10 +35,20 @@
             "types": "./dist/memory/index.d.ts",
             "import": "./dist/memory/index.mjs",
             "require": "./dist/memory/index.js"
+        },
+        "./persona": {
+            "types": "./dist/persona.d.ts",
+            "import": "./dist/persona.mjs",
+            "require": "./dist/persona.js"
+        },
+        "./system": {
+            "types": "./system/systemManifest.ts",
+            "import": "./system/systemManifest.ts",
+            "require": "./system/systemManifest.ts"
         }
     },
     "scripts": {
-        "build": "tsup",
+        "build": "tsup && tsc --emitDeclarationOnly",
         "dev": "tsup --watch",
         "lint": "eslint src/",
         "clean": "rimraf dist",

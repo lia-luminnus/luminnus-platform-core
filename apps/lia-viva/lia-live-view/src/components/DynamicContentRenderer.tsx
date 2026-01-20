@@ -184,27 +184,95 @@ function TableView({ data }: { data: TableData }) {
 // ======================================================================
 
 function ImageView({ data }: { data: ImageData }) {
+    const [isExpanded, setIsExpanded] = React.useState(false);
+
+    // Download handler
+    const handleDownload = async () => {
+        try {
+            const response = await fetch(data.url);
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${data.alt?.replace(/[^a-z0-9]/gi, '_') || 'imagem'}_${Date.now()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Erro ao baixar imagem:', error);
+            window.open(data.url, '_blank');
+        }
+    };
+
     return (
-        <div className="h-full flex flex-col overflow-hidden">
-            <div className="flex items-center gap-2 mb-3 flex-shrink-0">
-                <Image className="w-4 h-4 text-[#00f3ff]" />
-                <span className="text-sm text-gray-400">Imagem</span>
-            </div>
-
-            {/* Container com scroll para imagens grandes */}
-            <div className="flex-1 overflow-auto flex items-start justify-center">
-                <img
-                    src={data.url}
-                    alt={data.alt || 'Imagem'}
-                    className="max-w-full rounded-lg object-contain"
-                    style={{ maxHeight: 'none' }} // Permite altura total
-                />
-            </div>
-
-            {data.caption && (
-                <p className="text-sm text-gray-400 text-center mt-2 flex-shrink-0">{data.caption}</p>
+        <>
+            {/* Modal Fullscreen */}
+            {isExpanded && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+                    onClick={() => setIsExpanded(false)}
+                >
+                    <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handleDownload(); }}
+                            className="px-4 py-2 rounded-lg bg-gradient-to-r from-[#00f3ff] to-[#bc13fe] text-white font-medium hover:opacity-80 transition-opacity flex items-center gap-2"
+                        >
+                            <span>⬇️</span> BAIXAR IMAGEM
+                        </button>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}
+                            className="p-2 rounded-lg bg-red-500/50 text-white hover:bg-red-500 transition-colors"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                    <img
+                        src={data.url}
+                        alt={data.alt || 'Imagem'}
+                        className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </div>
             )}
-        </div>
+
+            {/* Main View */}
+            <div className="h-full flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between mb-3 flex-shrink-0">
+                    <div className="flex items-center gap-2">
+                        <Image className="w-4 h-4 text-[#00f3ff]" />
+                        <span className="text-sm text-gray-400">Visualização em Tempo Real</span>
+                    </div>
+                    <button
+                        onClick={handleDownload}
+                        className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#00f3ff] to-[#bc13fe] text-white text-xs font-medium hover:opacity-80 transition-opacity flex items-center gap-1"
+                    >
+                        <span>⬇️</span> BAIXAR IMAGEM
+                    </button>
+                </div>
+
+                {/* Imagem com clique para expandir */}
+                <div
+                    className="flex-1 min-h-[400px] flex items-center justify-center cursor-pointer group relative"
+                    onClick={() => setIsExpanded(true)}
+                >
+                    <img
+                        src={data.url}
+                        alt={data.alt || 'Imagem'}
+                        className="max-w-full max-h-full rounded-lg object-contain shadow-lg border border-[rgba(0,243,255,0.2)] group-hover:border-[#00f3ff] transition-all"
+                    />
+                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center pointer-events-none">
+                        <div className="bg-[rgba(0,243,255,0.7)] px-4 py-2 rounded-lg text-white text-sm font-bold shadow-xl">
+                            🔍 CLIQUE PARA AMPLIAR
+                        </div>
+                    </div>
+                </div>
+
+                {data.caption && (
+                    <p className="text-sm text-gray-400 text-center mt-2 flex-shrink-0">{data.caption}</p>
+                )}
+            </div>
+        </>
     );
 }
 
@@ -288,10 +356,8 @@ function JsonView({ data }: { data: any }) {
 export function DynamicContentRenderer({ className = '' }: { className?: string }) {
     const { dynamicContent, setDynamicContent, isProcessingUpload, isTyping } = useLIA();
 
-    // Mostrar loading APENAS quando processando upload de arquivo
-    // NÃO mostrar loading para digitação normal ou análises de texto
-    // Análises de documentos devem ir diretamente para o chat como mensagem
-    if (isProcessingUpload) {
+    // Mostrar loading quando processando upload OU quando LIA está gerando/pensando (e a área está vazia)
+    if (isProcessingUpload || (isTyping && (!dynamicContent || dynamicContent.type === 'none'))) {
         return (
             <div className={`flex items-center justify-center ${className}`}>
                 <LuminnusLoading />
@@ -305,7 +371,7 @@ export function DynamicContentRenderer({ className = '' }: { className?: string 
             <div className={`flex items-center justify-center text-center ${className}`}>
                 <div className="text-gray-500">
                     <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm">Dynamic Content Area</p>
+                    <p className="text-sm">Área de Conteúdo Dinâmico</p>
                     <p className="text-xs opacity-60">
                         LIA exibirá gráficos, tabelas e análises aqui
                     </p>
@@ -314,8 +380,10 @@ export function DynamicContentRenderer({ className = '' }: { className?: string 
         );
     }
 
+    const isImage = dynamicContent.type === 'image';
+
     return (
-        <div className={`bg-[rgba(0,0,0,0.3)] rounded-xl border border-[rgba(0,243,255,0.2)] p-4 relative ${className}`}>
+        <div className={`bg-[rgba(0,0,0,0.3)] rounded-xl border border-[rgba(0,243,255,0.2)] relative flex flex-col ${isImage ? 'p-0 overflow-hidden' : 'p-4'} ${className}`}>
             {/* Botão de fechar */}
             <button
                 onClick={() => setDynamicContent(null)}
@@ -330,14 +398,14 @@ export function DynamicContentRenderer({ className = '' }: { className?: string 
             )}
 
             {/* Conteúdo */}
-            <div className="h-full">
+            <div className={`flex-1 ${isImage ? 'h-full' : ''}`}>
                 {dynamicContent.type === 'chart' && <ChartView data={dynamicContent.data as ChartData} />}
                 {dynamicContent.type === 'table' && <TableView data={dynamicContent.data as TableData} />}
                 {dynamicContent.type === 'image' && <ImageView data={dynamicContent.data as ImageData} />}
                 {dynamicContent.type === 'analysis' && <AnalysisView data={dynamicContent.data as AnalysisData} />}
                 {dynamicContent.type === 'json' && <JsonView data={dynamicContent.data} />}
                 {dynamicContent.type === 'text' && (
-                    <div className="text-gray-300 whitespace-pre-wrap">{dynamicContent.data}</div>
+                    <div className="text-gray-300 whitespace-pre-wrap p-4">{dynamicContent.data}</div>
                 )}
             </div>
         </div>

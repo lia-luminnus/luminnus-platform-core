@@ -1,9 +1,8 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import Header from './Header';
 import { useAppStore } from '../store/useAppStore';
 import { motion } from 'framer-motion';
-import { useContext } from 'react';
-import { LanguageContext } from '../App';
+import { LanguageContext } from '../contexts/LanguageContext';
 
 const ClientLIAHub: React.FC = () => {
     const { planType } = useAppStore();

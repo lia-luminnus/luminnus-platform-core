@@ -1,0 +1,240 @@
+import React, { useState, useContext, useEffect } from 'react';
+import Header from './Header';
+import { LanguageContext } from '../contexts/LanguageContext';
+import { motion, AnimatePresence } from 'framer-motion';
+import WhatsAppConfig from './whatsapp/WhatsAppConfig.tsx';
+import WhatsAppInbox from './whatsapp/WhatsAppInbox.tsx';
+import WhatsAppSummaries from './whatsapp/WhatsAppSummaries.tsx';
+import WhatsAppKanban from './whatsapp/WhatsAppKanban.tsx';
+import WhatsAppAudioInbox from './whatsapp/WhatsAppAudioInbox.tsx';
+import WhatsAppBriefingConfig from './whatsapp/WhatsAppBriefingConfig.tsx';
+
+import { LIAProvider } from './lia/LIAContext';
+
+const WhatsAppAgentContent: React.FC = () => {
+    const { t } = useContext(LanguageContext);
+    const [activeTab, setActiveTab] = useState<'config' | 'inbox' | 'summaries' | 'kanban' | 'audio' | 'briefings'>('config');
+    const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+    const [notification, setNotification] = useState<{ message: string, type: 'success' | 'info' | 'error' } | null>(null);
+    const [status, setStatus] = useState<any>(null);
+    const [loadingStatus, setLoadingStatus] = useState(true);
+
+    const fetchStatus = async () => {
+        try {
+            const response = await fetch('/api/integrations/whatsapp/status');
+            const data = await response.json();
+            setStatus(data);
+        } catch (err) {
+            console.error('Failed to fetch status:', err);
+        } finally {
+            setLoadingStatus(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchStatus();
+    }, []);
+
+    const showNotify = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 3000);
+    };
+
+    const handleAction = async (action: string) => {
+        if (action === 'hub') {
+            window.location.hash = '#/integrations/whatsapp';
+            return;
+        }
+
+        switch (action) {
+            case 'reconnect':
+                showNotify(t('waReconnecting'), 'info');
+                try {
+                    const response = await fetch('/api/integrations/whatsapp/reconnect', { method: 'POST' });
+                    if (response.ok) {
+                        showNotify(t('waReconnected'), 'success');
+                        fetchStatus();
+                    } else {
+                        showNotify('Erro ao reconectar.', 'error');
+                    }
+                } catch (err) {
+                    showNotify('Falha na comunicação com o servidor.', 'error');
+                }
+                break;
+            case 'webhook':
+                showNotify(t('waTestingWebhook'), 'info');
+                try {
+                    const response = await fetch('/api/integrations/whatsapp/test-webhook', { method: 'POST' });
+                    const data = await response.json();
+                    if (data.success) {
+                        showNotify('✅ Webhook funcionando!', 'success');
+                        fetchStatus();
+                    } else {
+                        showNotify('⚠️ Erro no webhook: ' + (data.error || 'desconhecido'), 'error');
+                    }
+                } catch (err) {
+                    showNotify('Falha ao testar webhook.', 'error');
+                }
+                break;
+            case 'logs':
+                window.location.hash = '#/integrations/whatsapp';
+                break;
+            default:
+                break;
+        }
+    };
+
+    const tabs = [
+        { id: 'config', label: t('waConfig'), icon: 'settings_suggest' },
+        { id: 'inbox', label: t('waInbox'), icon: 'inbox' },
+        { id: 'kanban', label: t('waPipeline'), icon: 'view_kanban' },
+        { id: 'audio', label: t('waAudios'), icon: 'headphones' },
+        { id: 'briefings', label: t('waBriefings'), icon: 'schedule_send' },
+        { id: 'summaries', label: t('waSummaries'), icon: 'description' }
+    ];
+
+    return (
+        <div className="flex flex-col h-full bg-[#f1f5f9] dark:bg-[#06080f] overflow-hidden">
+            <Header title={t('whatsappAgent' as any) || 'WhatsApp (Agente)'} />
+
+            {/* Status Header Unificado */}
+            <div className="px-6 py-2 bg-white dark:bg-[#0a0d14] border-b border-gray-200 dark:border-white/5 flex items-center justify-between shadow-sm z-10 transition-colors">
+                <div className="flex items-center gap-4">
+                    {loadingStatus ? (
+                        <div className="w-20 h-6 bg-gray-200 dark:bg-white/5 animate-pulse rounded-full"></div>
+                    ) : (
+                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${status?.status === 'online'
+                            ? "bg-green-500/10 text-green-500 border-green-500/20"
+                            : "bg-red-500/10 text-red-500 border-red-500/20"
+                            }`}>
+                            <div className={`w-2 h-2 rounded-full ${status?.status === 'online' ? 'bg-green-500' : 'bg-red-500'} ${status?.status === 'online' ? 'animate-pulse' : ''}`}></div>
+                            <span className="text-[10px] font-black uppercase tracking-widest">
+                                {status?.status === 'online' ? t('waConnected') : 'Desconectado'}
+                            </span>
+                        </div>
+                    )}
+                    <p className="text-[10px] font-bold text-gray-400 font-mono">{status?.phone || 'Número não definido'}</p>
+                </div>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => handleAction('hub')}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-gray-300 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5 transition-all text-gray-700 dark:text-gray-300"
+                    >
+                        <span className="material-symbols-outlined text-xs">settings_ethernet</span>
+                        Gerenciar Conexão
+                    </button>
+                    {status?.status === 'online' ? (
+                        <button
+                            onClick={() => handleAction('webhook')}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-gray-300 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5 transition-all text-brand-primary font-black"
+                        >
+                            <span className="material-symbols-outlined text-xs">api</span>
+                            Testar Webhook
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => handleAction('hub')}
+                            className="px-4 py-1.5 rounded-lg bg-brand-primary text-white text-[9px] font-black uppercase tracking-widest shadow-lg shadow-brand-primary/20 hover:scale-105 active:scale-95 transition-all"
+                        >
+                            Configurar Agora
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Banner de Erro/CTA */}
+            {!loadingStatus && status?.status !== 'online' && (
+                <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-2.5 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-amber-500 text-lg">warning</span>
+                        <p className="text-[11px] font-bold text-amber-700 dark:text-amber-500">
+                            Integração Pendente: Seu agente não pode responder mensagens até que a conexão seja configurada.
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => handleAction('hub')}
+                        className="text-[10px] font-black text-amber-700 dark:text-amber-500 underline underline-offset-4 hover:opacity-70"
+                    >
+                        IR PARA HUB DE INTEGRAÇÕES
+                    </button>
+                </div>
+            )}
+
+            {/* Sub-menu Interno */}
+            <div className="px-6 pt-1 border-b border-gray-200 dark:border-white/5 bg-white dark:bg-[#07090e] shadow-sm transition-colors">
+                <div className="flex gap-8">
+                    {tabs.map((tab) => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id as any)}
+                            className={`pb-2.5 text-xs font-bold transition-all relative flex items-center gap-2 ${activeTab === tab.id ? 'text-brand-primary' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                                }`}
+                        >
+                            <span className="material-symbols-outlined text-lg">{tab.icon}</span>
+                            {tab.label}
+                            {activeTab === tab.id && (
+                                <motion.span
+                                    layoutId="whatsappTabIndicator"
+                                    className="absolute bottom-0 left-0 w-full h-[3px] bg-brand-primary rounded-t-full shadow-[0_-4px_10px_rgba(139,92,246,0.5)]"
+                                />
+                            )}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-hidden relative">
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={activeTab}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="h-full"
+                    >
+                        {activeTab === 'config' && <WhatsAppConfig onSave={() => showNotify('Configurações salvas com sucesso!', 'success')} />}
+                        {activeTab === 'inbox' && <WhatsAppInbox activeLeadId={selectedLeadId} />}
+                        {activeTab === 'kanban' && <WhatsAppKanban onOpenChat={(leadId) => {
+                            setSelectedLeadId(leadId);
+                            setActiveTab('inbox');
+                        }} />}
+                        {activeTab === 'audio' && <WhatsAppAudioInbox />}
+                        {activeTab === 'briefings' && <WhatsAppBriefingConfig />}
+                        {activeTab === 'summaries' && <WhatsAppSummaries onOpenChat={() => setActiveTab('inbox')} />}
+                    </motion.div>
+                </AnimatePresence>
+
+                {/* Notificações Float */}
+                <AnimatePresence>
+                    {notification && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 50, x: '-50%' }}
+                            animate={{ opacity: 1, y: 0, x: '-50%' }}
+                            exit={{ opacity: 0, y: 20, x: '-50%' }}
+                            className={`fixed bottom-8 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 z-[100] ${notification.type === 'success' ? 'bg-green-500 text-white border-green-400' :
+                                notification.type === 'info' ? 'bg-brand-primary text-white border-brand-primary/20' :
+                                    'bg-red-500 text-white border-red-400'
+                                }`}
+                        >
+                            <span className="material-symbols-outlined">
+                                {notification.type === 'success' ? 'check_circle' : notification.type === 'info' ? 'info' : 'error'}
+                            </span>
+                            <span className="text-xs font-black uppercase tracking-widest">{notification.message}</span>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+        </div>
+    );
+};
+
+const WhatsAppAgent: React.FC = () => {
+    return (
+        <LIAProvider>
+            <WhatsAppAgentContent />
+        </LIAProvider>
+    );
+};
+
+export default WhatsAppAgent;

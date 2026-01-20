@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { User, LogOut, Settings, UserCircle, Shield } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+
 
 /**
  * COMPONENTE: AccountMenu
@@ -111,10 +113,10 @@ const AccountMenu = () => {
                 onClick={async () => {
                   handleMenuClick();
                   // Get current session to transfer to dashboard app
-                  const { data: { session } } = await import('@/integrations/supabase/client').then(m => m.supabase.auth.getSession());
-                  if (session) {
-                    // Redirect to modular dashboard at port 3000 with auth bridge
-                    const bridgeUrl = `http://localhost:3000/#/auth-bridge?access_token=${session.access_token}&refresh_token=${session.refresh_token}`;
+                  const { data: { session: currentSession } } = await supabase.auth.getSession();
+                  if (currentSession) {
+                    // Redirect to modular dashboard at port 3001 with auth bridge
+                    const bridgeUrl = `http://localhost:3001/#/auth-bridge?access_token=${currentSession.access_token}&refresh_token=${currentSession.refresh_token}`;
                     window.location.href = bridgeUrl;
                   } else {
                     // No session, redirect to login

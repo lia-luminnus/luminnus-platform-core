@@ -1,11 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/['"]+/g, '');
 const SUPABASE_ANON_KEY = (
     (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
     (import.meta.env.VITE_SUPABASE_ANON as string | undefined) ||
     (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)
-);
+)?.replace(/['"]+/g, '');
 
 export const configError = (!SUPABASE_URL || !SUPABASE_ANON_KEY)
     ? `[Dashboard] Configuração do Supabase incompleta. Verifique VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no seu .env.local.`

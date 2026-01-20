@@ -1,11 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/['"]+/g, '').trim();
 const SUPABASE_ANON_KEY = (
     (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
     (import.meta.env.VITE_SUPABASE_ANON as string | undefined) ||
     (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)
-);
+)?.replace(/['"]+/g, '').trim();
 
 export const configError = (!SUPABASE_URL || !SUPABASE_ANON_KEY)
     ? `Configuração do Supabase incompleta em Dashboard-client. Verifique o arquivo .env.local neste diretório e certifique-se de que VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY estão definidos.`
@@ -24,7 +24,7 @@ export const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY)
             autoRefreshToken: true,
             detectSessionInUrl: false,
             storage: localStorage,
-            storageKey: 'sb-dashboard-client-auth',
+            storageKey: 'sb-dashboard-auth',
             flowType: 'implicit'
         }
     })

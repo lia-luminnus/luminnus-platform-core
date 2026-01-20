@@ -24,6 +24,10 @@ export default defineConfig(({ mode }) => ({
       'Expires': '0'
     },
     proxy: {
+      // Routes hosted on LIA Live View server (port 3000)
+      '/api/admin': 'http://localhost:3000',
+      '/api/integrations': 'http://localhost:3000',
+      // Fallback for other API routes (port 5000)
       '/api': 'http://localhost:5000',
       '/health': 'http://localhost:5000',
       '/version': 'http://localhost:5000',

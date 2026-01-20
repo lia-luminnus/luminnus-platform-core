@@ -79,11 +79,11 @@ function LiveMarketChart() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-bold text-[#00f3ff] tracking-wider uppercase">
-          Real-Time Market Pulse
+          Pulso de Mercado em Tempo Real
         </h3>
         <div className="flex items-center gap-2 bg-[rgba(0,255,136,0.2)] border border-[#00ff88] rounded-full px-3 py-1">
           <div className="w-2 h-2 bg-[#00ff88] rounded-full animate-pulse" />
-          <span className="text-xs font-bold text-[#00ff88]">Live Feed: +{liveFeed}%</span>
+          <span className="text-xs font-bold text-[#00ff88]">Ao Vivo: +{liveFeed}%</span>
         </div>
       </div>
 
@@ -126,7 +126,7 @@ function LiveMarketChart() {
       {/* Status */}
       <div className="mt-4 text-center">
         <p className="text-sm text-[#bc13fe] font-medium italic animate-pulse">
-          Generating Visual Report...
+          Gerando Relatório Visual...
         </p>
       </div>
     </div>
@@ -260,17 +260,17 @@ export function MultiModal() {
   const audioChunksRef = useRef<Blob[]>([])
 
   // Logic for phased thinking text (Thinking -> Generating)
-  const [phasedThinkingText, setPhasedThinkingText] = useState("Lia Thinking...")
+  const [phasedThinkingText, setPhasedThinkingText] = useState("Lia Pensando...")
   useEffect(() => {
     if (isTyping) {
-      setPhasedThinkingText("Lia Thinking...")
+      setPhasedThinkingText("Lia Pensando...")
       const timer = setTimeout(() => {
-        setPhasedThinkingText("Lia Generating...")
+        setPhasedThinkingText("Lia Gerando...")
       }, 2000)
       return () => clearTimeout(timer)
     } else {
       // Reset when not typing
-      setPhasedThinkingText("Lia Thinking...")
+      setPhasedThinkingText("Lia Pensando...")
     }
   }, [isTyping])
 
@@ -318,7 +318,7 @@ export function MultiModal() {
   const handleSend = async () => {
     // Se tem arquivos anexados, usar função centralizada do context
     if (attachedFiles.length > 0) {
-      const prompt = inputValue.trim() || 'Analise este arquivo e me diga o que você vê. Forneça insights e sugestões.'
+      const prompt = inputValue.trim() || 'Verifique este arquivo e identifique qualquer erro ou inconsistência. Se for um print, faça o diagnóstico técnico.'
 
       // Usar função do context que já faz tudo
       await sendMessageWithFiles(prompt, attachedFiles)
@@ -493,15 +493,22 @@ export function MultiModal() {
           {/* ===== ÁREA DE CONTEÚDO DINÂMICO (APENAS para gráficos, tabelas, imagens) ===== */}
           {/* Análises de texto/documentos vão para o CHAT, não para esta área */}
           {((dynamicContent && !['none', 'analysis', 'text'].includes(dynamicContent.type)) || isProcessingUpload) ? (
-            <div className="flex-1 rounded-xl border-2 border-[#bc13fe] bg-[rgba(10,10,30,0.8)] p-4 shadow-[0_0_20px_rgba(188,19,254,0.2)] overflow-hidden">
-              <DynamicContentRenderer className="h-full" />
+            <div className="rounded-xl border-2 border-[#bc13fe] bg-[rgba(10,10,30,0.8)] shadow-[0_0_20px_rgba(188,19,254,0.2)] overflow-hidden flex flex-col" style={{ minHeight: '350px', maxHeight: 'calc(100vh - 250px)' }}>
+              {/* Header "ÁREA DE TRABALHO DINÂMICA" */}
+              <div className="flex items-center gap-2 mb-3 pb-2 border-b border-[rgba(188,19,254,0.3)]">
+                <div className="w-2 h-2 rounded-full bg-[#bc13fe] animate-pulse" />
+                <span className="text-sm font-bold text-[#bc13fe] tracking-wider">ÁREA DE TRABALHO DINÂMICA</span>
+              </div>
+              <div className="flex-1 overflow-auto p-4 pt-2">
+                <DynamicContentRenderer className="h-full" />
+              </div>
             </div>
           ) : null}
 
 
           {/* ===== CHAT LOG (EXPANDE QUANDO SEM CONTEÚDO VISUAL) ===== */}
           <div className={`rounded-xl border border-[rgba(0,243,255,0.3)] bg-[rgba(10,20,40,0.9)] overflow-hidden flex flex-col ${((dynamicContent && !['none', 'analysis', 'text'].includes(dynamicContent.type)) || isProcessingUpload)
-            ? 'h-48'
+            ? 'h-40'
             : 'flex-1'
             }`}>
 

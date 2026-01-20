@@ -140,7 +140,7 @@ export async function loadRecentMessages(conversationId, limit = 6) {
     try {
         const { data, error } = await supabase
             .from("messages")
-            .select("role, content")
+            .select("role, content, attachments")
             .eq("conversation_id", conversationId)
             .order("created_at", { ascending: false })
             .limit(limit);
@@ -924,6 +924,31 @@ export async function getConversationSummary(conversationId) {
         if (error || !data) return null;
         return JSON.parse(data.content);
     } catch (err) {
+        return null;
+    }
+}
+
+/**
+ * v4.0: Dashboard Awareness
+ * Obtém a configuração ativa do dashboard para um tenant.
+ */
+export async function getActiveDashboard(tenantId) {
+    if (!supabase) return null;
+    try {
+        const { data, error } = await supabase
+            .from("tenant_dashboards")
+            .select("config_json")
+            .eq("tenant_id", tenantId)
+            .eq("is_active", true)
+            .maybeSingle();
+
+        if (error) {
+            console.error("❌ [getActiveDashboard] Erro:", error);
+            return null;
+        }
+        return data?.config_json || null;
+    } catch (err) {
+        console.error("❌ [getActiveDashboard] Exceção:", err);
         return null;
     }
 }

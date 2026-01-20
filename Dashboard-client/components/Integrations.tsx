@@ -26,17 +26,18 @@ interface GoogleService {
     name: string;
     icon: React.ReactNode;
     description: string;
+    planRequired: 'start' | 'plus' | 'pro';
 }
 
 const GOOGLE_SERVICES: GoogleService[] = [
-    { id: 'gmail', name: 'Gmail', icon: <Mail className="w-4 h-4 text-red-500" />, description: 'Emails' },
-    { id: 'calendar', name: 'Calendar', icon: <Calendar className="w-4 h-4 text-blue-500" />, description: 'Eventos' },
-    { id: 'meet', name: 'Meet', icon: <Video className="w-4 h-4 text-green-500" />, description: 'Reuniões' },
-    { id: 'drive', name: 'Drive', icon: <Folder className="w-4 h-4 text-yellow-500" />, description: 'Arquivos' },
-    { id: 'sheets', name: 'Sheets', icon: <FileText className="w-4 h-4 text-green-600" />, description: 'Planilhas' },
-    { id: 'docs', name: 'Docs', icon: <FileText className="w-4 h-4 text-blue-600" />, description: 'Documentos' },
-    { id: 'slides', name: 'Slides', icon: <Globe className="w-4 h-4 text-orange-500" />, description: 'Apresentações' },
-    { id: 'maps', name: 'Maps', icon: <Map className="w-4 h-4 text-green-500" />, description: 'Rotas' },
+    { id: 'gmail', name: 'Gmail', icon: <Mail className="w-4 h-4 text-red-500" />, description: 'Emails', planRequired: 'start' },
+    { id: 'calendar', name: 'Calendar', icon: <Calendar className="w-4 h-4 text-blue-500" />, description: 'Eventos', planRequired: 'start' },
+    { id: 'meet', name: 'Meet', icon: <Video className="w-4 h-4 text-green-500" />, description: 'Reuniões', planRequired: 'plus' },
+    { id: 'drive', name: 'Drive', icon: <Folder className="w-4 h-4 text-yellow-500" />, description: 'Arquivos', planRequired: 'plus' },
+    { id: 'sheets', name: 'Sheets', icon: <FileText className="w-4 h-4 text-green-600" />, description: 'Planilhas', planRequired: 'plus' },
+    { id: 'docs', name: 'Docs', icon: <FileText className="w-4 h-4 text-blue-600" />, description: 'Documentos', planRequired: 'plus' },
+    { id: 'slides', name: 'Slides', icon: <Globe className="w-4 h-4 text-orange-500" />, description: 'Apresentações', planRequired: 'plus' },
+    { id: 'maps', name: 'Maps', icon: <Map className="w-4 h-4 text-green-500" />, description: 'Rotas', planRequired: 'plus' },
 ];
 
 interface IntegrationDef {
@@ -52,84 +53,91 @@ interface IntegrationDef {
 }
 
 const INTEGRATIONS_LIST: IntegrationDef[] = [
-    // === GOOGLE WORKSPACE ===
+    // === START ===
     {
         id: 'google_workspace',
         name: 'Google Workspace',
-        description: 'Gmail, Calendar, Meet, Drive, Sheets, Docs, Slides e Maps em uma única conexão',
-        icon: <div className="flex gap-1 items-center"><span className="text-blue-500 font-black">G</span><span className="text-red-500 font-black">o</span><span className="text-yellow-500 font-black">o</span><span className="text-blue-400 font-black">g</span><span className="text-green-500 font-black">l</span><span className="text-red-400 font-black">e</span></div>,
+        description: 'Conecte Gmail e Calendar para a LIA gerenciar seus compromissos e comunicações.',
+        icon: <div className="flex gap-1 items-center"><span className="text-blue-500 font-black">G</span><span className="text-red-500 font-black">o</span><span className="text-yellow-500 font-black">o</span><span className="text-blue-400 font-black">g</span><span className="text-green-500 font-black">l</span><span className="text-red-400 font-black whitespace-nowrap">e</span></div>,
         category: 'productivity',
         planRequired: 'start',
-        permissions: ['Gmail', 'Calendar', 'Meet', 'Drive', 'Sheets', 'Docs', 'Slides', 'Maps'],
+        permissions: ['Gmail', 'Calendar'],
         isComposite: true
     },
+    {
+        id: 'whatsapp',
+        name: 'WhatsApp Business',
+        description: 'Atendimento inteligente e proativo via WhatsApp oficial.',
+        icon: <MessageCircle className="text-green-500" />,
+        category: 'communication',
+        planRequired: 'start',
+        permissions: ['Enviar mensagens', 'Ler conversas']
+    },
 
-    // === COMUNICAÇÃO ===
-    { id: 'whatsapp', name: 'WhatsApp Business', description: 'Atendimento automático via WhatsApp', icon: <MessageCircle className="text-green-500" />, category: 'communication', planRequired: 'start', permissions: ['Enviar mensagens', 'Ler conversas'] },
-    { id: 'slack', name: 'Slack', description: 'Integrar canais e notificações', icon: <Briefcase className="text-indigo-400" />, category: 'communication', planRequired: 'plus', permissions: ['Enviar mensagens', 'Ler canais'] },
-    { id: 'telegram', name: 'Telegram Bot', description: 'Automatizar respostas no Telegram', icon: <Rocket className="text-blue-400" />, category: 'communication', planRequired: 'plus', permissions: ['Enviar mensagens', 'Receber comandos'] },
-    { id: 'discord', name: 'Discord', description: 'Integrar servidores e bots', icon: <Gamepad2 className="text-indigo-500" />, category: 'communication', planRequired: 'plus', permissions: ['Enviar mensagens', 'Gerenciar canais'] },
-    { id: 'twilio', name: 'Twilio SMS', description: 'Enviar SMS e notificações', icon: <Smartphone className="text-red-500" />, category: 'communication', planRequired: 'pro', permissions: ['Enviar SMS', 'Receber mensagens'] },
-
-    // === FINANÇAS ===
-    { id: 'stripe', name: 'Stripe', description: 'Processar pagamentos e assinaturas', icon: <CreditCard className="text-indigo-500" />, category: 'finance', planRequired: 'plus', permissions: ['Ver transações', 'Gerenciar clientes'] },
-    { id: 'pix', name: 'PIX API', description: 'Receber e enviar PIX automaticamente', icon: <Server className="text-teal-500" />, category: 'finance', planRequired: 'plus', permissions: ['Gerar QR codes', 'Verificar pagamentos'] },
-    { id: 'asaas', name: 'Asaas', description: 'Cobranças e gestão financeira', icon: <span className="text-blue-500 font-bold">$</span>, category: 'finance', planRequired: 'plus', permissions: ['Criar cobranças'] },
-    { id: 'nfe', name: 'Nota Fiscal', description: 'Emitir notas fiscais automaticamente', icon: <Receipt className="text-orange-500" />, category: 'finance', planRequired: 'pro', permissions: ['Emitir NF-e'] },
-    { id: 'mercadopago', name: 'Mercado Pago', description: 'Pagamentos e checkout', icon: <ShoppingBag className="text-blue-600" />, category: 'finance', planRequired: 'plus', permissions: ['Receber pagamentos'] },
-
-    // === VENDAS & CRM ===
-    { id: 'hubspot', name: 'HubSpot', description: 'Sincronizar leads e oportunidades', icon: <Target className="text-orange-500" />, category: 'sales', planRequired: 'plus', permissions: ['Ler contatos', 'Criar deals'] },
-    { id: 'pipedrive', name: 'Pipedrive', description: 'Gerenciar funil de vendas', icon: <BarChart2 className="text-green-600" />, category: 'sales', planRequired: 'plus', permissions: ['Ler deals', 'Criar atividades'] },
-    { id: 'rdstation', name: 'RD Station', description: 'Marketing e automação de leads', icon: <Rocket className="text-blue-600" />, category: 'sales', planRequired: 'plus', permissions: ['Gerenciar leads'] },
-    { id: 'salesforce', name: 'Salesforce', description: 'CRM empresarial completo', icon: <Cloud className="text-blue-400" />, category: 'sales', planRequired: 'pro', permissions: ['Gerenciar oportunidades'] },
-
-    // === MARKETING ===
-    { id: 'meta_ads', name: 'Meta Ads', description: 'Gerenciar campanhas Facebook/Instagram', icon: <Megaphone className="text-blue-500" />, category: 'marketing', planRequired: 'pro', permissions: ['Ver métricas', 'Criar anúncios'] },
-    { id: 'google_ads', name: 'Google Ads', description: 'Automatizar campanhas de busca', icon: <Search className="text-yellow-500" />, category: 'marketing', planRequired: 'pro', permissions: ['Ver performance'] },
-    { id: 'mailchimp', name: 'Mailchimp', description: 'Enviar campanhas de email marketing', icon: <Mail className="text-yellow-600" />, category: 'marketing', planRequired: 'plus', permissions: ['Gerenciar listas'] },
-    { id: 'activecampaign', name: 'ActiveCampaign', description: 'Automação de email e CRM', icon: <Mail className="text-blue-700" />, category: 'marketing', planRequired: 'plus', permissions: ['Criar automações'] },
-
-    // === E-COMMERCE ===
-    { id: 'shopify', name: 'Shopify', description: 'Integrar loja virtual', icon: <Store className="text-green-500" />, category: 'ecommerce', planRequired: 'plus', permissions: ['Gerenciar produtos'] },
-    { id: 'woocommerce', name: 'WooCommerce', description: 'Gerenciar loja WordPress', icon: <Store className="text-purple-600" />, category: 'ecommerce', planRequired: 'plus', permissions: ['Ver pedidos'] },
-
-    // === SUPORTE ===
-    { id: 'zendesk', name: 'Zendesk', description: 'Gerenciar tickets de suporte', icon: <Headset className="text-green-700" />, category: 'support', planRequired: 'plus', permissions: ['Responder tickets'] },
-    { id: 'intercom', name: 'Intercom', description: 'Chat ao vivo e suporte', icon: <MessageSquare className="text-blue-500" />, category: 'support', planRequired: 'plus', permissions: ['Gerenciar conversas'] },
-
-    // === ARMAZENAMENTO ===
-    { id: 'dropbox', name: 'Dropbox', description: 'Sincronizar documentos', icon: <Folder className="text-blue-500" />, category: 'storage', planRequired: 'plus', permissions: ['Ler arquivos'] },
-    { id: 'aws_s3', name: 'AWS S3', description: 'Armazenamento em nuvem', icon: <Server className="text-orange-400" />, category: 'storage', planRequired: 'pro', permissions: ['Upload/Download'] },
-
-    // === ERPs & SISTEMAS ===
-    { id: 'sap', name: 'SAP', description: 'Integrar ERP SAP', icon: <Building className="text-blue-800" />, category: 'erp', planRequired: 'pro', permissions: ['Sincronizar dados'] },
-    { id: 'totvs', name: 'TOTVS', description: 'Integrar sistemas TOTVS', icon: <Database className="text-orange-600" />, category: 'erp', planRequired: 'pro', permissions: ['Financeiro'] },
-    { id: 'bling', name: 'Bling', description: 'Gestão empresarial', icon: <Zap className="text-yellow-500" />, category: 'erp', planRequired: 'plus', permissions: ['Estoque', 'Vendas'] },
-
-    // === IA & AUTOMAÇÃO ===
-    { id: 'openai', name: 'OpenAI', description: 'Integrar GPT e modelos de IA', icon: <Bot className="text-green-500" />, category: 'ai', planRequired: 'pro', permissions: ['Chamadas API'] },
-    { id: 'zapier', name: 'Zapier', description: 'Conectar milhares de apps', icon: <Zap className="text-orange-500" />, category: 'ai', planRequired: 'plus', permissions: ['Automações'] },
+    // === PRO/HUB ===
+    {
+        id: 'sap',
+        name: 'SAP Enterprise',
+        description: 'Integração nativa com ecossistema SAP para grandes operações.',
+        icon: <Building className="text-blue-800" />,
+        category: 'erp',
+        planRequired: 'pro',
+        permissions: ['Sincronizar dados']
+    },
+    {
+        id: 'hub',
+        name: 'Hub de Integrações',
+        description: 'Conecte qualquer sistema via API, Webhooks e mapeamento universal.',
+        icon: <Zap className="text-indigo-400" />,
+        category: 'core',
+        planRequired: 'plus',
+        permissions: ['API Keys', 'Webhooks', 'Endpoints']
+    },
 ];
 
 const CATEGORIES = [
     { id: 'all', label: 'Todos', icon: <LayoutGrid className="w-3.5 h-3.5" /> },
     { id: 'productivity', label: 'Produtividade', icon: <Briefcase className="w-3.5 h-3.5" /> },
     { id: 'communication', label: 'Comunicação', icon: <MessageSquare className="w-3.5 h-3.5" /> },
-    { id: 'finance', label: 'Finanças', icon: <CreditCard className="w-3.5 h-3.5" /> },
-    { id: 'sales', label: 'Vendas', icon: <Users className="w-3.5 h-3.5" /> },
-    { id: 'marketing', label: 'Marketing', icon: <Megaphone className="w-3.5 h-3.5" /> },
-    { id: 'ecommerce', label: 'Online', icon: <Store className="w-3.5 h-3.5" /> },
-    { id: 'support', label: 'Suporte', icon: <Headset className="w-3.5 h-3.5" /> },
-    { id: 'storage', label: 'Arquivos', icon: <Folder className="w-3.5 h-3.5" /> },
-    { id: 'erp', label: 'ERPs', icon: <Building className="w-3.5 h-3.5" /> },
-    { id: 'ai', label: 'IA', icon: <Bot className="w-3.5 h-3.5" /> },
+    { id: 'erp', label: 'Empresarial', icon: <Building className="w-3.5 h-3.5" /> },
+    { id: 'core', label: 'Desenvolvedor', icon: <Zap className="w-3.5 h-3.5" /> },
 ];
 
 const Integrations: React.FC = () => {
-    const { user, session, profile } = useDashboardAuth();
+    const { user, session, profile, loading: authLoading, initialized, plan: authPlan, setPlanName } = useDashboardAuth();
     const { completeIntegrations, planType } = useAppStore();
     const navigate = useNavigate();
+
+    // Se ainda não inicializou, mostra loading spinner
+    if (!initialized) {
+        return (
+            <div className="flex h-full items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-brand-primary" />
+            </div>
+        );
+    }
+
+    // Se não há sessão/usuário/perfil após inicialização, redirecionar para login
+    // v2.5: Aceitar session OU profile como fallback se user estiver temporariamente null
+    if (initialized && !user && !session && !profile && !authLoading) {
+        return (
+            <div className="flex flex-col h-full items-center justify-center gap-4 p-8 text-center">
+                <Lock className="h-16 w-16 text-yellow-500/50" />
+                <h2 className="text-xl font-bold text-white">Login Necessário</h2>
+                <p className="text-gray-400 max-w-md">
+                    Para acessar as integrações, você precisa estar autenticado.
+                    Por favor, faça login pelo aplicativo principal ou recarregue a página.
+                </p>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="px-6 py-3 bg-brand-primary text-white font-bold rounded-xl hover:opacity-90 transition-opacity"
+                >
+                    Recarregar Página
+                </button>
+            </div>
+        );
+    }
+
 
     const [activeTab, setActiveTab] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
@@ -148,7 +156,7 @@ const Integrations: React.FC = () => {
         }
         setLoading(true);
         try {
-            // v2.1: Usar rota unificada sem prefixo /lia (porte 5000 via proxy)
+            // v2.1: Usar rota unificada sem prefixo /lia (porte 3000 via proxy)
             const response = await fetch('/api/integrations', {
                 headers: {
                     'Authorization': `Bearer ${session.access_token}`
@@ -236,6 +244,17 @@ const Integrations: React.FC = () => {
     });
 
     const toggleGoogleService = (serviceId: string) => {
+        const service = GOOGLE_SERVICES.find(s => s.id === serviceId);
+        const currentPlan = (authPlan?.name?.toLowerCase() || 'start') as 'start' | 'plus' | 'pro';
+        const planHierarchy = { start: 0, plus: 1, pro: 2 };
+
+        if (service && planHierarchy[currentPlan] < planHierarchy[service.planRequired]) {
+            toast(`O serviço ${service.name} está disponível apenas no plano ${service.planRequired.toUpperCase()}.`, {
+                icon: '🔒'
+            });
+            return;
+        }
+
         setSelectedGoogleServices(prev =>
             prev.includes(serviceId)
                 ? prev.filter(id => id !== serviceId)
@@ -244,19 +263,55 @@ const Integrations: React.FC = () => {
     };
 
     const handleConnect = (integration: IntegrationDef) => {
+        if (integration.id === 'hub') {
+            navigate('/integrations/hub');
+            return;
+        }
+
+        if (integration.id === 'sap') {
+            toast('Implantação Assistida: Nossa equipe entrará em contato para agendar o setup enterprise.', {
+                icon: '🏢',
+                duration: 5000
+            });
+            return;
+        }
+
         if (integration.isComposite) {
             setSelectedIntegration(integration);
+
+            // Se for Google Workspace, verificar se já está conectado e carregar serviços salvos
+            if (integration.id === 'google_workspace') {
+                const existingIntegration = userIntegrations.find(ui => ui.provider === 'google_workspace');
+                if (existingIntegration && existingIntegration.services && existingIntegration.services.length > 0) {
+                    // Carregar serviços já salvos, filtrando pelo plano atual
+                    const currentPlan = (authPlan?.name?.toLowerCase() || 'start') as 'start' | 'plus' | 'pro';
+                    const planHierarchy = { start: 0, plus: 1, pro: 2 };
+                    const allowedServices = GOOGLE_SERVICES.filter(s =>
+                        planHierarchy[currentPlan] >= planHierarchy[s.planRequired]
+                    ).map(s => s.id);
+
+                    setSelectedGoogleServices(existingIntegration.services.filter((s: string) => allowedServices.includes(s)));
+                } else {
+                    // Se não conectado, selecionar apenas os básicos por padrão
+                    setSelectedGoogleServices(['gmail', 'calendar']);
+                }
+            }
+            setSelectedIntegration(integration);
         } else {
+            // WhatsApp ou outros simples
             toast.promise(
                 new Promise((resolve) => setTimeout(resolve, 1500)),
                 {
-                    loading: `Conectando com ${integration.name}...`,
+                    loading: `Iniciando conexão com ${integration.name}...`,
                     success: `${integration.name} conectado com sucesso!`,
                     error: `Falha ao conectar com ${integration.name}.`,
                 }
             );
-            // Simulação local
-            setUserIntegrations(prev => [...prev, { provider: integration.id, status: 'active', services: [] }]);
+            // Simulação local ou chamada real
+            if (integration.id === 'whatsapp') {
+                navigate('/integrations/whatsapp');
+                return;
+            }
         }
     };
 
@@ -264,20 +319,35 @@ const Integrations: React.FC = () => {
         // Validar user_id de forma robusta
         const userId = user?.id || profile?.id;
 
+        console.log('[Integrations] startGoogleOAuth chamado:', {
+            userId,
+            userObj: user ? { id: user.id, email: user.email } : null,
+            profileObj: profile ? { id: profile.id } : null,
+            sessionExists: !!session,
+            initialized
+        });
+
         if (!userId || userId === 'unknown') {
-            console.error('[Integrations] Perfil não carregado para OAuth:', { user, profile });
+            console.error('[Integrations] Perfil não carregado para OAuth:', {
+                user: user ? { id: user.id, email: user.email } : null,
+                profile: profile ? { id: profile.id } : null,
+                sessionAccessToken: session?.access_token ? 'presente' : 'ausente',
+                initialized
+            });
             toast.error('Erro de sessão: Perfil não identificado. Recarregue a página.');
             return;
         }
+
 
         if (selectedGoogleServices.length === 0) {
             toast.error('Selecione pelo menos um serviço');
             return;
         }
 
+
         const loadToast = toast.loading('Redirecionando para Google...');
         try {
-            // v2.3: Redirecionamento unificado (porta 5000 via proxy) sem prefixo /lia
+            // v2.3: Redirecionamento unificado (porta 3000 via proxy) sem prefixo /lia
             const callbackUrl = window.location.origin + '/#/integrations';
 
             // Passamos redirect_to no state para o unificado (3000) saber para onde voltar
@@ -305,7 +375,7 @@ const Integrations: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col h-full bg-[#0A0F1A] overflow-hidden">
+        <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0A0F1A] overflow-hidden">
             <Header title="Hub de Integrações" />
 
             <div className="flex-1 p-6 lg:p-10 overflow-y-auto no-scrollbar">
@@ -315,7 +385,7 @@ const Integrations: React.FC = () => {
                     <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-900/40 via-purple-900/20 to-transparent border border-white/5 p-8 shadow-2xl">
                         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                             <div>
-                                <h1 className="text-3xl lg:text-4xl font-black text-white tracking-tight mb-2">Ecossistema LIA</h1>
+                                <h1 className="text-3xl lg:text-4xl font-black text-gray-900 dark:text-white tracking-tight mb-2">Ecossistema LIA</h1>
                                 <p className="text-gray-400 max-w-xl">
                                     Conecte a LIA às suas ferramentas favoritas para desbloquear o poder total da automação inteligente.
                                 </p>
@@ -336,10 +406,10 @@ const Integrations: React.FC = () => {
                     </div>
 
                     {/* Filter & Search */}
-                    <div className="flex flex-col xl:flex-row gap-4 items-center justify-between sticky top-0 z-20 py-2 bg-[#0A0F1A]">
+                    <div className="flex flex-col xl:flex-row gap-4 items-center justify-between sticky top-0 z-20 py-2 bg-gray-50 dark:bg-[#0A0F1A]">
                         <div className="relative w-full xl:flex-1">
                             {/* Indicador de scroll à esquerda */}
-                            <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-[#0A0F1A] to-transparent z-10 pointer-events-none" />
+                            <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-gray-50 dark:from-[#0A0F1A] to-transparent z-10 pointer-events-none" />
                             <div
                                 className="flex gap-2 overflow-x-auto py-3 px-1"
                                 style={{
@@ -356,7 +426,7 @@ const Integrations: React.FC = () => {
                                             "flex items-center gap-2 px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all whitespace-nowrap border shrink-0",
                                             activeTab === cat.id
                                                 ? "bg-indigo-600 text-white border-indigo-500 shadow-xl shadow-indigo-600/20"
-                                                : "bg-white/5 text-gray-400 border-white/10 hover:bg-white/10 hover:text-white"
+                                                : "bg-white dark:bg-white/5 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
                                         )}
                                     >
                                         {cat.icon}
@@ -365,7 +435,7 @@ const Integrations: React.FC = () => {
                                 ))}
                             </div>
                             {/* Indicador de scroll à direita */}
-                            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#0A0F1A] to-transparent z-10 pointer-events-none" />
+                            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-gray-50 dark:from-[#0A0F1A] to-transparent z-10 pointer-events-none" />
                         </div>
 
                         <div className="relative w-full xl:w-80 shrink-0">
@@ -374,7 +444,7 @@ const Integrations: React.FC = () => {
                                 placeholder="Buscar ferramentas..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 text-white text-sm rounded-xl focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none transition-all"
+                                className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white text-sm rounded-xl focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none transition-all"
                             />
                         </div>
                     </div>
@@ -394,8 +464,8 @@ const Integrations: React.FC = () => {
                                         className={cn(
                                             "group relative flex flex-col p-6 rounded-3xl border transition-all duration-300",
                                             connected
-                                                ? "bg-indigo-900/10 border-indigo-500/30"
-                                                : "bg-[#0F1420] border-white/5 hover:border-indigo-500/40"
+                                                ? "bg-indigo-50 dark:bg-indigo-900/10 border-indigo-500/30"
+                                                : "bg-white dark:bg-[#0F1420] border-gray-200 dark:border-white/5 hover:border-indigo-500/40"
                                         )}
                                     >
                                         <div className="flex justify-between items-start mb-6">
@@ -421,7 +491,7 @@ const Integrations: React.FC = () => {
                                             )}
                                         </div>
 
-                                        <h3 className="text-lg font-bold text-white mb-2">{item.name}</h3>
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{item.name}</h3>
                                         <p className="text-xs text-gray-500 leading-relaxed mb-8 flex-1">
                                             {item.description}
                                         </p>
@@ -445,11 +515,11 @@ const Integrations: React.FC = () => {
                     </div>
 
                     {/* Solicitar Nova Integração */}
-                    <div className="p-8 rounded-3xl bg-[#0F1420] border border-white/5 text-center">
+                    <div className="p-8 rounded-3xl bg-white dark:bg-[#0F1420] border border-gray-200 dark:border-white/5 text-center">
                         <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
                             <Plus className="w-8 h-8 text-indigo-400" />
                         </div>
-                        <h3 className="text-xl font-black text-white mb-2 tracking-tight">Não encontrou sua ferramenta?</h3>
+                        <h3 className="text-xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">Não encontrou sua ferramenta?</h3>
                         <p className="text-gray-500 mb-6 max-w-md mx-auto text-sm">
                             Solicite uma nova integração e nossa equipe irá avaliar a viabilidade de adicionar ao ecossistema LIA.
                         </p>
@@ -478,8 +548,15 @@ const Integrations: React.FC = () => {
                         >
                             <div className="p-8">
                                 <div className="flex justify-between items-start mb-8">
-                                    <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-4xl shadow-inner">
-                                        {selectedIntegration.icon}
+                                    <div className="h-16 px-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-4xl shadow-inner shrink-0 overflow-visible">
+                                        <div className="flex gap-2 items-center px-4 leading-none">
+                                            <span className="text-blue-500 font-black">G</span>
+                                            <span className="text-red-500 font-black">o</span>
+                                            <span className="text-yellow-500 font-black">o</span>
+                                            <span className="text-blue-400 font-black">g</span>
+                                            <span className="text-green-500 font-black">l</span>
+                                            <span className="text-red-400 font-black">e</span>
+                                        </div>
                                     </div>
                                     <button onClick={() => setSelectedIntegration(null)} className="p-3 hover:bg-white/5 rounded-full text-gray-500 transition-colors">
                                         <X className="w-6 h-6" />
@@ -492,21 +569,44 @@ const Integrations: React.FC = () => {
                                 <div className="space-y-6">
                                     <div className="flex items-center justify-between px-1">
                                         <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">Escopo da Conexão</h4>
-                                        <span className="text-[10px] text-gray-600 font-bold uppercase">{selectedGoogleServices.length} Selecionados</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] text-gray-600 font-bold uppercase">{selectedGoogleServices.length} Selecionados</span>
+                                            {(authPlan?.name?.toLowerCase() || 'start') === 'start' && (
+                                                <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                                                    <Lock className="w-2.5 h-2.5 text-amber-500" />
+                                                    <span className="text-[9px] font-black text-amber-500 uppercase">Plus Requerido para extras</span>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                                         {GOOGLE_SERVICES.map((service) => {
                                             const isSelected = selectedGoogleServices.includes(service.id);
+                                            const currentPlan = (authPlan?.name?.toLowerCase() || 'start') as 'start' | 'plus' | 'pro';
+                                            const planHierarchy = { start: 0, plus: 1, pro: 2 };
+                                            const isLocked = planHierarchy[currentPlan] < planHierarchy[service.planRequired];
+
                                             return (
                                                 <div
                                                     key={service.id}
-                                                    onClick={() => toggleGoogleService(service.id)}
+                                                    onClick={() => {
+                                                        if (isLocked) {
+                                                            toast(`O serviço ${service.name} está disponível apenas no plano ${service.planRequired.toUpperCase()}.`, {
+                                                                icon: '🔒',
+                                                                duration: 3000
+                                                            });
+                                                            return;
+                                                        }
+                                                        toggleGoogleService(service.id);
+                                                    }}
                                                     className={cn(
-                                                        "flex items-center gap-3 p-4 rounded-2xl border transition-all cursor-pointer group",
+                                                        "flex items-center gap-3 p-4 rounded-2xl border transition-all cursor-pointer group relative",
                                                         isSelected
                                                             ? "bg-indigo-500/10 border-indigo-500/40"
-                                                            : "bg-white/5 border-white/5 hover:border-white/20"
+                                                            : isLocked
+                                                                ? "bg-black/20 border-white/5 opacity-60 grayscale cursor-not-allowed"
+                                                                : "bg-white/5 border-white/5 hover:border-white/20"
                                                     )}
                                                 >
                                                     <div className="p-2 bg-white/5 rounded-xl group-hover:scale-110 transition-transform">
@@ -514,13 +614,28 @@ const Integrations: React.FC = () => {
                                                     </div>
                                                     <div className="flex-1 min-w-0">
                                                         <h5 className="font-bold text-white text-xs truncate uppercase tracking-wider">{service.name}</h5>
+                                                        {isLocked && (
+                                                            <div className="mt-1 px-2 py-0.5 bg-blue-500/10 border border-blue-500/30 rounded-full inline-flex">
+                                                                <span className="text-[9px] text-blue-500 font-black uppercase tracking-tighter">Plano Plus</span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     <div className={cn(
                                                         "w-5 h-5 rounded-lg flex items-center justify-center border transition-all",
-                                                        isSelected ? "bg-indigo-500 border-indigo-500" : "border-white/20"
+                                                        isSelected ? "bg-indigo-500 border-indigo-500" : "border-white/20",
+                                                        isLocked && "border-amber-500/20 bg-amber-500/5"
                                                     )}>
-                                                        {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                                                        {isLocked ? (
+                                                            <Lock className="w-2.5 h-2.5 text-amber-500" />
+                                                        ) : isSelected && (
+                                                            <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                                                        )}
                                                     </div>
+                                                    {isLocked && (
+                                                        <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-amber-500 rounded text-[8px] font-black text-black">
+                                                            {service.planRequired.toUpperCase()}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         })}
@@ -538,7 +653,7 @@ const Integrations: React.FC = () => {
                                         onClick={startGoogleOAuth}
                                         className="flex-1 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-widest shadow-xl shadow-indigo-600/30 hover:scale-[1.02] active:scale-95 transition-all"
                                     >
-                                        Conectar Agora
+                                        {isConnected('google_workspace') ? 'Salvar Alterações' : 'Conectar Agora'}
                                     </button>
                                 </div>
                             </div>

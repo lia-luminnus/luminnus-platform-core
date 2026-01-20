@@ -41,7 +41,6 @@ class LiaActionBus {
     }
 
     dispatch(action: LiaAction) {
-        console.log('🎯 [LiaActionBus] Dispatching:', action.type, action.payload);
         this.listeners.forEach(listener => listener(action));
     }
 
@@ -100,7 +99,6 @@ function LiaActionDispatcher({
             return;
         }
 
-        console.log('🎮 [LiaActionDispatcher] Handling action:', action.type);
 
         switch (action.type) {
             case LiaActionType.SET_DATE_RANGE:
@@ -139,12 +137,10 @@ function LiaActionDispatcher({
             case LiaActionType.REFRESH_WIDGET:
                 // Trigger refetch by updating a timestamp in widget config
                 // Widget components should react to this
-                console.log('🔄 Refresh widget:', action.payload.widgetId);
                 break;
 
             case LiaActionType.ZOOM_WIDGET:
                 // Open widget in modal/fullscreen view
-                console.log('🔍 Zoom widget:', action.payload.widgetId);
                 break;
 
             case LiaActionType.NAVIGATE:

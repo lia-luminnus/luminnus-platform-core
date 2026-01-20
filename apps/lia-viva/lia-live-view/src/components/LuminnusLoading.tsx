@@ -9,8 +9,8 @@ import React, { useState, useEffect } from 'react';
 
 // Mensagens rotativas
 const LOADING_MESSAGES = [
-    'Lia Thinking',
-    'Lia Generating',
+    'Lia Pensando',
+    'Lia Gerando',
     'Analisando',
     'Criando',
     'Processando',

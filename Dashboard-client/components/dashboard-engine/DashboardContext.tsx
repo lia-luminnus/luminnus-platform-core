@@ -26,7 +26,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { useAppStore } from '../../store/useAppStore';
 import toast from 'react-hot-toast';
-import { normalizeWidgetType, isValidWidgetType, getAvailableWidgetsMessage, suggestClosestWidget } from './widgetTypes';
+import { normalizeWidgetType, isValidWidgetType, getAvailableWidgetsMessage, suggestClosestWidget, WIDGET_METRIC_DEFAULTS } from './widgetTypes';
 
 // ============================================
 // Initial State
@@ -68,9 +68,7 @@ const migrateConfig = (config: DashboardConfig): DashboardConfig => {
 
     if (!hasChanges) return config;
 
-    // Use a flag to avoid excessive logging in console
     if (typeof window !== 'undefined' && !(window as any)._dashboard_migrated) {
-        console.log('🔄 DashboardContext: Migrated legacy widgets to premium versions');
         (window as any)._dashboard_migrated = true;
     }
 
@@ -298,7 +296,7 @@ export function DashboardProvider({
     // ============================================
 
     const handleLiaAction = useCallback((action: LiaAction) => {
-        console.log('🎯 [DashboardContext] Handling LIA Action:', action);
+        // LIA Action debug removed
 
         switch (action.type) {
             // ========== Date/Filter Actions ==========
@@ -354,11 +352,17 @@ export function DashboardProvider({
                 const existingLayout = state.config.layout || [];
                 const maxY = existingLayout.reduce((max, item) => Math.max(max, item.y + item.h), 0);
 
+                // v4.5: Aplicar métricas padrão se não fornecidas (Fix: Empty Widgets)
+                const defaultMetrics = WIDGET_METRIC_DEFAULTS[widgetType]?.metrics || [];
+                const finalMetric = widgetConfig?.metric || (defaultMetrics.length > 0 ? defaultMetrics[0] : undefined);
+                const finalMetrics = widgetConfig?.metrics || (defaultMetrics.length > 1 ? defaultMetrics : undefined);
+
                 const newConfig: WidgetConfig = {
                     type: widgetType,
                     title: widgetConfig?.title || 'Novo Widget',
                     color: widgetConfig?.color || 'green',
-                    metric: widgetConfig?.metric,
+                    metric: finalMetric,
+                    metrics: finalMetrics,
                     config: widgetConfig?.config || {}
                 };
 
@@ -374,7 +378,7 @@ export function DashboardProvider({
                 };
 
                 addWidget(widgetId, newConfig, newLayout);
-                console.log('✅ [LIA] Widget adicionado:', widgetId, widgetType);
+                // Widget added
 
                 // 🎯 Feedback visual para o usuário
                 toast.success(`Widget ${widgetType} adicionado!`, {
@@ -604,7 +608,7 @@ export function DashboardProvider({
             }
 
             dispatch({ type: 'MARK_SAVED' });
-            console.log('✅ Dashboard saved successfully');
+            // Saved
         } catch (error) {
             console.error('❌ Error saving dashboard:', error);
             dispatch({ type: 'SET_ERROR', payload: 'Erro ao salvar dashboard' });
@@ -762,7 +766,7 @@ export function DashboardProvider({
                 setPlanType((currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)) as any);
             }
 
-            console.log('[DashboardContext] Loading dashboard lifecycle event:', { tenantId, businessType: currentBusinessType, plan: currentPlan });
+            // Lifecycle silenced
             loadDashboard(tenantId);
         }
     }, [tenantId, plan, currentBusinessType, loadDashboard]); // Syncs everything at once
@@ -772,7 +776,7 @@ export function DashboardProvider({
         const handleWindowMessage = (event: MessageEvent) => {
             // Validate origin if needed, but for now we trust LIA_ACTION type
             if (event.data?.type === 'LIA_ACTION' && event.data.action) {
-                console.log('📬 [DashboardContext] Received action from LIA:', event.data.action);
+                // PostMessage action received
                 handleLiaAction(event.data.action);
             }
         };
@@ -863,15 +867,19 @@ export function DashboardProvider({
         const activeTypes = Array.from(new Set(widgets.map(w => w.type)));
         const hash = getSnapshotHash();
 
-        console.log('📦 [DASHBOARD] getSnapshot hash:', hash, 'widgets:', widgets.length);
+        // Calcular próxima posição disponível (simplificado: abaixo do último widget)
+        const maxY = widgets.length > 0
+            ? Math.max(...widgets.map(w => w.position.y + w.position.h))
+            : 0;
 
         return {
             hash,
             widgets,
             widgetCount: widgets.length,
             active_widget_types: activeTypes,
-            layout_summary: `${widgets.length} widgets em grid 12-colunas`,
-            summary: `Dashboard com ${widgets.length} widgets ativos: ${activeTypes.join(', ')}.`
+            next_suggested_position: { x: 0, y: maxY, w: 6, h: 4 },
+            layout_summary: `${widgets.length} widgets ativos em grid de 12 colunas.`,
+            summary: `Dashboard com ${widgets.length} widgets ativos: ${activeTypes.join(', ')}. Próximo espaço sugerido em Y=${maxY}.`
         };
     }, [state.config, getSnapshotHash]);
 
@@ -1011,11 +1019,17 @@ export function DashboardProvider({
 
         // Criar novo widget com mesma posição
         const newWidgetId = `widget_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        // v4.5: Aplicar métricas padrão se não fornecidas (Fix: Empty Widgets)
+        const defaultMetrics = WIDGET_METRIC_DEFAULTS[patch.new_widget_type]?.metrics || [];
+        const finalMetric = patch.new_widget_config?.metric || (defaultMetrics.length > 0 ? defaultMetrics[0] : targetWidget.metric);
+        const finalMetrics = patch.new_widget_config?.metrics || (defaultMetrics.length > 1 ? defaultMetrics : undefined);
+
         const newConfig: WidgetConfig = {
             type: patch.new_widget_type,
             title: patch.new_widget_config?.title || `Novo ${patch.new_widget_type}`,
             color: patch.new_widget_config?.color || targetWidget.color || 'blue',
-            metric: patch.new_widget_config?.metric || targetWidget.metric,
+            metric: finalMetric,
+            metrics: finalMetrics,
             icon: patch.new_widget_config?.icon,
             config: patch.new_widget_config?.config || {}
         };
@@ -1044,28 +1058,48 @@ export function DashboardProvider({
         }
 
         const newWidgetId = `widget_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const defaultMetrics = WIDGET_METRIC_DEFAULTS[patch.widget_type]?.metrics || [];
+        const finalMetric = patch.widget_config?.metric || (defaultMetrics.length > 0 ? defaultMetrics[0] : undefined);
+        const finalMetrics = patch.widget_config?.metrics || (defaultMetrics.length > 1 ? defaultMetrics : undefined);
+
         const newConfig: WidgetConfig = {
             type: patch.widget_type,
             title: patch.widget_config?.title || `Novo ${patch.widget_type}`,
             color: patch.widget_config?.color || 'blue',
-            metric: patch.widget_config?.metric,
+            metric: finalMetric,
+            metrics: finalMetrics,
             icon: patch.widget_config?.icon,
             config: patch.widget_config?.config || {}
         };
 
+        // --- LÓGICA DE POSICIONAMENTO INTELIGENTE ---
+        let x = patch.position?.x;
+        let y = patch.position?.y;
+        let w = patch.position?.w || (patch.widget_type.includes('kpi') ? 3 : 6);
+        let h = patch.position?.h || (patch.widget_type.includes('kpi') ? 2 : 4);
+
+        // Se x ou y não forem fornecidos, calcular automático
+        if (x === undefined || y === undefined) {
+            const maxY = state.config.layout.length > 0
+                ? Math.max(...state.config.layout.map(l => l.y + l.h))
+                : 0;
+            x = 0;
+            y = maxY;
+            console.log(`🧠 [DASHBOARD] Posição automática calculada: x=${x}, y=${y}`);
+        }
+
         const newLayout: LayoutItem = {
             id: newWidgetId,
             i: newWidgetId,
-            x: patch.position?.x || 0,
-            y: patch.position?.y || 0,
-            w: patch.position?.w || 6,
-            h: patch.position?.h || 4,
+            x: x,
+            y: y,
+            w: w,
+            h: h,
             minW: 2,
             minH: 2
         };
 
         addWidget(newWidgetId, newConfig, newLayout);
-        console.log('✅ [LIA] Widget adicionado transacionalmente:', newWidgetId, '(', patch.widget_type, ')');
 
         return createAck(actionId, 'applied', preHash, 'SUCCESS');
     }, [state.config, getSnapshotHash, createAck, addWidget]);
@@ -1104,7 +1138,6 @@ export function DashboardProvider({
             const snapshot = getSnapshot();
             if (snapshot) {
                 (window as any).__liaLastSnapshot = snapshot;
-                console.log('📦 [DASHBOARD] Snapshot atualizado no cache:', snapshot.widgetCount, 'widgets');
             }
         };
 

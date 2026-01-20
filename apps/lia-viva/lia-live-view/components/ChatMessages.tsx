@@ -28,7 +28,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, isLoading = false
     <div className={`flex-1 overflow-y-auto ${paddingClass} ${spaceClass} scrollbar-thin scrollbar-thumb-neon-blue/20`}>
       {messages.length === 0 && !isLoading && (
         <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-600 font-mono pointer-events-none">
-          <div className={`animate-pulse ${compact ? 'text-xs' : 'text-sm'} tracking-widest`}>AWAITING COMMUNICATION...</div>
+          <div className={`animate-pulse ${compact ? 'text-xs' : 'text-sm'} tracking-widest`}>AGUARDANDO COMUNICAÇÃO...</div>
         </div>
       )}
 
@@ -38,11 +38,10 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, isLoading = false
           <div key={msg.id} className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'}`}>
             <div className={`flex flex-col ${maxWidthClass} ${isUser ? 'items-end' : 'items-start'}`}>
 
-              <div className={`relative ${compact ? 'p-2' : 'p-4'} ${compact ? 'rounded-lg' : 'rounded-2xl'} shadow-lg border backdrop-blur-md transition-all ${
-                isUser
+              <div className={`relative ${compact ? 'p-2' : 'p-4'} ${compact ? 'rounded-lg' : 'rounded-2xl'} shadow-lg border backdrop-blur-md transition-all ${isUser
                   ? 'bg-neon-purple/10 border-neon-purple/40 text-gray-100 rounded-br-none'
                   : 'bg-gray-900/80 border-neon-green/30 text-gray-200 rounded-bl-none'
-              }`}>
+                }`}>
 
                 {msg.emotion && !compact && (
                   <div className="text-xs font-mono text-neon-green mb-1 uppercase">

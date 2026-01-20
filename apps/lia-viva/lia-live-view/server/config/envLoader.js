@@ -10,8 +10,11 @@ const __dirname = path.dirname(__filename);
 const rootPath = path.resolve(__dirname, '..', '..', '..', '..', '..');
 
 const envPaths = [
+    path.join(rootPath, '.env.local'),
     path.join(rootPath, '.env.development'),
     path.join(rootPath, '.env'),
+    path.resolve(__dirname, '..', '..', '..', 'web', '.env'), // Correct path to apps/web/.env
+    path.resolve(__dirname, '..', '..', '..', '..', 'web', '.env'), // Fallback for alternative structure
     path.resolve(__dirname, '..', '..', '..', 'web', 'api', '.env'),
     path.resolve(__dirname, '..', '..', '..', '.env'),
     path.resolve(__dirname, '..', '..', '.env'),

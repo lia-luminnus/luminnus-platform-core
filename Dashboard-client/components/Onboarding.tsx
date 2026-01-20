@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { BusinessCategory, ModuleId } from '../types';
 import { useAppStore } from '../store/useAppStore';
 import { MODULE_REGISTRY, CATEGORY_PRESETS } from '../config/modules';
-import { LanguageContext } from '../App';
+import { LanguageContext } from '../contexts/LanguageContext';
 import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 import { completeOnboarding as completeOnboardingDB } from '../services/profileService';
 import toast from 'react-hot-toast';
@@ -80,7 +80,7 @@ const Onboarding: React.FC = () => {
   // Finalize setup and go to dashboard
   const finalizeOnboarding = async () => {
     setIsLoading(true);
-    const loadingToast = toast.loading('A LIA está construindo seu painel modular...');
+    const loadingToast = toast.loading(t('liaBuildingDashboard'));
 
     try {
       // Salvar no banco apenas se o usuário estiver autenticado
@@ -180,7 +180,7 @@ const Onboarding: React.FC = () => {
               onClick={() => setStep('category')}
               className="px-6 py-3 rounded-xl border border-white/20 text-white hover:bg-white/5 transition-colors"
             >
-              Voltar
+              {t('back')}
             </button>
             <button
               onClick={() => setStep('integrations')}
@@ -204,17 +204,17 @@ const Onboarding: React.FC = () => {
             <div className="inline-flex items-center justify-center p-3 bg-brand-primary/10 rounded-2xl mb-4 border border-brand-primary/20">
               <span className="material-symbols-outlined text-4xl text-brand-primary">hub</span>
             </div>
-            <h1 className="text-3xl font-bold mb-2">Hub de Integrações</h1>
-            <p className="text-gray-400">Conecte suas ferramentas favoritas para que a LIA possa automatizar tarefas.</p>
+            <h1 className="text-3xl font-bold mb-2">{t('hubIntegrations')}</h1>
+            <p className="text-gray-400">{t('hubIntegrationsDesc')}</p>
           </div>
 
           {/* Preview das categorias disponíveis */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
             {[
-              { icon: 'work', label: 'Produtividade', count: '8+' },
-              { icon: 'chat', label: 'Comunicação', count: '5+' },
-              { icon: 'payments', label: 'Finanças', count: '5+' },
-              { icon: 'store', label: 'E-commerce', count: '3+' },
+              { icon: 'work', label: t('productivity'), count: '8+' },
+              { icon: 'chat', label: t('communication'), count: '5+' },
+              { icon: 'payments', label: t('finance'), count: '5+' },
+              { icon: 'store', label: t('ecommerce'), count: '3+' },
             ].map((cat, i) => (
               <div key={i} className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
                 <span className="material-symbols-outlined text-2xl text-brand-primary mb-2">{cat.icon}</span>
@@ -228,7 +228,7 @@ const Onboarding: React.FC = () => {
             <div className="flex gap-4 items-start">
               <span className="material-symbols-outlined text-green-400">info</span>
               <p className="text-sm text-gray-300">
-                <span className="font-bold text-white">Dica da LIA:</span> Você pode configurar as integrações agora no Hub completo ou pular e fazer depois. Quanto mais conexões, mais inteligente eu fico!
+                <span className="font-bold text-white">{t('liaTip')}</span> {t('liaTipDesc')}
               </p>
             </div>
           </div>
@@ -245,7 +245,7 @@ const Onboarding: React.FC = () => {
                 onClick={async () => {
                   // Salvar onboarding e ir para o Hub de Integrações
                   setIsLoading(true);
-                  const loadingToast = toast.loading('Preparando seu Hub de Integrações...');
+                  const loadingToast = toast.loading(t('preparinhHub'));
 
                   // Timeout de segurança de 5 segundos
                   const timeoutPromise = new Promise((_, reject) =>
@@ -265,7 +265,7 @@ const Onboarding: React.FC = () => {
 
                         // Instantiate modular dashboard
                         try {
-                          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+                          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
                           await fetch(`${API_URL}/api/dashboard/tenant/${tenantId}/dashboard/instantiate`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -308,7 +308,7 @@ const Onboarding: React.FC = () => {
                 }}
                 className="px-10 py-3 rounded-xl bg-brand-primary text-white font-bold shadow-[0_0_20px_rgba(139,92,246,0.5)] hover:bg-opacity-90 transition-all flex items-center gap-2"
               >
-                <span>Abrir Hub Completo</span>
+                <span>{t('openFullHub')}</span>
                 <span className="material-symbols-outlined">arrow_forward</span>
               </button>
             </div>
@@ -316,7 +316,7 @@ const Onboarding: React.FC = () => {
               onClick={finalizeOnboarding}
               className="text-gray-400 hover:text-white text-sm underline underline-offset-4 transition-colors"
             >
-              Pular por agora, configurar depois →
+              {t('skipForNow')} →
             </button>
           </div>
         </div>
@@ -333,29 +333,29 @@ const Onboarding: React.FC = () => {
             <span className="material-symbols-outlined text-4xl text-brand-primary">rocket_launch</span>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-            Escolha o tipo do seu negócio
+            {t('chooseBusinessType')}
           </h1>
           <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-            A LIA irá pré-configurar os módulos ideais para sua área de atuação.
+            {t('liaPreconfigure')}
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pb-12">
           {categories.map((category, index) => (
             <button
               key={category.id}
               onClick={() => handleSelectCategory(category)}
-              className="group relative flex flex-col items-start p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-brand-primary/50 transition-all duration-300 hover:shadow-[0_0_20px_rgba(139,92,246,0.15)] text-left"
+              className="group relative flex flex-col items-start p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-brand-primary/50 transition-all duration-300 hover:shadow-[0_0_20px_rgba(139,92,246,0.15)] text-left"
               style={{ animationDelay: `${index * 50}ms` }}
             >
-              <div className="p-3 rounded-xl bg-brand-primary/10 text-brand-primary mb-4 group-hover:scale-110 transition-transform duration-300">
-                <span className="material-symbols-outlined text-3xl">{category.icon}</span>
+              <div className="p-2.5 rounded-xl bg-brand-primary/10 text-brand-primary mb-3 group-hover:scale-110 transition-transform duration-300">
+                <span className="material-symbols-outlined text-2xl">{category.icon}</span>
               </div>
-              <h3 className="text-xl font-bold mb-2 group-hover:text-brand-primary transition-colors">
-                {category.title}
+              <h3 className="text-lg font-bold mb-1 group-hover:text-brand-primary transition-colors">
+                {t(`sector_${category.id}` as any) || category.title}
               </h3>
-              <p className="text-sm text-gray-400 leading-relaxed">
-                {category.description}
+              <p className="text-xs text-gray-400 leading-relaxed">
+                {t(`desc_${category.id}` as any) || category.description}
               </p>
               <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0">
                 <span className="material-symbols-outlined text-brand-primary">arrow_forward</span>
@@ -380,16 +380,16 @@ const Onboarding: React.FC = () => {
               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-500 via-purple-600 to-blue-500 flex items-center justify-center mb-4">
                 <span className="material-symbols-outlined text-xl text-white">auto_awesome</span>
               </div>
-              <h2 className="text-2xl font-bold mb-2">Conte para a LIA sobre seu negócio</h2>
+              <h2 className="text-2xl font-bold mb-2">{t('tellLiaAboutBusiness')}</h2>
               <p className="text-gray-400 text-sm">
-                Descreva o que você faz para sugerirmos os melhores módulos.
+                {t('descBusinessLiaSugg')}
               </p>
             </div>
 
             <textarea
               value={customDescription}
               onChange={(e) => setCustomDescription(e.target.value)}
-              placeholder="Ex: Sou um personal trainer focado em consultoria online..."
+              placeholder={t('customDescPlaceholder')}
               className="w-full h-32 bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent resize-none text-sm mb-6"
             />
 
@@ -398,14 +398,14 @@ const Onboarding: React.FC = () => {
                 onClick={() => setIsModalOpen(false)}
                 className="px-5 py-2.5 rounded-xl text-gray-400 hover:bg-white/5 hover:text-white transition-colors text-sm font-medium"
               >
-                Cancelar
+                {t('cancel')}
               </button>
               <button
                 onClick={handleCustomSubmit}
                 disabled={!customDescription.trim()}
                 className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-600 to-blue-600 text-white font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                <span>Continuar</span>
+                <span>{t('continue')}</span>
                 <span className="material-symbols-outlined text-lg">arrow_forward</span>
               </button>
             </div>

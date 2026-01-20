@@ -5,9 +5,9 @@
  */
 
 import { Router, Request, Response } from 'express';
-import metricsService from '../services/metricsService';
+import metricsService from '../services/metricsService.js';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * GET /api/metrics/query
@@ -70,6 +70,13 @@ router.get('/query', async (req: Request, res: Response) => {
                     tenant_id as string,
                     entity_type as any,
                     { startDate, endDate, limit: parseInt(limit as string) }
+                );
+                break;
+
+            case 'alerts':
+                data = await metricsService.queryAlerts(
+                    tenant_id as string,
+                    parseInt(limit as string)
                 );
                 break;
 

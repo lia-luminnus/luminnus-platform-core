@@ -247,8 +247,12 @@ export class SchemaValidator {
         let secretsMasked: string[] = [];
         let sanitizedData: any = null;
 
-        // Extrair JSON do texto
-        const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) || text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+        // Extrair JSON do texto: Priorizar blocos de código. 
+        // Loose matching ({...}) apenas se for explicitamente solicitado JSON ou se o texto começar/terminar com chaves.
+        const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) ||
+            (options.jsonOnly || text.trim().startsWith('{') || text.trim().startsWith('[')
+                ? text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/)
+                : null);
 
         // REGRA DE OURO: Se JSON NÃO foi solicitado, mas está presente de forma dominante
         // Só bloquear se o JSON for REALMENTE invasivo (>70% da resposta) e parecer técnico

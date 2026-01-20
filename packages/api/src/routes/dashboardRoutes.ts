@@ -5,9 +5,9 @@
  */
 
 import { Router, Request, Response } from 'express';
-import dashboardService from '../services/dashboardService';
+import dashboardService from '../services/dashboardService.js';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * GET /api/tenant/:tenantId/dashboard/active

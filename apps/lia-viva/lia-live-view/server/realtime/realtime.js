@@ -13,6 +13,7 @@ import fs from "fs";
 import { setupMultimodalEvents } from "./multimodal-events.js";
 import path from "path";
 import { OutputContracts } from "../services/outputContracts.js";
+import { getLiaGreeting } from "@luminnus/lia-runtime";
 
 dotenv.config();
 
@@ -158,14 +159,16 @@ const webSearchTool = {
 import { loadImportantMemories, detectAndSaveMemory } from "../config/supabase.js";
 import { LIA_PERSONALITY_SHORT } from "../personality/lia-personality.js";
 
-async function runChatWithTools(conversationId, userMessage, contextOptions = {}) {
+async function runChatWithTools(conversationId, userMessage, contextOptions = {}, origin = "voice") {
   try {
     const userId = contextOptions.userId;
     const tenantId = contextOptions.tenantId || userId;
 
     if (!userId) {
-      console.warn("⚠️ [runChatWithTools] Chamado sem userId!");
+      console.warn("⚠️ [runChatWithTools] Chamado sem userId! Usando ID padrão.");
     }
+
+    console.log(`🤖 [runChatWithTools] Conv: ${conversationId} | User: ${userId} | Origin: ${origin}`);
 
     // v1.1.2: Carregar contexto completo via MemoryService
     const { getContext, updateSummaryIfNeeded } = await import("../services/memoryService.js");
@@ -173,9 +176,14 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
 
     const context = await getContext(conversationId, userId, userMessage, contextOptions.userLocation);
 
+    // Personalidade v4.0 Centralizada (SSOT)
+    const admin_diagnostic_mode = contextOptions.admin_diagnostic_mode === true;
+    const basePersona = getLiaGreeting(admin_diagnostic_mode);
+
     // Build messages array with system context + history + CURRENT message
+    // CRITICAL FIX: Include context.systemInstruction which contains ALL MEMORIES!
     const messages = [
-      { role: "system", content: context.systemInstruction },
+      { role: "system", content: basePersona + '\n\n' + (context.systemInstruction || '') + (contextOptions.userLocation ? `\n\n[Localização Atual: ${contextOptions.userLocation}]` : '') },
       ...context.history.map(msg => ({
         role: msg.role === 'assistant' ? 'assistant' : 'user',
         content: msg.content
@@ -206,134 +214,129 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
     });
 
     let finalReply = gptResponse.text;
-    let toolCall = gptResponse.function_call;
+    let turnCalls = gptResponse.tool_calls || (gptResponse.function_call ? [gptResponse.function_call] : []);
 
-    // Loop de execução de ferramentas
-    if (toolCall) {
-      console.log(`🔧 [Realtime] Chamando ferramenta: ${toolCall.name}`);
-      const args = JSON.parse(toolCall.arguments || "{}");
+    // v4.0 Ciclo Agêntico para Voz
+    let turnCount = 0;
+    const MAX_TURNS = 3;
+    let finalDashboardAction = null;
+    let finalImagePayload = null;
 
-      const function_result = await ToolService.execute(toolCall.name, args, {
-        userId,
-        tenantId,
-        userLocation: contextOptions.userLocation
+    while (turnCalls.length > 0 && turnCount < MAX_TURNS) {
+      turnCount++;
+      console.log(`🔄 [Realtime] Turno ${turnCount}: ${turnCalls.length} ferramentas`);
+
+      for (const call of turnCalls) {
+        console.log(`🔧 [Realtime] Executando: ${call.name}`);
+        const args = typeof call.arguments === 'string' ? JSON.parse(call.arguments || "{}") : call.arguments;
+
+        let function_result;
+        try {
+          function_result = await ToolService.execute(call.name, args, {
+            userId,
+            tenantId,
+            userLocation: contextOptions.userLocation
+          });
+
+          if (!function_result || function_result.error) {
+            throw new Error(function_result?.error || 'Retorno vazio da ferramenta');
+          }
+        } catch (toolError) {
+          console.error(`❌ [Realtime] Erro na ferramenta ${call.name}:`, toolError.message);
+          // ANTI-LOOP GUARDRAIL: Falhou + por quê + plano B
+          finalReply = `Falhou ao executar ${call.name}. Motivo: ${toolError.message}. Plano B: Vou tentar resolver de outra forma ou seguir sem essa informação. Quer que eu tente novamente por outro caminho ou prefere seguir para o próximo tópico? (A/B)`;
+          turnCalls = []; // Abortar loop agêntico
+          break;
+        }
+
+        // TRATAMENTO: generateImage
+        if (call.name === 'generateImage' && function_result?.url) {
+          finalImagePayload = {
+            type: 'image',
+            title: 'Imagem gerada',
+            data: {
+              url: function_result.url,
+              prompt: function_result.prompt || args.prompt,
+              alt: function_result.prompt || args.prompt,
+              caption: function_result.prompt || args.prompt
+            },
+            timestamp: Date.now()
+          };
+          break;
+        }
+
+        // TRATAMENTO: Dashboard Actions (Add/Replace/Reorganize)
+        if (call.name.startsWith('dashboard') && call.name !== 'dashboardGetSnapshot' && function_result?.action) {
+          finalDashboardAction = {
+            name: function_result.action,
+            arguments: JSON.stringify(function_result.params || {}),
+            message: function_result.message
+          };
+          // Historico
+          messages.push({ role: "assistant", content: null, function_call: call });
+          messages.push({ role: "function", name: call.name, content: JSON.stringify(function_result) });
+          break;
+        }
+
+        // TRATAMENTO ESPECIAL: Gmail Tools (Preservar links formatados)
+        // v4.9 - Previne que o segundo call do GPT reformate e perca os URLs
+        if ((call.name === 'listGmailMessages' || call.name === 'searchGmail') && function_result?.message) {
+          console.log(`📧 [Realtime] Gmail tool detectado - usando resposta pré-formatada`);
+          finalReply = function_result.message; // Usar a mensagem já formatada com links
+          turnCalls = []; // Encerrar o loop agêntico - não precisa de segundo call
+          messages.push({ role: "assistant", content: null, function_call: call });
+          messages.push({ role: "function", name: call.name, content: JSON.stringify(function_result) });
+          break;
+        }
+
+        // Historico para o proximo turno
+        messages.push({ role: "assistant", content: null, function_call: call });
+        messages.push({ role: "function", name: call.name, content: JSON.stringify(function_result) });
+      }
+
+      if (finalImagePayload || finalDashboardAction) break;
+
+      // Chama AI de novo
+      const nextCall = await runGpt4Mini("Continue a conversa com base nos resultados.", {
+        conversationId,
+        temperature: 0.7,
+        messages
       });
 
-      // =====================================================
-      // TRATAMENTO ESPECIAL PARA IMAGENS (v1.4)
-      // Retorna payload estruturado para exibição na lousa
-      // =====================================================
-      if (toolCall.name === 'generateImage' && function_result?.url) {
-        console.log(`🖼️ [Realtime] Imagem gerada com sucesso: ${function_result.url}`);
-
-        const imagePayload = {
-          type: 'image',
-          title: 'Imagem gerada',
-          data: {
-            url: function_result.url,
-            prompt: function_result.prompt || args.prompt,
-            alt: function_result.prompt || args.prompt,
-            caption: function_result.prompt || args.prompt
-          },
-          timestamp: Date.now()
-        };
-
-        // Persistir mensagens
-        const { saveMessage } = await import("../config/supabase.js");
-        await saveMessage(conversationId, "user", userMessage, "voice");
-        await saveMessage(conversationId, "assistant", `🖼️ Imagem gerada: ${function_result.prompt || args.prompt}`, "voice");
-
-        return {
-          voiceScript: `Pronto! Gerei a imagem que você pediu.`,
-          chatPayload: JSON.stringify(imagePayload),
-          dynamicContent: imagePayload,
-          text: JSON.stringify(imagePayload),
-          mode: "voice",
-          isStructured: true
-        };
-      }
-
-      // =====================================================
-      // TRATAMENTO ESPECIAL PARA DASHBOARD ACTIONS (v3.0)
-      // Emite action para o frontend executar no DashboardContext
-      // =====================================================
-      if (toolCall.name.startsWith('dashboard') && function_result?.action) {
-        console.log(`🎯 [Realtime] Ação de dashboard: ${function_result.action}`);
-
-        const naturalReply = function_result.message || "Pronto, já preparei o dashboard para você!";
-
-        // Persistir mensagens
-        const { saveMessage } = await import("../config/supabase.js");
-        await saveMessage(conversationId, "user", userMessage, "voice");
-        await saveMessage(conversationId, "assistant", naturalReply, "voice");
-
-        // Retornar com action para o frontend
-        return {
-          voiceScript: naturalReply,
-          chatPayload: naturalReply,
-          text: naturalReply,
-          mode: "voice",
-          // CRÍTICO: Incluir action para o frontend processar
-          action: {
-            name: function_result.action,
-            arguments: JSON.stringify(function_result.params || {})
-          },
-          function_call: {
-            name: function_result.action,
-            arguments: JSON.stringify(function_result.params || {})
-          }
-        };
-      }
-
-      const isGmailRead = ['listGmailMessages', 'searchGmail'].includes(toolCall.name);
-
-      // =====================================================
-      // TRATAMENTO ESPECIAL PARA GMAIL READ (v3.4)
-      // Bypassa humanização e governança para preservar markdown
-      // =====================================================
-      if (isGmailRead && function_result?.success) {
-        console.log(`📧 [Realtime] Gmail Read detectado (H-F Bypass). Preservando markdown.`);
-
-        const gmailReply = function_result.message;
-
-        // Persistir mensagens
-        const { saveMessage } = await import("../config/supabase.js");
-        await saveMessage(conversationId, "user", userMessage, "voice");
-        await saveMessage(conversationId, "assistant", gmailReply, "voice");
-
-        return {
-          voiceScript: "Aqui estão os seus e-mails:",
-          chatPayload: gmailReply,
-          text: gmailReply,
-          mode: "voice",
-          isStructured: true, // Voltar para true para ativar cards/containers
-          table: function_result.table // Passar a tabela para o chamador emitir
-        };
-      }
-
-      // Second GPT call with tool results (para outras ferramentas)
-      const isJsonExplicit = OutputContracts.isJsonRequested(userMessage);
-
-      // v3.3: Prompt de humanização adaptativo
-      let humanizedPrompt = OutputContracts.buildHumanizedPrompt(userMessage, toolCall.name, function_result);
-
-      console.log(`🧠 [Realtime] Gerando resposta humanizada (Tipo: Padrão, JSON: ${isJsonExplicit})`);
-
-      const secondResponse = await runGpt4Mini(
-        humanizedPrompt,
-        {
-          conversationId,
-          temperature: 0.7,
-          maxTokens: 800,
-          messages: [
-            ...messages,
-            { role: "assistant", content: null, function_call: toolCall },
-            { role: "function", name: toolCall.name, content: JSON.stringify(function_result) }
-          ]
-        }
-      );
-      finalReply = secondResponse.text;
+      finalReply = nextCall.text || finalReply;
+      turnCalls = nextCall.tool_calls || (nextCall.function_call ? [nextCall.function_call] : []);
     }
+
+    // Retornos Especiais
+    if (finalImagePayload) {
+      const naturalReply = `Gerei a imagem que você pediu sobre ${finalImagePayload.data.prompt}.`;
+      await saveMessage(conversationId, "user", userMessage, origin);
+      await saveMessage(conversationId, "assistant", naturalReply, origin);
+
+      return {
+        voiceScript: naturalReply,
+        chatPayload: JSON.stringify(finalImagePayload),
+        dynamicContent: finalImagePayload,
+        text: JSON.stringify(finalImagePayload),
+        mode: "voice",
+        isStructured: true
+      };
+    }
+
+    if (finalDashboardAction) {
+      const naturalReply = finalDashboardAction.message || "Dashboard atualizado!";
+      await saveMessage(conversationId, "user", userMessage, origin);
+      await saveMessage(conversationId, "assistant", naturalReply, origin);
+
+      return {
+        voiceScript: naturalReply,
+        chatPayload: naturalReply,
+        text: naturalReply,
+        mode: "voice",
+        action: { name: finalDashboardAction.name, arguments: finalDashboardAction.arguments }
+      };
+    }
+
 
 
     // =====================================================
@@ -371,9 +374,9 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
     }
 
     // v1.1.2: Persistir mensagens no banco (usa chatPayload, não voiceScript curto)
-    await saveMessage(conversationId, "user", userMessage, "voice");
-    await saveMessage(conversationId, "assistant", chatPayload, "voice");
-    console.log(`💾 Voz persistida para conv ${conversationId}`);
+    await saveMessage(conversationId, "user", userMessage, origin);
+    await saveMessage(conversationId, "assistant", chatPayload, origin);
+    console.log(`💾 Mensagem persistida (${origin}) para conv ${conversationId}`);
 
     // v1.2: Disparar atualização de resumo incremental (Enterprise)
     if (typeof updateSummaryIfNeeded === 'function') {
@@ -411,8 +414,8 @@ export function setupRealtime(io) {
     // Identidade da conversa
     // -----------------------------
     socket.on("register-conversation", payload => {
-      const { conversationId } = typeof payload === "string"
-        ? { conversationId: payload }
+      const { conversationId, admin_diagnostic_mode } = typeof payload === "string"
+        ? { conversationId: payload, admin_diagnostic_mode: false }
         : (payload || {});
 
       // Contexto já extraído e validado pelo middleware socketAuth
@@ -420,11 +423,12 @@ export function setupRealtime(io) {
       socket.conversationId = conversationId || auth.conversationId;
       socket.userId = auth.userId;
       socket.tenantId = auth.tenantId;
+      socket.admin_diagnostic_mode = admin_diagnostic_mode || false;
 
       if (socket.conversationId) socket.join(`conv:${socket.conversationId}`);
       if (socket.tenantId) socket.join(`tenant:${socket.tenantId}`);
 
-      console.log("📋 [Socket] ConversationID vinculado:", socket.conversationId, "User:", socket.userId);
+      console.log("📋 [Socket] ConversationID vinculado:", socket.conversationId, "User:", socket.userId, "Admin:", socket.admin_diagnostic_mode);
     });
 
     // Setup multimodal events
@@ -489,10 +493,11 @@ export function setupRealtime(io) {
         const contextOptions = {
           userId: auth.userId || socket.userId,
           tenantId: auth.tenantId || socket.tenantId,
-          userLocation: session?.userLocation
+          userLocation: session?.userLocation,
+          admin_diagnostic_mode: socket.admin_diagnostic_mode
         };
 
-        const resposta = await runChatWithTools(convId, text, contextOptions);
+        const resposta = await runChatWithTools(convId, text, contextOptions, "text");
 
         // Auto-memória para chat realtime
         if (contextOptions.userId) {
@@ -635,13 +640,14 @@ export function setupRealtime(io) {
         const contextOptions = {
           userId: auth.userId || socket.userId,
           tenantId: auth.tenantId || socket.tenantId,
-          userLocation: session?.userLocation
+          userLocation: session?.userLocation,
+          admin_diagnostic_mode: socket.admin_diagnostic_mode
         };
 
         // Deduplicação
         if (lastTranscriptionCache.get(convId) === texto) {
           console.log("♻️ [Realtime] Transcrição duplicada detectada, gerando resposta rápida...");
-          const resposta = await runChatWithTools(convId, texto, contextOptions);
+          const resposta = await runChatWithTools(convId, texto, contextOptions, "voice");
           // Emite texto e tenta áudio
           socket.emit("lia-message", resposta);
           try {
@@ -657,7 +663,7 @@ export function setupRealtime(io) {
         lastTranscriptionCache.set(convId, texto);
 
         // GPT
-        const resposta = await runChatWithTools(convId, texto, contextOptions);
+        const resposta = await runChatWithTools(convId, texto, contextOptions, "voice");
 
         // Extrair texto para TTS (voiceScript) e para chat (chatPayload ou text)
         const textoParaTTS = typeof resposta === 'string'

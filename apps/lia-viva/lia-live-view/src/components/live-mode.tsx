@@ -330,7 +330,7 @@ export function LiveMode() {
         <div className="w-80 md:w-96 max-h-[450px] rounded-2xl overflow-hidden border border-[rgba(188,19,254,0.2)] bg-[rgba(10,20,40,0.7)] backdrop-blur-xl shadow-xl">
           {/* Chat Header */}
           <div className="px-4 py-3 border-b border-[rgba(188,19,254,0.15)] bg-[rgba(0,0,0,0.3)] flex justify-between items-center">
-            <h3 className="text-sm font-bold text-[#bc13fe]">💬 CHAT LOG</h3>
+            <h3 className="text-sm font-bold text-[#bc13fe]">💬 REGISTRO DE CHAT</h3>
             {scopeMessages.length > 0 && (
               <span className="text-[10px] text-[rgba(224,247,255,0.4)]">
                 {scopeMessages.length} msgs

@@ -83,7 +83,7 @@ export interface LiaRuntimeConfig {
     /** ID do tenant */
     tenantId?: string;
 
-    /** Chave para recuperar o token do localStorage (opcional, padrão sb-dashboard-client-auth) */
+    /** Chave para recuperar o token do localStorage (opcional, padrão sb-dashboard-auth) */
     authStorageKey?: string;
 
     /** Token de autenticação Supabase (se fornecido, ignora localStorage) */

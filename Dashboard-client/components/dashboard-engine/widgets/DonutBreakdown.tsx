@@ -4,7 +4,7 @@
  * Gráfico donut com breakdown por dimensão
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useContext } from 'react';
 import { Loader2 } from 'lucide-react';
 import {
     PieChart,
@@ -15,6 +15,7 @@ import {
     Legend,
 } from 'recharts';
 import { WidgetProps, MetricBreakdownItem } from '../types';
+import { LanguageContext } from '../../../contexts/LanguageContext';
 
 // ============================================
 // Helpers
@@ -63,9 +64,10 @@ function DonutBreakdown({ id, config, data, loading, error, isEditMode }: Widget
     const { title, config: widgetConfig } = config;
     const showLegend = widgetConfig?.showLegend !== false;
     const showPercentage = widgetConfig?.showPercentage !== false;
-    const innerRadius = widgetConfig?.innerRadius || 40;
+    const innerRadius = widgetConfig?.innerRadius || '60%';
 
     const [activeIndex, setActiveIndex] = useState<number | null>(null);
+    const { t } = useContext(LanguageContext);
 
     // Transform data for recharts - Group duplicates, then group small slices for clarity
     const chartData = useMemo(() => {
@@ -74,7 +76,8 @@ function DonutBreakdown({ id, config, data, loading, error, isEditMode }: Widget
         // First pass: normalize names and group duplicates
         const grouped: Record<string, { name: string; value: number }> = {};
         data.forEach((item: any, index: number) => {
-            const name = item.name || item.dimension_value || `Categoria ${index + 1}`;
+            const rawName = item.name || item.dimension_value || `categoria ${index + 1}`;
+            const name = t(`cat_${rawName.toLowerCase()}`);
             const val = Number(item.value) || 0;
             if (grouped[name]) {
                 grouped[name].value += val;
@@ -112,7 +115,7 @@ function DonutBreakdown({ id, config, data, loading, error, isEditMode }: Widget
         }));
 
         processed.push({
-            name: 'Outros',
+            name: t('cat_outros'),
             value: othersValue,
             percentage: totalValue > 0 ? (othersValue / totalValue) * 100 : 0,
             fill: '#94a3b8',
@@ -128,7 +131,7 @@ function DonutBreakdown({ id, config, data, loading, error, isEditMode }: Widget
 
     if (loading) {
         return (
-            <div className="h-full w-full rounded-2xl p-4 bg-white/5 border border-white/10 flex items-center justify-center">
+            <div className="h-full w-full rounded-2xl p-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 flex items-center justify-center">
                 <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
             </div>
         );
@@ -145,12 +148,12 @@ function DonutBreakdown({ id, config, data, loading, error, isEditMode }: Widget
     // Empty state
     if (!chartData || chartData.length === 0) {
         return (
-            <div className="h-full w-full rounded-2xl p-4 bg-white/5 border border-white/10 flex flex-col">
-                <h3 className="text-sm font-semibold text-white mb-2">{title}</h3>
+            <div className="h-full w-full rounded-2xl p-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 flex flex-col">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">{title}</h3>
                 <div className="flex-1 flex items-center justify-center">
                     <div className="text-center">
-                        <span className="material-symbols-outlined text-4xl text-gray-600 mb-2">donut_large</span>
-                        <p className="text-sm text-gray-500">Sem dados para o período</p>
+                        <span className="material-symbols-outlined text-4xl text-gray-400 dark:text-gray-600 mb-2">donut_large</span>
+                        <p className="text-sm text-gray-500">{t('noDataForPeriod')}</p>
                     </div>
                 </div>
             </div>
@@ -158,14 +161,14 @@ function DonutBreakdown({ id, config, data, loading, error, isEditMode }: Widget
     }
 
     return (
-        <div className={`h-full w-full rounded-2xl p-5 bg-white/5 border border-white/10 flex flex-col relative overflow-hidden group shadow-xl ${isEditMode ? 'cursor-move' : ''}`}>
+        <div className={`h-full w-full rounded-2xl p-5 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 flex flex-col relative overflow-hidden group shadow-xl ${isEditMode ? 'cursor-move' : ''}`}>
             {/* Background Glow */}
             <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-brand-primary/10 blur-3xl rounded-full pointer-events-none" />
 
             <div className="flex items-center justify-between mb-4 relative z-10">
                 <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-brand-primary text-lg">donut_large</span>
-                    <h3 className="text-sm font-bold text-white tracking-tight uppercase opacity-80">{title}</h3>
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight uppercase opacity-80">{title}</h3>
                 </div>
             </div>
 
@@ -229,7 +232,7 @@ function DonutBreakdown({ id, config, data, loading, error, isEditMode }: Widget
                                             <div className="bg-[#111827]/95 backdrop-blur-md border border-white/10 p-3 rounded-xl shadow-2xl z-[110] relative no-drag">
                                                 <p className="text-xs font-bold text-gray-400 mb-1">{item.name}</p>
                                                 <p className="text-sm font-black text-white">{formatCurrency(item.value)}</p>
-                                                <p className="text-[10px] text-brand-primary mt-1 font-mono">{item.percentage.toFixed(1)}% do total</p>
+                                                <p className="text-[10px] text-brand-primary mt-1 font-mono">{item.percentage.toFixed(1)}% {t('fromTotal') || 'do total'}</p>
                                             </div>
                                         );
                                     }
@@ -241,9 +244,9 @@ function DonutBreakdown({ id, config, data, loading, error, isEditMode }: Widget
 
                     {/* Center Label - Enhanced */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="text-center bg-[#0a0f1a]/40 backdrop-blur-sm w-20 h-20 rounded-full flex flex-col items-center justify-center border border-white/5 shadow-inner">
-                            <p className="text-sm font-black text-white leading-none mb-0.5">{formatCurrency(total)}</p>
-                            <p className="text-[9px] text-gray-500 uppercase tracking-widest font-black">Total</p>
+                        <div className="text-center bg-gray-50/80 dark:bg-[#0a0f1a]/40 backdrop-blur-sm w-20 h-20 rounded-full flex flex-col items-center justify-center border border-gray-200 dark:border-white/5 shadow-inner">
+                            <p className="text-sm font-black text-gray-900 dark:text-white leading-none mb-0.5">{formatCurrency(total)}</p>
+                            <p className="text-[9px] text-gray-500 uppercase tracking-widest font-black">{t('total')}</p>
                         </div>
                     </div>
                 </div>

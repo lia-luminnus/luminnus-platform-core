@@ -102,6 +102,111 @@ router.post('/update-efficiency', (req, res) => {
   }
 });
 
+/**
+ * GET /api/metrics/query - Dashboard Engine Generic Query
+ * Retorna dados mock no formato esperado pelo DashboardRenderer
+ */
+router.get('/query', (req, res) => {
+  try {
+    const { metric_key, tenant_id, type = 'timeseries' } = req.query;
+    const mKey = (metric_key as string) || 'unknown';
+    const qType = (type as string) || 'timeseries';
+
+    console.log(`🔍 [Metrics] Query recebida: tenant=${tenant_id}, metric=${mKey}, type=${qType}`);
+
+    // Helper: Generate random number in range
+    const rand = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+    const randFloat = (min: number, max: number) => parseFloat((Math.random() * (max - min) + min).toFixed(2));
+
+    let data: any;
+
+    switch (qType) {
+      case 'kpi':
+        // Frontend (KPICard.tsx) expects: current_value, previous_value, change_percent, trend
+        data = [
+          {
+            metric_key: mKey,
+            current_value: randFloat(20000, 80000),
+            previous_value: randFloat(15000, 70000),
+            change_percent: randFloat(-10, 30),
+            trend: Math.random() > 0.3 ? 'up' : 'down',
+            label: mKey
+          }
+        ];
+        break;
+
+      case 'breakdown':
+        // Frontend (DonutBreakdown.tsx) expects: Array of { name, value } or { dimension_value, value }
+        data = [
+          { name: 'Produtos', value: rand(5000, 15000) },
+          { name: 'Serviços', value: rand(3000, 10000) },
+          { name: 'Consultoria', value: rand(2000, 7000) },
+          { name: 'Eventos', value: rand(1000, 5000) }
+        ];
+        break;
+
+      case 'funnel':
+        // Frontend (Funnel.tsx) expects: stage, value
+        data = [
+          { stage: 'Visitantes', value: 1000 },
+          { stage: 'Leads', value: 300 },
+          { stage: 'MQLs', value: 150 },
+          { stage: 'Oportunidades', value: 60 },
+          { stage: 'Vendas', value: 25 }
+        ];
+        break;
+
+      case 'table':
+        // Frontend (TableTransactions.tsx) expects: TransactionRow { id, data: { date, description, type, category, amount } }
+        data = [1, 2, 3, 4, 5].map(i => ({
+          id: `tx-${i}`,
+          data: {
+            date: new Date(Date.now() - i * 86400000).toISOString(),
+            description: `Transação Mock #${i}`,
+            type: Math.random() > 0.5 ? 'in' : 'out',
+            category: 'vendas',
+            amount: randFloat(100, 2000)
+          },
+          created_at: new Date().toISOString()
+        }));
+        break;
+
+      case 'timeseries':
+      default:
+        // Frontend (LineTimeseries.tsx) expects: period (ISO Date), value, previous_value
+        // Generate last 7 days
+        data = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          data.push({
+            period: d.toISOString().split('T')[0], // YYYY-MM-DD
+            value: rand(2000, 6000),
+            previous_value: rand(1500, 5500)
+          });
+        }
+        break;
+    }
+
+    const response = {
+      success: true,
+      data,
+      meta: {
+        tenant_id,
+        metric_key: mKey,
+        type: qType
+      }
+    };
+
+    console.log(`✅ [Metrics] Retornando ${Array.isArray(data) ? data.length : 1} registros para ${mKey}`);
+    res.json(response);
+
+  } catch (error: any) {
+    console.error('❌ Error in /api/metrics/query:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export function setupMetricsRoutes(app: any) {
   app.use('/api/metrics', router);
 }

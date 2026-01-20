@@ -29,5 +29,5 @@ export const config = {
     supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY || '',
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-    appUrl: process.env.APP_URL || 'http://localhost:3000'
+    appUrl: process.env.APP_URL || 'http://localhost:5000'
 };

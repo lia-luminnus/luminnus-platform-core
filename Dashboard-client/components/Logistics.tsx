@@ -1,7 +1,7 @@
 
 import React, { useContext } from 'react';
 import Header from './Header';
-import { LanguageContext } from '../App';
+import { LanguageContext } from '../contexts/LanguageContext';
 import { Skeleton } from './ui/Skeleton';
 
 const Logistics: React.FC = () => {

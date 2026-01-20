@@ -1,0 +1,50 @@
+components/Automations.tsx(5,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/Automations.tsx(8,11): error TS2339: Property 't' does not exist on type '{}'.
+components/Calendar.tsx(5,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/Calendar.tsx(25,11): error TS2339: Property 't' does not exist on type '{}'.
+components/Calendar.tsx(25,14): error TS2339: Property 'language' does not exist on type '{}'.
+components/ClientLIAHub.tsx(6,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/ClientLIAHub.tsx(10,13): error TS2339: Property 't' does not exist on type '{}'.
+components/CRM.tsx(5,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/CRM.tsx(19,13): error TS2339: Property 't' does not exist on type '{}'.
+components/dashboard-engine/DashboardContext.tsx(882,13): error TS2353: Object literal may only specify known properties, and 'next_suggested_position' does not exist in type 'DashboardSnapshot'.
+components/dashboard-engine/DashboardEditor.tsx(14,10): error TS2614: Module '"../../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../../App"' instead?
+components/dashboard-engine/DashboardEditor.tsx(46,13): error TS2339: Property 't' does not exist on type '{}'.
+components/dashboard-engine/DashboardEditor.tsx(136,13): error TS2339: Property 't' does not exist on type '{}'.
+components/dashboard-engine/DashboardEditor.tsx(269,13): error TS2339: Property 't' does not exist on type '{}'.
+components/dashboard-engine/widgets/AreaTimeseries.tsx(37,13): error TS2339: Property 't' does not exist on type '{}'.
+components/dashboard-engine/widgets/KPICard.tsx(56,13): error TS2339: Property 't' does not exist on type '{}'.
+components/dashboard-engine/widgets/LineTimeseries.tsx(39,13): error TS2339: Property 't' does not exist on type '{}'.
+components/Dashboard.tsx(6,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/Dashboard.tsx(28,11): error TS2339: Property 't' does not exist on type '{}'.
+components/Files.tsx(5,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/Files.tsx(19,11): error TS2339: Property 't' does not exist on type '{}'.
+components/Financial.tsx(6,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/Financial.tsx(10,11): error TS2339: Property 't' does not exist on type '{}'.
+components/Header.tsx(3,24): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/Header.tsx(8,11): error TS2339: Property 't' does not exist on type '{}'.
+components/Logistics.tsx(4,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/Logistics.tsx(8,13): error TS2339: Property 't' does not exist on type '{}'.
+components/MedicalRecords.tsx(4,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/MedicalRecords.tsx(72,11): error TS2339: Property 't' does not exist on type '{}'.
+components/Onboarding.tsx(7,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/Onboarding.tsx(30,11): error TS2339: Property 't' does not exist on type '{}'.
+components/Plan.tsx(3,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/Plan.tsx(9,12): error TS2339: Property 't' does not exist on type '{}'.
+components/Properties.tsx(4,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/Properties.tsx(70,11): error TS2339: Property 't' does not exist on type '{}'.
+components/Sales.tsx(4,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/Sales.tsx(7,11): error TS2339: Property 't' does not exist on type '{}'.
+components/Settings.tsx(4,24): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/Settings.tsx(4,41): error TS2614: Module '"../App"' has no exported member 'Language'. Did you mean to use 'import Language from "../App"' instead?
+components/Settings.tsx(24,13): error TS2339: Property 'language' does not exist on type '{}'.
+components/Settings.tsx(24,23): error TS2339: Property 'setLanguage' does not exist on type '{}'.
+components/Settings.tsx(24,36): error TS2339: Property 't' does not exist on type '{}'.
+components/Sidebar.tsx(4,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/Sidebar.tsx(11,11): error TS2339: Property 't' does not exist on type '{}'.
+components/Stock.tsx(4,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/Stock.tsx(17,11): error TS2339: Property 't' does not exist on type '{}'.
+components/Support.tsx(4,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/Support.tsx(7,11): error TS2339: Property 't' does not exist on type '{}'.
+components/Team.tsx(4,10): error TS2614: Module '"../App"' has no exported member 'LanguageContext'. Did you mean to use 'import LanguageContext from "../App"' instead?
+components/Team.tsx(7,11): error TS2339: Property 't' does not exist on type '{}'.

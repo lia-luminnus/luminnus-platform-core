@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, configError } from '../lib/supabase';
 import { useAppStore } from '../store/useAppStore';
+import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 
 // Mensagens da LIA durante loading
 const LIA_LOADING_MESSAGES = [
@@ -32,79 +33,28 @@ const AuthBridge: React.FC = () => {
         return () => clearInterval(interval);
     }, []);
 
+    const { initialized, user } = useDashboardAuth();
+
     useEffect(() => {
-        if (syncStarted.current) return;
+        // Se já inicializou e tem usuário, podemos ir para a home
+        if (initialized && user) {
+            console.log('[AuthBridge] DashboardAuthContext inicializado com sucesso. Redirecionando...');
+            setStatus('✅ Pronto! Redirecionando...');
+            setTimeout(() => navigate('/', { replace: true }), 500);
+        }
+    }, [initialized, user, navigate]);
 
-        const syncSession = async () => {
-            console.log('[AuthBridge] ===== Sincronizando Acesso Admin =====');
-
-            const extractParams = () => {
-                const searchParams = new URLSearchParams(window.location.search);
-                const hash = window.location.hash;
-                const hashSearchParams = new URLSearchParams(hash.includes('?') ? hash.split('?')[1] : '');
-
-                return {
-                    access: searchParams.get('access_token') || hashSearchParams.get('access_token'),
-                    refresh: searchParams.get('refresh_token') || hashSearchParams.get('refresh_token'),
-                    adminAccess: searchParams.get('admin_access') === 'true' || hashSearchParams.get('admin_access') === 'true'
-                };
-            };
-
-            const { access: accessToken, refresh: refreshToken, adminAccess } = extractParams();
-
-            if (adminAccess) {
-                console.log('[AuthBridge] Flag admin_access detectada. Forçando reset do onboarding para teste...');
-                resetOnboarding();
+    useEffect(() => {
+        // Timeout de fallback: se demorar demais, tenta ir para a home
+        const timeout = setTimeout(() => {
+            if (!initialized) {
+                console.warn('[AuthBridge] Timeout de inicialização detectado. Forçando carregamento...');
+                navigate('/', { replace: true });
             }
+        }, 10000);
+        return () => clearTimeout(timeout);
+    }, [initialized, navigate]);
 
-            if (configError || !supabase) {
-                console.error('[AuthBridge] Erro de configuração:', configError || 'Supabase não inicializado');
-                setError(configError || 'Configuração do Supabase incompleta.');
-                syncStarted.current = true;
-
-                if (adminAccess) {
-                    setTimeout(() => {
-                        console.log('[AuthBridge] Redirecionando admin para modo mock...');
-                        navigate('/', { replace: true });
-                    }, 3000);
-                }
-                return;
-            }
-
-            if (syncStarted.current) return;
-            syncStarted.current = true;
-
-            if (!accessToken) {
-                console.error('[AuthBridge] ERRO: access_token ausente');
-                setError('Token de acesso não encontrado. Tente novamente via Admin Panel.');
-                return;
-            }
-
-            try {
-                const { data, error: syncError } = await supabase.auth.setSession({
-                    access_token: accessToken,
-                    refresh_token: refreshToken || ''
-                });
-
-                if (syncError) throw syncError;
-                if (!data?.session) throw new Error('Falha ao criar sessão.');
-
-                console.log('[AuthBridge] ✓ Sessão sincronizada para:', data.session.user?.email);
-                setStatus('✅ Pronto! LIA está te levando para o dashboard...');
-
-                setTimeout(() => {
-                    navigate('/', { replace: true });
-                }, 800);
-
-            } catch (err: any) {
-                console.error('[AuthBridge] Falha na sincronização:', err.message);
-                setError(`Erro ao sincronizar sessão: ${err.message}`);
-                setTimeout(() => navigate('/'), 2000);
-            }
-        };
-
-        syncSession();
-    }, [navigate, resetOnboarding]);
 
     if (error) {
         return (

@@ -7,6 +7,7 @@ import { ToolService } from '../services/toolService.js';
 import { OutputContracts } from '../services/outputContracts.js';
 import { getOpenAIVoice } from '../config/openai-voices.js';
 import { ensureSession } from '../server.js';
+import { getLiaGreeting } from '@luminnus/lia-runtime';
 
 export function setupChatRoutes(app: Express, openai: OpenAI) {
   const functions = ToolService.getTools();
@@ -31,51 +32,6 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
       const { getContext, updateSummaryIfNeeded } = await import('../services/memoryService.js');
       const context = await getContext(conversationId, finalUserId, message, session?.userLocation);
 
-      // 1.1 DIAGNOSTIC MODE: Injetar contexto de diagnóstico para Admin Root
-      let diagnosticContext = '';
-      if (liaMode === 'DIAGNOSTIC') {
-        console.log('🔧 [DIAGNOSTIC MODE] Injetando contexto de diagnóstico...');
-        diagnosticContext = `
-
-## 🔧 MODO DIAGNÓSTICO E SRE ATIVO (ROOT ACCESS)
-
-Você é a **Engenheira Principal de SRE (Site Reliability Engineering)** da Luminnus.
-Sua missão é diagnosticar falhas, analisar logs e propor correções técnicas imediatas.
-
-### 📜 DIRETRIZES CRÍTICAS:
-1. **NUNCA peça chaves de API**, tokens ou configurações ao usuário. Você JÁ TEM acesso total via backend.
-2. Você está perfeitamente integrada ao sistema. Se algo não funcionar, verifique os logs e a saúde via ferramentas.
-3. Não seja genérica. Forneça dados técnicos, caminhos de arquivos e linhas de código.
-4. Sua persona é direta, técnica e resolutiva (estilo DevOps Senior).
-
-### 🛠️ Ferramentas de Análise (Acessíveis via APIs internas):
-- Saúde: GET /api/admin/system/health
-- Logs: GET /api/admin/system/logs
-- Código: POST /api/admin/system/read-code
-- Estrutura: GET /api/admin/system/map
-
-### ⚖️ REGRA DE OURO:
-**NUNCA dê um diagnóstico baseado em suposições.** Se o usuário reportar uma falha, seu PRIMEIRO passo deve ser usar as ferramentas acima para investigar a causa real (ex: listar arquivos com \`map\`, ler logs com \`logs\`, ou ler o código fonte com \`read-code\`). Diagnósticos sem evidências técnicas coletadas via ferramentas serão rejeitados.
-
-### 📋 Formato de Resposta MANDATÓRIO:
-## 🚨 INCIDENTE [SEV-1/2/3] - [Título Curto]
-
-### 🔍 DIAGNÓSTICO TÉCNICO
-[O que você descobriu analisando os dados do sistema]
-
-### 🧪 EVIDÊNCIAS
-- Logs/Saúde: [Citar dados reais se disponíveis]
-
-### 🛠️ PLANO DE RESOLUÇÃO (ACTION ITEMS)
-- [ ] Passo 1...
-- [ ] Passo 2...
-
-### 💻 TRECHO DE CÓDIGO (FIX SUGGESTION)
-\`\`\`[linguagem]
-// Sugestão de correção se aplicável
-\`\`\`
-`;
-      }
 
       // 2. Auto-memória (opcional/automático)
       let autoSavedMemories: any[] = [];
@@ -92,8 +48,11 @@ Sua missão é diagnosticar falhas, analisar logs e propor correções técnicas
         content: msg.content
       }));
 
-      // Injetar contexto diagnóstico no system instruction se ativo
-      const finalSystemInstruction = (context.systemInstruction || '') + diagnosticContext;
+      // Personalidade v4.0 Centralizada (SSOT)
+      const admin_diagnostic_mode = req.body.admin_diagnostic_mode === true || liaMode === 'DIAGNOSTIC';
+      const basePersona = getLiaGreeting(admin_diagnostic_mode);
+
+      const finalSystemInstruction = basePersona + '\n\n' + (session.userLocation ? `\n\n[Localização Atual: ${session.userLocation}]` : '');
 
       const messages = [
         { role: "system" as const, content: finalSystemInstruction },
@@ -120,118 +79,157 @@ Sua missão é diagnosticar falhas, analisar logs e propor correções técnicas
       });
 
       let replyText = aiResponse.text;
-      let function_call = aiResponse.function_call;
+      let function_calls = aiResponse.function_calls || (aiResponse.function_call ? [aiResponse.function_call] : []);
+      let finalDashboardAction = null;
+      let finalImagePayload = null;
 
-      // 5. Executar ferramentas se solicitado
-      if (function_call) {
-        console.log(`🔧 [Chat] Chamando ferramenta: ${function_call.name}`);
-        const args = JSON.parse(function_call.arguments || '{}');
+      // 5. Ciclo Agêntico v4.0 - Loop de Ferramentas
+      let turnCount = 0;
+      const MAX_TURNS = 3;
 
-        const function_result: any = await ToolService.execute(function_call.name, args, {
-          userId: finalUserId,
-          tenantId: finalTenantId,
-          userLocation: session?.userLocation
+      while (function_calls.length > 0 && turnCount < MAX_TURNS) {
+        turnCount++;
+        console.log(`🔄 [Chat] Turno Agêntico ${turnCount}: Processando ${function_calls.length} ferramentas`);
+
+        const turnResults = [];
+
+        for (const call of function_calls) {
+          console.log(`🔧 [Chat] Executando: ${call.name}`);
+          const args = typeof call.arguments === 'string' ? JSON.parse(call.arguments || '{}') : call.arguments;
+
+          let function_result: any;
+          try {
+            function_result = await ToolService.execute(call.name, args, {
+              userId: finalUserId,
+              tenantId: finalTenantId,
+              userLocation: session?.userLocation
+            });
+
+            if (!function_result || function_result.error) {
+              throw new Error(function_result?.error || 'Retorno vazio da ferramenta');
+            }
+          } catch (toolError: any) {
+            console.error(`❌ Erro na ferramenta ${call.name}:`, toolError.message);
+            // ANTI-LOOP GUARDRAIL: Falhou + por quê + plano B
+            replyText = `Falhou ao executar ${call.name}. Motivo: ${toolError.message}. Plano B: Vou tentar resolver de outra forma ou seguir sem essa informação. Quer que eu tente novamente por outro caminho ou prefere seguir para o próximo tópico? (A/B)`;
+            function_calls = []; // Abortar loop agêntico
+            break;
+          }
+
+          // TRATAMENTO: generateImage (Retorno Imediato)
+          if (call.name === 'generateImage' && function_result?.url) {
+            finalImagePayload = {
+              type: 'image',
+              title: 'Imagem gerada',
+              data: {
+                url: function_result.url,
+                prompt: function_result.prompt || args.prompt,
+                alt: function_result.prompt || args.prompt,
+                caption: function_result.prompt || args.prompt
+              },
+              timestamp: Date.now()
+            };
+            break; // Sai do for e o while vai encerrar
+          }
+
+          // TRATAMENTO: Dashboard Actions que exigem Frontend (Add/Replace/Reorganize)
+          // v4.1: dashboardGetSnapshot NÃO causa interrupção, pois agora retorna dados reais
+          if (call.name.startsWith('dashboard') && call.name !== 'dashboardGetSnapshot' && function_result?.action) {
+            finalDashboardAction = {
+              name: function_result.action,
+              arguments: JSON.stringify(function_result.params || {}),
+              message: function_result.message
+            };
+            // Adicionar ao histórico para a IA saber que solicitou a ação
+            messages.push({ role: 'assistant', content: null, function_call: call });
+            messages.push({ role: 'function', name: call.name, content: JSON.stringify(function_result) });
+            break;
+          }
+
+          // TRATAMENTO ESPECIAL: Gmail Tools (Preservar links formatados)
+          // v4.9 - Previne que o segundo call da IA reformate e perca os URLs
+          if ((call.name === 'listGmailMessages' || call.name === 'searchGmail') && function_result?.message) {
+            console.log(`📧 [Chat] Gmail tool detectado - usando resposta pré-formatada`);
+            replyText = function_result.message; // Usar a mensagem já formatada com links
+            function_calls = []; // Encerrar o loop agêntico - não precisa de segundo call
+            messages.push({ role: 'assistant', content: null, function_call: call });
+            messages.push({ role: 'function', name: call.name, content: JSON.stringify(function_result) });
+            break;
+          }
+
+          // Adicionar resultado ao histórico para o próximo turno
+          messages.push({ role: 'assistant', content: null, function_call: call });
+          messages.push({ role: 'function', name: call.name, content: JSON.stringify(function_result) });
+          turnResults.push(function_result);
+        }
+
+        // Se gerou imagem ou ação de dashboard, encerramos o loop para o frontend agir
+        if (finalImagePayload || finalDashboardAction) break;
+
+        // Chamar AI novamente com os resultados das ferramentas
+        const isJsonExplicit = OutputContracts.isJsonRequested(message);
+        const nextPrompt = isJsonExplicit
+          ? `Continue com base nos resultados das ferramentas acima. Garanta o formato JSON se solicitado.`
+          : `Continue a conversa.`;
+
+        console.log(`🧠 [Chat] Turno ${turnCount}: Solicitando continuação para a IA...`);
+        const nextResponse: any = await runGemini(nextPrompt, {
+          conversationId,
+          messages,
+          temperature: 0.7
         });
 
-        // =====================================================
-        // TRATAMENTO ESPECIAL PARA IMAGENS (v1.4)
-        // Retorna payload estruturado para exibição na lousa
-        // =====================================================
-        if (function_call.name === 'generateImage' && function_result?.url) {
-          console.log(`🖼️ [Chat] Imagem gerada com sucesso: ${function_result.url}`);
-
-          const imagePayload = {
-            type: 'image',
-            title: 'Imagem gerada',
-            data: {
-              url: function_result.url,
-              prompt: function_result.prompt || args.prompt,
-              alt: function_result.prompt || args.prompt,
-              caption: function_result.prompt || args.prompt
-            },
-            timestamp: Date.now()
-          };
-
-          // Persistir mensagens
-          try {
-            const { saveMessage } = await import('../config/supabase.js');
-            await saveMessage(conversationId, 'user', message, 'text');
-            await saveMessage(conversationId, 'assistant', `🖼️ Imagem gerada: ${function_result.prompt || args.prompt}`, 'text');
-          } catch (dbErr) {
-            console.error('⚠️ Falha ao persistir:', dbErr);
-          }
-
-          return res.json({
-            ok: true,
-            reply: JSON.stringify(imagePayload),
-            dynamicContent: imagePayload,
-            isStructured: true,
-            function_call,
-            savedMemories: autoSavedMemories
-          });
-        }
-
-        // =====================================================
-        // TRATAMENTO ESPECIAL PARA DASHBOARD ACTIONS (v3.0)
-        // Retorna ação para o frontend executar no DashboardContext
-        // =====================================================
-        if (function_call.name.startsWith('dashboard') && function_result?.action) {
-          console.log(`🎯 [Chat] Ação de dashboard: ${function_result.action}`);
-
-          // Persistir mensagens
-          try {
-            const { saveMessage } = await import('../config/supabase.js');
-            await saveMessage(conversationId, 'user', message, 'text');
-            await saveMessage(conversationId, 'assistant', function_result.message || `Dashboard atualizado com ${function_result.action}`, 'text');
-          } catch (dbErr) {
-            console.error('⚠️ Falha ao persistir:', dbErr);
-          }
-
-          return res.json({
-            ok: true,
-            reply: function_result.message || 'Dashboard atualizado!',
-            // CRÍTICO: Enviar action para o frontend processar 
-            action: {
-              name: function_result.action,
-              arguments: JSON.stringify(function_result.params || {})
-            },
-            function_call: {
-              name: function_result.action,
-              arguments: JSON.stringify(function_result.params || {})
-            },
-            savedMemories: autoSavedMemories
-          });
-        }
-
-        // Loop de segunda chamada para responder ao resultado de OUTRAS ferramentas
-        if (!replyText || replyText === '...') {
-          const isJsonExplicit = OutputContracts.isJsonRequested(message);
-          const humanizedPrompt = isJsonExplicit
-            ? `O usuário perguntou: "${message}"\nResultado da ferramenta ${function_call.name}: ${JSON.stringify(function_result)}\nRetorne o JSON conforme solicitado.`
-            : OutputContracts.buildHumanizedPrompt(message, function_call.name, function_result);
-
-          console.log(`🧠 [Chat] Gerando resposta humanizada (JSON Explícito: ${isJsonExplicit})`);
-
-          const secondCall: any = await runGemini(
-            humanizedPrompt,
-            {
-              conversationId,
-              messages: [
-                ...messages,
-                { role: 'assistant', content: null, function_call },
-                { role: 'function', name: function_call.name, content: JSON.stringify(function_result) }
-              ]
-            }
-          );
-          replyText = secondCall.text || replyText;
-        }
+        replyText = nextResponse.text || replyText;
+        function_calls = nextResponse.function_calls || (nextResponse.function_call ? [nextResponse.function_call] : []);
       }
+
+      // 5.1 Retornos Especiais (Imagem)
+      if (finalImagePayload) {
+        try {
+          const { saveMessage } = await import('../config/supabase.js');
+          await saveMessage(conversationId, 'user', message, 'text');
+          await saveMessage(conversationId, 'assistant', `🖼️ Imagem gerada: ${finalImagePayload.data.prompt}`, 'text');
+        } catch (dbErr) { console.error('⚠️ persistence err:', dbErr); }
+
+        return res.json({
+          ok: true,
+          reply: JSON.stringify(finalImagePayload),
+          dynamicContent: finalImagePayload,
+          isStructured: true,
+          savedMemories: autoSavedMemories
+        });
+      }
+
+      // 5.2 Retornos Especiais (Dashboard Action)
+      if (finalDashboardAction) {
+        try {
+          const { saveMessage } = await import('../config/supabase.js');
+          await saveMessage(conversationId, 'user', message, 'text');
+          await saveMessage(conversationId, 'assistant', finalDashboardAction.message || 'Dashboard atualizado', 'text');
+        } catch (dbErr) { console.error('⚠️ persistence err:', dbErr); }
+
+        return res.json({
+          ok: true,
+          reply: finalDashboardAction.message || 'Dashboard atualizado!',
+          action: { name: finalDashboardAction.name, arguments: finalDashboardAction.arguments },
+          savedMemories: autoSavedMemories
+        });
+      }
+
 
 
       // 6. Governança de Saída (Filtros de privacidade / Formatação)
       const { OutputGovernance } = await import('../services/outputGovernance.js');
       const governed = await OutputGovernance.forChat(replyText, message, async (retryPrompt) => {
-        const response = await runGemini(retryPrompt, { temperature: 0.3 });
+        // v4.9: Garantir que o retry tenha acesso à personalidade e contexto para não alucinar incapacidade
+        const response = await runGemini(retryPrompt, {
+          conversationId,
+          messages: [
+            { role: 'system', content: finalSystemInstruction },
+            ...historyMessages.slice(-5) // Últimas 5 mensagens de histórico para contexto
+          ],
+          temperature: 0.3
+        });
         return response.text;
       });
       replyText = governed.markdown;
@@ -264,7 +262,7 @@ Sua missão é diagnosticar falhas, analisar logs e propor correções técnicas
         ok: true,
         reply: SecurityService.maskSensitiveData(replyText),
         audio: audioBase64,
-        function_call,
+        function_call: function_calls.length > 0 ? function_calls[0] : null,
         savedMemories: autoSavedMemories
       });
 

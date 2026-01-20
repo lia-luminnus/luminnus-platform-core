@@ -1,6 +1,7 @@
 import React, { useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ThemeContext, LanguageContext } from '../App';
+import { ThemeContext } from '../App';
+import { LanguageContext } from '../contexts/LanguageContext';
 import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 
 const Header: React.FC<{ title?: string }> = ({ title }) => {

@@ -1,7 +1,7 @@
 
 import React, { useState, useContext, useRef, useMemo } from 'react';
 import Header from './Header';
-import { LanguageContext } from '../App';
+import { LanguageContext } from '../contexts/LanguageContext';
 import toast from 'react-hot-toast';
 
 interface HistoryEntry {
@@ -73,7 +73,7 @@ const MedicalRecords: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Informações Pessoais');
   const [patient, setPatient] = useState<Patient>(mockPatient);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // States for editing notes
   const [isEditingObs, setIsEditingObs] = useState(false);
   const [isEditingPrivObs, setIsEditingPrivObs] = useState(false);
@@ -92,7 +92,7 @@ const MedicalRecords: React.FC = () => {
   ];
 
   const filteredHistory = useMemo(() => {
-    return patient.history.filter(item => 
+    return patient.history.filter(item =>
       item.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.type.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -104,45 +104,45 @@ const MedicalRecords: React.FC = () => {
 
   const handleAddStat = (key: keyof Patient['stats'], label: string) => {
     const newHistory: HistoryEntry = {
-        id: Date.now().toString(),
-        date: new Date().toLocaleDateString('pt-BR'),
-        text: `Adicionado novo registro de ${label.toLowerCase()} ao prontuário.`,
-        icon: 'add_circle',
-        color: 'bg-brand-primary',
-        type: label
+      id: Date.now().toString(),
+      date: new Date().toLocaleDateString('pt-BR'),
+      text: `Adicionado novo registro de ${label.toLowerCase()} ao prontuário.`,
+      icon: 'add_circle',
+      color: 'bg-brand-primary',
+      type: label
     };
 
     setPatient(prev => ({
-        ...prev,
-        stats: { ...prev.stats, [key]: prev.stats[key] + 1 },
-        history: [newHistory, ...prev.history]
+      ...prev,
+      stats: { ...prev.stats, [key]: prev.stats[key] + 1 },
+      history: [newHistory, ...prev.history]
     }));
     toast.success(`${label} adicionado ao histórico`);
   };
 
   const saveObservations = () => {
-      setPatient(prev => ({ ...prev, observations: tempObs }));
-      setIsEditingObs(false);
-      toast.success('Observações salvas');
+    setPatient(prev => ({ ...prev, observations: tempObs }));
+    setIsEditingObs(false);
+    toast.success('Observações salvas');
   };
 
   const savePrivateObservations = () => {
-      setPatient(prev => ({ ...prev, privateObservations: tempPrivObs }));
-      setIsEditingPrivObs(false);
-      toast.success('Observações privadas salvas');
+    setPatient(prev => ({ ...prev, privateObservations: tempPrivObs }));
+    setIsEditingPrivObs(false);
+    toast.success('Observações privadas salvas');
   };
 
   const handlePrint = () => {
     toast.loading('Gerando PDF do prontuário...', { duration: 2000 });
     setTimeout(() => {
-        window.print();
+      window.print();
     }, 1000);
   };
 
   const handleShare = () => {
-      const shareLink = `https://luminnus.app/records/${patient.id}`;
-      navigator.clipboard.writeText(shareLink);
-      toast.success('Link de compartilhamento copiado!');
+    const shareLink = `https://luminnus.app/records/${patient.id}`;
+    navigator.clipboard.writeText(shareLink);
+    toast.success('Link de compartilhamento copiado!');
   };
 
   const renderPrescriptions = () => (
@@ -182,25 +182,25 @@ const MedicalRecords: React.FC = () => {
     <div className="animate-fade-in space-y-6">
       <h3 className="text-xl font-bold text-gray-800 dark:text-white">Acompanhamento Clínico</h3>
       {filteredHistory.length === 0 ? (
-          <div className="p-8 text-center text-gray-500 italic">Nenhum registro encontrado para a busca.</div>
+        <div className="p-8 text-center text-gray-500 italic">Nenhum registro encontrado para a busca.</div>
       ) : (
         <div className="relative pl-8 space-y-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-brand-primary/20">
-            {filteredHistory.map((item) => (
+          {filteredHistory.map((item) => (
             <div key={item.id} className="relative group">
-                <div className={`absolute -left-10 top-0 w-6 h-6 rounded-full ${item.color} flex items-center justify-center text-white border-4 border-white dark:border-dark-bg z-10 shadow-sm`}>
-                    <span className="material-symbols-outlined text-xs">{item.icon}</span>
+              <div className={`absolute -left-10 top-0 w-6 h-6 rounded-full ${item.color} flex items-center justify-center text-white border-4 border-white dark:border-dark-bg z-10 shadow-sm`}>
+                <span className="material-symbols-outlined text-xs">{item.icon}</span>
+              </div>
+              <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-200 dark:border-white/10 group-hover:bg-white dark:group-hover:bg-white/10 transition-colors shadow-sm">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-bold text-brand-primary uppercase tracking-tight">{item.type} - {item.date}</span>
+                  <button className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-brand-primary">
+                    <span className="material-symbols-outlined text-sm">more_horiz</span>
+                  </button>
                 </div>
-                <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-200 dark:border-white/10 group-hover:bg-white dark:group-hover:bg-white/10 transition-colors shadow-sm">
-                    <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs font-bold text-brand-primary uppercase tracking-tight">{item.type} - {item.date}</span>
-                        <button className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-brand-primary">
-                            <span className="material-symbols-outlined text-sm">more_horiz</span>
-                        </button>
-                    </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{item.text}</p>
-                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{item.text}</p>
+              </div>
             </div>
-            ))}
+          ))}
         </div>
       )}
     </div>
@@ -315,11 +315,10 @@ const MedicalRecords: React.FC = () => {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`py-4 px-8 text-sm font-black transition-all relative whitespace-nowrap uppercase tracking-widest ${
-                  activeTab === tab 
-                    ? 'text-brand-primary bg-white dark:bg-white/10' 
+                className={`py-4 px-8 text-sm font-black transition-all relative whitespace-nowrap uppercase tracking-widest ${activeTab === tab
+                    ? 'text-brand-primary bg-white dark:bg-white/10'
                     : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                }`}
+                  }`}
               >
                 {tab}
                 {activeTab === tab && (
@@ -337,9 +336,9 @@ const MedicalRecords: React.FC = () => {
                   {/* Avatar */}
                   <div className="relative group flex-shrink-0 mx-auto lg:mx-0">
                     <div className="w-40 h-40 rounded-3xl overflow-hidden border-4 border-brand-primary/20 bg-blue-100 shadow-xl">
-                      <img 
-                        src="https://api.dicebear.com/7.x/avataaars/svg?seed=Alice&hairColor=f59724&clothingColor=3c91e6" 
-                        alt="Patient" 
+                      <img
+                        src="https://api.dicebear.com/7.x/avataaars/svg?seed=Alice&hairColor=f59724&clothingColor=3c91e6"
+                        alt="Patient"
                         className="w-full h-full object-cover"
                       />
                     </div>
@@ -404,34 +403,34 @@ const MedicalRecords: React.FC = () => {
                     <div className="space-y-3">
                       <h4 className="text-gray-400 font-black uppercase tracking-widest text-xs flex items-center justify-between">
                         <span className="flex items-center gap-2">
-                           <span className="material-symbols-outlined text-orange-400">sticky_note_2</span>
-                           Observações:
+                          <span className="material-symbols-outlined text-orange-400">sticky_note_2</span>
+                          Observações:
                         </span>
                         {!isEditingObs ? (
-                            <button onClick={() => setIsEditingObs(true)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg text-orange-400 transition-colors print:hidden">
-                                <span className="material-symbols-outlined text-lg">edit_square</span>
-                            </button>
+                          <button onClick={() => setIsEditingObs(true)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg text-orange-400 transition-colors print:hidden">
+                            <span className="material-symbols-outlined text-lg">edit_square</span>
+                          </button>
                         ) : (
-                            <div className="flex gap-2">
-                                <button onClick={saveObservations} className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
-                                    <span className="material-symbols-outlined text-sm">check</span>
-                                </button>
-                                <button onClick={() => { setIsEditingObs(false); setTempObs(patient.observations); }} className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
-                                    <span className="material-symbols-outlined text-sm">close</span>
-                                </button>
-                            </div>
+                          <div className="flex gap-2">
+                            <button onClick={saveObservations} className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+                              <span className="material-symbols-outlined text-sm">check</span>
+                            </button>
+                            <button onClick={() => { setIsEditingObs(false); setTempObs(patient.observations); }} className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
+                              <span className="material-symbols-outlined text-sm">close</span>
+                            </button>
+                          </div>
                         )}
                       </h4>
                       {isEditingObs ? (
-                          <textarea 
-                            value={tempObs}
-                            onChange={(e) => setTempObs(e.target.value)}
-                            className="w-full bg-orange-50/50 dark:bg-orange-500/5 border border-orange-200 dark:border-orange-500/20 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-orange-400 outline-none text-gray-700 dark:text-gray-300 min-h-[100px]"
-                          />
+                        <textarea
+                          value={tempObs}
+                          onChange={(e) => setTempObs(e.target.value)}
+                          className="w-full bg-orange-50/50 dark:bg-orange-500/5 border border-orange-200 dark:border-orange-500/20 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-orange-400 outline-none text-gray-700 dark:text-gray-300 min-h-[100px]"
+                        />
                       ) : (
-                          <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed italic border-l-4 border-orange-400/50 pl-4 py-1">
-                            {patient.observations}
-                          </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed italic border-l-4 border-orange-400/50 pl-4 py-1">
+                          {patient.observations}
+                        </p>
                       )}
                     </div>
 
@@ -439,34 +438,34 @@ const MedicalRecords: React.FC = () => {
                     <div className="space-y-3">
                       <h4 className="text-gray-400 font-black uppercase tracking-widest text-xs flex items-center justify-between">
                         <span className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-red-500">lock</span>
-                            Observações privadas:
+                          <span className="material-symbols-outlined text-red-500">lock</span>
+                          Observações privadas:
                         </span>
                         {!isEditingPrivObs ? (
-                            <button onClick={() => setIsEditingPrivObs(true)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg text-red-400 transition-colors print:hidden">
-                                <span className="material-symbols-outlined text-lg">edit_square</span>
-                            </button>
+                          <button onClick={() => setIsEditingPrivObs(true)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg text-red-400 transition-colors print:hidden">
+                            <span className="material-symbols-outlined text-lg">edit_square</span>
+                          </button>
                         ) : (
-                            <div className="flex gap-2">
-                                <button onClick={savePrivateObservations} className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
-                                    <span className="material-symbols-outlined text-sm">check</span>
-                                </button>
-                                <button onClick={() => { setIsEditingPrivObs(false); setTempPrivObs(patient.privateObservations); }} className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
-                                    <span className="material-symbols-outlined text-sm">close</span>
-                                </button>
-                            </div>
+                          <div className="flex gap-2">
+                            <button onClick={savePrivateObservations} className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+                              <span className="material-symbols-outlined text-sm">check</span>
+                            </button>
+                            <button onClick={() => { setIsEditingPrivObs(false); setTempPrivObs(patient.privateObservations); }} className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
+                              <span className="material-symbols-outlined text-sm">close</span>
+                            </button>
+                          </div>
                         )}
                       </h4>
                       {isEditingPrivObs ? (
-                          <textarea 
-                            value={tempPrivObs}
-                            onChange={(e) => setTempPrivObs(e.target.value)}
-                            className="w-full bg-red-50/50 dark:bg-red-500/5 border border-red-200 dark:border-red-500/20 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-red-400 outline-none text-gray-700 dark:text-gray-300 min-h-[100px]"
-                          />
+                        <textarea
+                          value={tempPrivObs}
+                          onChange={(e) => setTempPrivObs(e.target.value)}
+                          className="w-full bg-red-50/50 dark:bg-red-500/5 border border-red-200 dark:border-red-500/20 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-red-400 outline-none text-gray-700 dark:text-gray-300 min-h-[100px]"
+                        />
                       ) : (
-                          <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed italic border-l-4 border-red-500/50 pl-4 py-1">
-                            {patient.privateObservations}
-                          </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed italic border-l-4 border-red-500/50 pl-4 py-1">
+                          {patient.privateObservations}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -485,7 +484,7 @@ const MedicalRecords: React.FC = () => {
                     <div key={i} className="flex flex-col items-center justify-between p-6 bg-gray-50/50 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition-all duration-300 min-h-[220px] group">
                       <span className="text-4xl font-black text-brand-primary mb-1 group-hover:scale-110 transition-transform">{stat.value}</span>
                       <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-6 text-center">{stat.label}</span>
-                      <button 
+                      <button
                         onClick={() => handleAddStat(stat.key as any, stat.label)}
                         className={`text-[10px] font-black uppercase tracking-widest px-3 py-2.5 rounded-xl border-2 border-brand-primary/20 text-brand-primary hover:bg-brand-primary hover:text-white transition-all w-full flex items-center gap-2 justify-center print:hidden shadow-sm active:scale-95 ${stat.btnColor || ''}`}
                       >
@@ -509,17 +508,17 @@ const MedicalRecords: React.FC = () => {
         {/* Bottom Navigation & Search - Hidden on Print */}
         <div className="mt-8 flex flex-col md:flex-row items-center gap-6 print:hidden">
           <div className="flex-shrink-0">
-             <button onClick={() => handleAction('Chat iniciado')} className="p-4 bg-brand-primary/10 text-brand-primary rounded-2xl hover:bg-brand-primary/20 transition-all hover:rotate-12 active:scale-90 shadow-sm">
-               <span className="material-symbols-outlined">forum</span>
-             </button>
+            <button onClick={() => handleAction('Chat iniciado')} className="p-4 bg-brand-primary/10 text-brand-primary rounded-2xl hover:bg-brand-primary/20 transition-all hover:rotate-12 active:scale-90 shadow-sm">
+              <span className="material-symbols-outlined">forum</span>
+            </button>
           </div>
           <div className="flex-1 w-full relative group">
             <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-brand-primary transition-colors">search</span>
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Pesquise no histórico (Data, Tipo, Conteúdo...)" 
+              placeholder="Pesquise no histórico (Data, Tipo, Conteúdo...)"
               className="w-full bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-brand-primary transition-all shadow-sm"
             />
           </div>
@@ -533,7 +532,7 @@ const MedicalRecords: React.FC = () => {
           </div>
         </div>
       </div>
-      
+
       {/* Print Styles */}
       <style>{`
         @media print {

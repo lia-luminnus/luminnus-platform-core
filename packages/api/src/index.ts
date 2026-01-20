@@ -9,6 +9,8 @@ import { authRouter } from './routes/auth.js';
 import { integrationsRouter } from './routes/integrations.js';
 import dashboardRouter from './routes/dashboardRoutes.js';
 import metricsRouter from './routes/metricsRoutes.js';
+import briefingRoutes from './routes/briefingRoutes.js';
+import hubRoutes from './routes/hubRoutes.js';
 import { errorHandler } from './middleware/error.js';
 import { setupWebSocket } from './ws/gateway.js';
 import http from 'http';
@@ -31,13 +33,15 @@ app.use(cors({
 app.use(express.json());
 
 // Routes
-app.use('/health', healthRouter);
-app.use('/version', versionRouter);
+app.use('/api/health', healthRouter);
+app.use('/api/version', versionRouter);
 app.use('/api/me', meRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/metrics', metricsRouter);
+app.use('/api/briefing', briefingRoutes);
+app.use('/api/integrations/hub', hubRoutes);
 
 // Error handler
 app.use(errorHandler);
@@ -53,8 +57,8 @@ server.listen(PORT, () => {
 ╠════════════════════════════════════════════════════════╣
 ║  Environment: ${(process.env.NODE_ENV || 'development').padEnd(40)}║
 ║  Port: ${String(PORT).padEnd(47)}║
-║  Health: http://localhost:${PORT}/health${' '.repeat(27 - String(PORT).length)}║
-║  Version: http://localhost:${PORT}/version${' '.repeat(26 - String(PORT).length)}║
+║  Health: http://localhost:${PORT}/api/health${' '.repeat(23 - String(PORT).length)}║
+║  Version: http://localhost:${PORT}/api/version${' '.repeat(22 - String(PORT).length)}║
 ╚════════════════════════════════════════════════════════╝
   `);
 });

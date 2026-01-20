@@ -1,6 +1,6 @@
 import React, { useContext, useState } from 'react';
 import Header from './Header';
-import { LanguageContext } from '../App';
+import { LanguageContext } from '../contexts/LanguageContext';
 import { usePlans, Plan as PlanType } from '../hooks/usePlans';
 import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 import { Loader2, Check, Rocket } from 'lucide-react';

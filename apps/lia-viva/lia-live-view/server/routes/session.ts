@@ -168,7 +168,8 @@ export function setupSessionRoutes(app: Express) {
       }
 
       // v4.31: Injetar consciência de controle de dashboard (LIA Action)
-      const { DASHBOARD_CONTROL_PROMPT } = await import('../../../../../Dashboard-client/components/lia/services/liaDashboardPrompt.js').catch(() => ({ DASHBOARD_CONTROL_PROMPT: '' }));
+      const { DASHBOARD_CONTROL_PROMPT } = await import('@luminnus/shared').catch(() => ({ DASHBOARD_CONTROL_PROMPT: '' }));
+
 
       // Construir systemInstruction COMPLETO para motor de voz Gemini
       // Integrando ContextPack (Persona + Memória + Histórico + Voz)
@@ -194,8 +195,16 @@ ${DASHBOARD_CONTROL_PROMPT}
 • Você TEM memória persistente. Use o que sabe sobre o usuário naturalmente.
 • Quando o usuário corrigir grafia do nome (ex: "com dois L"), APLIQUE a correção ao escrever/falar o nome.
 
+=== CONSCIÊNCIA DE HISTÓRICO (CRÍTICO) ===
+• O CONTEXTO DINÂMICO acima contém o HISTÓRICO RECENTE DA CONVERSA.
+• Este histórico inclui mensagens trocadas por TEXTO antes de você entrar em modo de voz.
+• Se o usuário perguntar "o que a gente tava conversando?" ou "qual foi minha primeira pergunta?", CONSULTE o histórico.
+• Se houver análise de IMAGEM ou ARQUIVO no histórico, você LEMBRA. Consulte o log.
+• Se o usuário perguntar sobre algo que NÃO está no histórico, diga que o contexto atual não contém essa informação.
+• Se o usuário perguntar sobre emails que você trouxe, CONSULTE o histórico onde você listou esses emails.
+
 === GATILHOS DE BUSCA EM TEMPO REAL (searchWeb) ===
-• O uso da ferramenta "searchWeb" é OBRIGATÓRIO quando o usuário usar palavras-chave como: "agora", "hoje", "últimas", "notícias", "cotação", "preço", "taxa", "ao vivo", "atualizado", "neste momento", "2026", "essa semana".
+• O uso da ferramenta "searchWeb" é OBRIGATÓRIO quando o usuário usar palavras-chave como: "últimas", "notícias", "cotação", "preço", "taxa", "ao vivo", "atualizado", "2026", "essa semana".
 • Se a busca falhar ou demorar, use a transparência: "Não consegui validar em tempo real agora, mas..."
 • NUNCA alucine dados em tempo real sem consultar a ferramenta.
 • Ao responder após uma busca, cite a fonte ou trecho do resultado.
@@ -204,6 +213,15 @@ ${DASHBOARD_CONTROL_PROMPT}
       // Log simplificado
       console.log('📋 [live-token-v4.5-DEBUG] SystemInstruction preparado COM contexto unificado');
 
+      // v3.2: Log detalhado do histórico para debug
+      const historyMarkerFound = context.systemInstruction.includes('=== HISTÓRICO RECENTE');
+      if (historyMarkerFound) {
+        const historyStart = context.systemInstruction.indexOf('=== HISTÓRICO RECENTE');
+        const historyPreview = context.systemInstruction.substring(historyStart, historyStart + 500);
+        console.log('📜 [live-token] HISTÓRICO encontrado no systemInstruction:', historyPreview.substring(0, 200) + '...');
+      } else {
+        console.warn('⚠️ [live-token] HISTÓRICO NÃO encontrado no systemInstruction do getContext!');
+      }
 
       // ===============================================================
       // GERAR TOKEN EPHEMERAL
@@ -244,7 +262,7 @@ ${DASHBOARD_CONTROL_PROMPT}
                     // === BUSCA E INFORMAÇÃO ===
                     {
                       name: 'searchWeb',
-                      description: 'OBRIGATÓRIO para cotações, preços, notícias. Gatilhos: quanto, cotação, preço, hoje.',
+                      description: 'Use para pesquisar fatos externos, cotações de moedas, preços de bitcoin e notícias atuais. NÃO use para funções internas do dashboard.',
                       parameters: { type: 'object', properties: { query: { type: 'string', description: 'Busca' } }, required: ['query'] }
                     },
                     {
@@ -293,8 +311,114 @@ ${DASHBOARD_CONTROL_PROMPT}
                     {
                       name: 'createCalendarEvent',
                       description: 'Agenda evento. Gatilhos: agenda, marca reunião, lembra-me.',
-                      parameters: { type: 'object', properties: { title: { type: 'string' }, start: { type: 'string' }, end: { type: 'string' } }, required: ['title', 'start', 'end'] }
+                      parameters: { type: 'object', properties: { title: { type: 'string' }, start: { type: 'string', description: 'ISO String' }, end: { type: 'string', description: 'ISO String' }, description: { type: 'string' } }, required: ['title', 'start', 'end'] }
+                    },
+                    {
+                      name: 'listCalendarEvents',
+                      description: 'Lista compromissos da agenda. Gatilhos: o que tenho hoje, compromissos extras.',
+                      parameters: { type: 'object', properties: { timeMin: { type: 'string' }, timeMax: { type: 'string' } } }
+                    },
+                    {
+                      name: 'listGmailMessages',
+                      description: 'Lista e-mails recentes.',
+                      parameters: { type: 'object', properties: { maxResults: { type: 'number' }, query: { type: 'string' } } }
+                    },
+                    {
+                      name: 'getGmailMessage',
+                      description: 'Lê o conteúdo de um e-mail específico pelo ID.',
+                      parameters: { type: 'object', properties: { messageId: { type: 'string' } }, required: ['messageId'] }
+                    },
+                    {
+                      name: 'searchGmail',
+                      description: 'Pesquisa e-mails usando termos de busca.',
+                      parameters: { type: 'object', properties: { searchTerm: { type: 'string' } }, required: ['searchTerm'] }
+                    },
+                    // === DIAGNÓSTICO E SISTEMA ===
+                    {
+                      name: 'getSystemHealth',
+                      description: 'Verifica a saúde do sistema LIA.'
+                    },
+                    {
+                      name: 'getSystemLogs',
+                      description: 'Recupera logs recentes do sistema.',
+                      parameters: { type: 'object', properties: { limit: { type: 'number' }, level: { type: 'string' } } }
+                    },
+                    {
+                      name: 'readProjectFile',
+                      description: 'Lê um arquivo específico do projeto.',
+                      parameters: { type: 'object', properties: { filePath: { type: 'string' } }, required: ['filePath'] }
+                    },
+                    {
+                      name: 'getProjectMap',
+                      description: 'Mostra a estrutura do projeto.'
+                    },
+                    // === DASHBOARD CONTROL (LIA Action Protocol v3.0) ===
+                    {
+                      name: 'dashboardGetSnapshot',
+                      description: 'OBRIGATÓRIO antes de qualquer manipulação de dashboard. Retorna lista de widgets atuais com IDs e posições.',
+                      parameters: { type: 'object', properties: {} }
+                    },
+                    {
+                      name: 'getBusinessMetrics',
+                      description: 'Consulta métricas financeiras reais (faturamento, despesas, etc). Gatilhos: quanto faturei, quais meus gastos.',
+                      parameters: {
+                        type: 'object',
+                        properties: {
+                          metricKey: { type: 'string', enum: ['cash_in', 'cash_out', 'net_cash', 'transaction_count', 'deals_value'] },
+                          period: { type: 'string', enum: ['day', 'week', 'month', 'year'] }
+                        },
+                        required: ['metricKey']
+                      }
+                    },
+                    {
+                      name: 'dashboardAddWidget',
+                      description: 'Adiciona um novo widget. RECOMENDADO: Omita x e y para adicionar automaticamente abaixo de tudo. Use x/y apenas para posicionamento preciso ("ao lado de X") baseado em snapshot.',
+                      parameters: {
+                        type: 'object',
+                        properties: {
+                          widgetType: {
+                            type: 'string',
+                            enum: ['kpi_card', 'line_timeseries', 'bar_grouped', 'donut_breakdown', 'table_rank', 'table_transactions', 'funnel', 'gauge', 'heatmap_calendar', 'alerts_list', 'radar_multidim', 'bar_horizontal', 'area_timeseries', 'pie_chart'],
+                            description: 'Tipo exato. Funil = funnel, Pizza = pie_chart.'
+                          },
+                          title: { type: 'string', description: 'Título visível' },
+                          x: { type: 'integer', description: 'Coluna (0-11). Omitir para auto.' },
+                          y: { type: 'integer', description: 'Linha. Omitir para auto.' },
+                          w: { type: 'integer', description: 'Largura. Padrão: 6.' },
+                          h: { type: 'integer', description: 'Altura. Padrão: 4.' }
+                        },
+                        required: ['widgetType']
+                      }
+                    },
+
+                    {
+                      name: 'dashboardReplaceWidget',
+                      description: 'Substitui um widget existente por outro tipo.',
+                      parameters: {
+                        type: 'object',
+                        properties: {
+                          targetWidgetType: { type: 'string', description: 'Tipo atual do widget a substituir' },
+                          targetWidgetTitle: { type: 'string', description: 'Título do widget a substituir' },
+                          newWidgetType: {
+                            type: 'string',
+                            enum: ['kpi_card', 'line_timeseries', 'bar_grouped', 'donut_breakdown', 'table_rank', 'table_transactions', 'funnel', 'gauge', 'heatmap_calendar', 'alerts_list', 'radar_multidim', 'bar_horizontal', 'area_timeseries', 'pie_chart']
+                          },
+                          newWidgetTitle: { type: 'string' }
+                        },
+                        required: ['newWidgetType']
+                      }
+                    },
+                    {
+                      name: 'dashboardReorganize',
+                      description: 'Reorganiza o layout do dashboard.',
+                      parameters: {
+                        type: 'object',
+                        properties: {
+                          layout: { type: 'string', enum: ['kpis-top', 'charts-first', 'auto'] }
+                        }
+                      }
                     }
+
                   ]
                 }
               ],
@@ -310,7 +434,9 @@ ${DASHBOARD_CONTROL_PROMPT}
         conversationId,
         userId,
         historico: historyCount > 0 ? `${historyCount} msgs` : 'NÃO',
-        localizacao: locationContext ? 'SIM' : 'NÃO'
+        localizacao: locationContext ? 'SIM' : 'NÃO',
+        hasHistoryInInstruction: fullSystemInstruction.includes('=== HISTÓRICO RECENTE'),
+        instructionLength: fullSystemInstruction.length
       });
 
       res.json({ token: token.name, expiresAt: expireTime });

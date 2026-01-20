@@ -1,22 +1,23 @@
 
 import React, { useContext, useState, useEffect } from 'react';
 import Header from './Header';
-import { ThemeContext, LanguageContext, Language } from '../App';
+import { ThemeContext } from '../App';
+import { LanguageContext, Language } from '../contexts/LanguageContext';
 import { useAppStore } from '../store/useAppStore';
 import { MODULE_REGISTRY } from '../config/modules';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const businessSectors = [
-    { id: 'technical_services', title: 'Serviços Técnicos', icon: 'build' },
-    { id: 'liberal_professionals', title: 'Profissionais Liberais', icon: 'gavel' },
-    { id: 'health_wellness', title: 'Saúde & Bem-Estar', icon: 'monitor_heart' },
-    { id: 'real_estate', title: 'Imobiliária & Construção', icon: 'apartment' },
-    { id: 'retail', title: 'Comércio & Lojas', icon: 'storefront' },
-    { id: 'logistics', title: 'Transporte & Logística', icon: 'local_shipping' },
-    { id: 'tech', title: 'Tecnologia & Software', icon: 'terminal' },
-    { id: 'creative', title: 'Conteúdo & Criativos', icon: 'palette' },
-    { id: 'other', title: 'Outros', icon: 'auto_awesome' },
+    { id: 'technical_services', title: 'sector_technical_services', icon: 'build' },
+    { id: 'liberal_professionals', title: 'sector_liberal_professionals', icon: 'gavel' },
+    { id: 'health_wellness', title: 'sector_health_wellness', icon: 'monitor_heart' },
+    { id: 'real_estate', title: 'sector_real_estate', icon: 'apartment' },
+    { id: 'retail', title: 'sector_retail', icon: 'storefront' },
+    { id: 'logistics', title: 'sector_logistics', icon: 'local_shipping' },
+    { id: 'tech', title: 'sector_tech', icon: 'terminal' },
+    { id: 'creative', title: 'sector_creative', icon: 'palette' },
+    { id: 'other', title: 'sector_other', icon: 'auto_awesome' },
 ];
 
 const Settings: React.FC = () => {
@@ -37,15 +38,16 @@ const Settings: React.FC = () => {
     };
 
     const handleReset = () => {
-        if (confirm("Deseja realmente resetar o onboarding? Suas preferências atuais serão perdidas.")) {
+        if (confirm(t('resetConfirm'))) {
             resetOnboarding();
             window.location.href = "/";
         }
     }
 
-    const handleSectorChange = (id: string, title: string) => {
-        setBusinessInfo(id, title);
-        toast.success(`Ramo alterado para: ${title}. Carregando novo painel...`);
+    const handleSectorChange = (id: string, titleKey: string) => {
+        const translatedTitle = t(titleKey);
+        setBusinessInfo(id, translatedTitle);
+        toast.success(`${t('sectorChangedTo')} ${translatedTitle}. ${t('loadingNewPanel')}`);
         // Navegar para dashboard e forçar reload para carregar template correto
         setTimeout(() => {
             window.location.href = '/';
@@ -61,8 +63,8 @@ const Settings: React.FC = () => {
                 <div className="flex gap-8">
                     {[
                         { id: 'general', label: t('appearance'), icon: 'palette' },
-                        { id: 'sector', label: 'Ramo de Atuação', icon: 'category' },
-                        { id: 'modules', label: 'Módulos & Apps', icon: 'extension' }
+                        { id: 'sector', label: t('businessSector'), icon: 'category' },
+                        { id: 'modules', label: t('modulesAndApps'), icon: 'extension' }
                     ].map((tab) => (
                         <button
                             key={tab.id}
@@ -97,7 +99,7 @@ const Settings: React.FC = () => {
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                                     <div>
                                         <h3 className="text-xl font-black mb-1 tracking-tight">{t('theme')}</h3>
-                                        <p className="text-sm text-gray-500 font-medium">Defina como o Luminnus deve aparecer para você.</p>
+                                        <p className="text-sm text-gray-500 font-medium">{t('themeDesc')}</p>
                                     </div>
                                     <div className="flex gap-2 bg-gray-100 dark:bg-black/30 p-1.5 rounded-2xl shadow-inner">
                                         <button
@@ -137,11 +139,11 @@ const Settings: React.FC = () => {
                             <div className="glass-panel bg-white dark:bg-white/5 rounded-3xl p-8 border border-gray-200 dark:border-white/10 shadow-xl hover-lift border-red-500/10">
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                                     <div>
-                                        <h3 className="text-xl font-black mb-1 tracking-tight text-red-500">Zerar Preferências</h3>
-                                        <p className="text-sm text-gray-500 font-medium">Voltar para o estado inicial de boas-vindas.</p>
+                                        <h3 className="text-xl font-black mb-1 tracking-tight text-red-500">{t('resetPrefs')}</h3>
+                                        <p className="text-sm text-gray-500 font-medium">{t('resetPrefsDesc')}</p>
                                     </div>
                                     <button onClick={handleReset} className="px-8 py-3 bg-red-500/10 text-red-500 border border-red-500/20 rounded-2xl hover:bg-red-500 hover:text-white text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-red-500/5">
-                                        Reiniciar
+                                        {t('resetBtn')}
                                     </button>
                                 </div>
                             </div>
@@ -166,8 +168,8 @@ const Settings: React.FC = () => {
                             className="space-y-6"
                         >
                             <div className="mb-8">
-                                <h3 className="text-2xl font-black tracking-tight mb-2">Seu Ramo de Atuação</h3>
-                                <p className="text-gray-500 font-medium">Mude sua profissão para que a LIA ajuste as ferramentas automaticamente.</p>
+                                <h3 className="text-2xl font-black tracking-tight mb-2">{t('yourSector')}</h3>
+                                <p className="text-gray-500 font-medium">{t('sectorChangeDesc')}</p>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -186,9 +188,9 @@ const Settings: React.FC = () => {
                                                 <span className="material-symbols-outlined text-3xl">{sector.icon}</span>
                                             </div>
                                             <div>
-                                                <h4 className="font-black text-sm uppercase tracking-wider">{sector.title}</h4>
+                                                <h4 className="font-black text-sm uppercase tracking-wider">{t(sector.title as any)}</h4>
                                                 <p className={`text-[10px] font-bold uppercase tracking-widest mt-1 ${isCurrent ? 'text-white/60' : 'text-gray-400'}`}>
-                                                    {isCurrent ? 'Ativo Agora' : 'Clique para Escolher'}
+                                                    {isCurrent ? t('activeNow') : t('clickToChoose')}
                                                 </p>
                                             </div>
                                             {isCurrent && <span className="material-symbols-outlined ml-auto text-white">check_circle</span>}
@@ -208,8 +210,8 @@ const Settings: React.FC = () => {
                             className="space-y-6"
                         >
                             <div className="mb-8">
-                                <h3 className="text-2xl font-black tracking-tight mb-2">Painel de Módulos</h3>
-                                <p className="text-gray-500 font-medium">Ative ou oculte as abas da sua barra lateral.</p>
+                                <h3 className="text-2xl font-black tracking-tight mb-2">{t('modulePanel')}</h3>
+                                <p className="text-gray-500 font-medium">{t('hideShowTabsDesc')}</p>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 stagger-in">
@@ -223,7 +225,7 @@ const Settings: React.FC = () => {
                                                 </div>
                                                 <div>
                                                     <h4 className="font-black text-xs uppercase tracking-tight">{t(module.translationKey as any)}</h4>
-                                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Módulo {isActive ? 'Ativo' : 'Oculto'}</p>
+                                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{isActive ? t('moduleActive') : t('moduleHidden')}</p>
                                                 </div>
                                             </div>
                                             <label className="relative inline-flex items-center cursor-pointer group scale-90">

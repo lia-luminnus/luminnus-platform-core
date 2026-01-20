@@ -139,7 +139,11 @@ interface ActivityLog {
   created_at: string;
 }
 
-const AdminIntegrations = () => {
+interface AdminIntegrationsProps {
+  onSectionChange?: (section: string) => void;
+}
+
+const AdminIntegrations = ({ onSectionChange }: AdminIntegrationsProps) => {
   const { role, user, session } = useAuth();
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -212,6 +216,12 @@ const AdminIntegrations = () => {
   };
 
   const handleConnect = async (integration: IntegrationDef) => {
+    // Redirecionamento especial para WhatsApp Admin Governance
+    if (integration.id === 'whatsapp' && onSectionChange) {
+      onSectionChange('whatsapp-admin');
+      return;
+    }
+
     if (integration.isComposite) {
       setSelectedIntegration(integration);
     } else {

@@ -301,7 +301,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           // Get session tokens for AuthBridge
           const { data: sessionData } = await supabase.auth.getSession();
           if (sessionData?.session) {
-            const bridgeUrl = `http://localhost:3000/#/auth-bridge?access_token=${sessionData.session.access_token}&refresh_token=${sessionData.session.refresh_token}`;
+            const bridgeUrl = `http://localhost:3001/#/integrations?access_token=${sessionData.session.access_token}&refresh_token=${sessionData.session.refresh_token}`;
             window.location.href = bridgeUrl;
           } else {
             // Fallback to main site dashboard
@@ -384,21 +384,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signOut = async () => {
     console.log('[AuthContext] Iniciando logout...');
     try {
+      // 1. Limpa explicitamente as chaves de armazenamento conhecidas
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'trnszeolsvyikavhqqid';
+      localStorage.removeItem('sb-dashboard-auth');
+      localStorage.removeItem(`sb-${projectId}-auth-token`);
+
+      // 2. Notifica o Supabase para invalidar o token no servidor
       await supabase.auth.signOut();
+
+      // 3. Limpa estados locais imediatamente
       setSession(null);
       setUser(null);
       setRole(null);
       setClienteId(null);
+      setCompany(null);
+      setPlan(null);
+      setEntitlements([]);
+
       console.log('[AuthContext] Logout completo, redirecionando...');
-      // Força redirecionamento limpo
-      window.location.href = '/';
+
+      // 4. Redirecionamento limpo com delay para garantir limpeza de cache/storage
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 100);
+
     } catch (error) {
       console.error('[AuthContext] Erro no logout:', error);
-      // Mesmo com erro, limpa estados e redireciona
-      setSession(null);
-      setUser(null);
-      setRole(null);
-      setClienteId(null);
+      // Limpeza de emergência mesmo em caso de erro
+      localStorage.removeItem('sb-dashboard-auth');
       window.location.href = '/';
     }
   };

@@ -72,7 +72,7 @@ function BarGrouped({ id, config, data, loading, error, isEditMode }: WidgetProp
 
     if (loading) {
         return (
-            <div className="h-full w-full rounded-2xl p-4 bg-white/5 border border-white/10 flex items-center justify-center">
+            <div className="h-full w-full rounded-2xl p-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 flex items-center justify-center">
                 <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
             </div>
         );
@@ -89,11 +89,11 @@ function BarGrouped({ id, config, data, loading, error, isEditMode }: WidgetProp
     // Empty state
     if (!chartData || chartData.length === 0) {
         return (
-            <div className="h-full w-full rounded-2xl p-4 bg-white/5 border border-white/10 flex flex-col">
-                <h3 className="text-sm font-semibold text-white mb-2">{title}</h3>
+            <div className="h-full w-full rounded-2xl p-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 flex flex-col">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">{title}</h3>
                 <div className="flex-1 flex items-center justify-center">
                     <div className="text-center">
-                        <span className="material-symbols-outlined text-4xl text-gray-600 mb-2">bar_chart</span>
+                        <span className="material-symbols-outlined text-4xl text-gray-400 dark:text-gray-600 mb-2">bar_chart</span>
                         <p className="text-sm text-gray-500">Sem dados para o período</p>
                     </div>
                 </div>
@@ -104,8 +104,8 @@ function BarGrouped({ id, config, data, loading, error, isEditMode }: WidgetProp
     const isHorizontal = orientation === 'horizontal';
 
     return (
-        <div className={`h-full w-full rounded-2xl p-4 bg-white/5 border border-white/10 flex flex-col ${isEditMode ? 'cursor-move' : ''}`}>
-            <h3 className="text-sm font-semibold text-white mb-3">{title}</h3>
+        <div className={`h-full w-full rounded-2xl p-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 flex flex-col ${isEditMode ? 'cursor-move' : ''}`}>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">{title}</h3>
 
             <div className="flex-1 min-h-0">
                 <ResponsiveContainer width="100%" height="100%">
@@ -166,6 +166,7 @@ function BarGrouped({ id, config, data, loading, error, isEditMode }: WidgetProp
                                 border: '1px solid rgba(255,255,255,0.1)',
                                 borderRadius: '12px',
                                 fontSize: '13px',
+                                color: '#fff',
                                 boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
                             } as React.CSSProperties}
                             itemStyle={{ color: '#f3f4f6', padding: '2px 0' }}

@@ -25,6 +25,12 @@ interface FunnelStage {
 // ============================================
 
 const STAGE_LABELS: Record<string, string> = {
+    visitantes: 'Visitantes',
+    leads: 'Leads',
+    mqls: 'MQLs',
+    sqls: 'SQLs',
+    oportunidades: 'Oportunidades',
+    vendas: 'Vendas',
     lead: 'Leads',
     contacted: 'Contactados',
     proposal: 'Proposta',
@@ -34,6 +40,12 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 const STAGE_COLORS: Record<string, string> = {
+    visitantes: 'from-blue-400 to-blue-600',
+    leads: 'from-cyan-400 to-cyan-600',
+    mqls: 'from-indigo-400 to-indigo-600',
+    sqls: 'from-purple-400 to-purple-600',
+    oportunidades: 'from-amber-400 to-amber-600',
+    vendas: 'from-green-400 to-green-600',
     lead: 'from-blue-500 to-blue-600',
     contacted: 'from-cyan-500 to-cyan-600',
     proposal: 'from-purple-500 to-purple-600',
@@ -60,8 +72,13 @@ function Funnel({ id, config, data, loading, error, isEditMode }: WidgetProps) {
     // Transform data
     const stages = useMemo(() => {
         if (!data || !Array.isArray(data)) return [];
-        // Filter out lost from main funnel, show separately
-        return (data as FunnelStage[])
+        // Filter out lost from main funnel, support 'value' as 'count'
+        return (data as any[])
+            .map(s => ({
+                ...s,
+                count: Number(s.count ?? s.value ?? 0),
+                total_value: Number(s.total_value ?? 0)
+            }))
             .filter(s => s.stage !== 'lost')
             .sort((a, b) => a.stage_order - b.stage_order);
     }, [data]);
@@ -89,7 +106,7 @@ function Funnel({ id, config, data, loading, error, isEditMode }: WidgetProps) {
 
     if (loading) {
         return (
-            <div className="h-full w-full rounded-2xl p-4 bg-white/5 border border-white/10 flex items-center justify-center">
+            <div className="h-full w-full rounded-2xl p-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 flex items-center justify-center">
                 <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
             </div>
         );
@@ -106,13 +123,13 @@ function Funnel({ id, config, data, loading, error, isEditMode }: WidgetProps) {
     // Empty state
     if (!stages || stages.length === 0) {
         return (
-            <div className="h-full w-full rounded-2xl p-4 bg-white/5 border border-white/10 flex flex-col">
-                <h3 className="text-sm font-semibold text-white mb-2">{title}</h3>
+            <div className="h-full w-full rounded-2xl p-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 flex flex-col">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">{title}</h3>
                 <div className="flex-1 flex items-center justify-center">
                     <div className="text-center">
-                        <span className="material-symbols-outlined text-4xl text-gray-600 mb-2">filter_alt</span>
+                        <span className="material-symbols-outlined text-4xl text-gray-400 dark:text-gray-600 mb-2">filter_alt</span>
                         <p className="text-sm text-gray-500">Sem dados de funil</p>
-                        <p className="text-xs text-gray-600 mt-1">Cadastre negócios para visualizar</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-600 mt-1">Cadastre negócios para visualizar</p>
                     </div>
                 </div>
             </div>
@@ -120,41 +137,37 @@ function Funnel({ id, config, data, loading, error, isEditMode }: WidgetProps) {
     }
 
     return (
-        <div className={`h-full w-full rounded-2xl p-5 bg-white/5 border border-white/10 flex flex-col relative overflow-hidden group shadow-xl ${isEditMode ? 'cursor-move' : ''}`}>
+        <div className={`h-full w-full rounded-2xl p-5 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 flex flex-col relative overflow-hidden group shadow-xl ${isEditMode ? 'cursor-move' : ''}`}>
             {/* Background Accent */}
             <div className="absolute -top-24 -right-24 w-48 h-48 bg-brand-primary/5 blur-3xl rounded-full pointer-events-none" />
 
             <div className="flex items-center justify-between mb-6 relative z-10">
                 <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-brand-primary text-xl">filter_alt</span>
-                    <h3 className="text-sm font-bold text-white tracking-tight uppercase opacity-80">{title}</h3>
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight uppercase opacity-80">{title}</h3>
                 </div>
-                <div className="text-[10px] text-gray-500 font-mono bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+                <div className="text-[10px] text-gray-500 font-mono bg-gray-100 dark:bg-white/5 px-2 py-0.5 rounded-full border border-gray-200 dark:border-white/5">
                     Live
                 </div>
             </div>
 
             <div className="flex-1 min-h-0 flex flex-col justify-between relative z-10 py-2">
                 {stages.map((stage, idx) => {
-                    // Hybrid width for a guaranteed funnel shape + data representation
-                    const fixedFunnelWidth = 100 - (idx * 14); // Theoretical perfect funnel
-                    const rawDataWidth = Math.max((stage.count / maxCount) * 100, 30);
-                    const widthPercent = (fixedFunnelWidth * 0.75) + (rawDataWidth * 0.25);
+                    const stageKey = stage.stage.toLowerCase().trim();
+                    // Much more aggressive funnel shape
+                    const widthPercent = 100 - (idx * 15);
+                    const nextWidth = 100 - ((idx + 1) * 15);
 
-                    const nextFixedFunnelWidth = 100 - ((idx + 1) * 14);
-                    const nextStage = stages[idx + 1];
-                    const nextRawDataWidth = nextStage ? Math.max((nextStage.count / maxCount) * 100, 30) : widthPercent * 0.8;
-                    const nextWidth = (nextFixedFunnelWidth * 0.75) + (nextRawDataWidth * 0.25);
-
-                    const gradient = STAGE_COLORS[stage.stage] || 'from-gray-500 to-gray-600';
-                    const taper = (widthPercent - nextWidth) / 2;
+                    const label = STAGE_LABELS[stageKey] || stage.stage;
+                    const gradient = STAGE_COLORS[stageKey] || 'from-gray-400 to-gray-600';
+                    const taper = 7.5; // Fixed taper for consistent trapezoid shape
 
                     return (
                         <div key={stage.stage} className="relative mb-1 flex flex-col items-center">
                             {/* Bar Container with Funnel Effect */}
                             <div className="w-full relative group/item">
                                 <div
-                                    className={`h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center gap-3 transition-all duration-700 ease-out shadow-lg hover:brightness-110 relative overflow-hidden border border-white/20`}
+                                    className={`h-11 bg-gradient-to-br ${gradient} flex items-center justify-center gap-3 transition-all duration-700 ease-out shadow-lg hover:brightness-110 relative overflow-hidden border border-white/20`}
                                     style={{
                                         width: `${widthPercent}%`,
                                         margin: '0 auto',
@@ -164,12 +177,12 @@ function Funnel({ id, config, data, loading, error, isEditMode }: WidgetProps) {
                                     {/* Glass reflection */}
                                     <div className="absolute inset-x-0 h-1/2 top-0 bg-white/10 pointer-events-none" />
 
-                                    <span className="text-white text-[11px] font-black uppercase tracking-wider drop-shadow-md z-10">
-                                        {STAGE_LABELS[stage.stage] || stage.stage}
+                                    <span className="text-white text-[11px] font-black uppercase tracking-wider shadow-sm z-10">
+                                        {label}
                                     </span>
-                                    <div className="bg-black/20 backdrop-blur-sm px-2 py-0.5 rounded-md border border-white/10 z-10">
+                                    <div className="bg-black/40 backdrop-blur-sm px-2 py-0.5 rounded-md border border-white/20 z-10 flex items-center justify-center min-w-[32px]">
                                         <span className="text-white text-xs font-black">
-                                            {stage.count}
+                                            {stage.count || 0}
                                         </span>
                                     </div>
                                 </div>
@@ -177,10 +190,10 @@ function Funnel({ id, config, data, loading, error, isEditMode }: WidgetProps) {
 
                             {/* Conversion Arrow/Badge */}
                             {showPercentages && idx < stages.length - 1 && (
-                                <div className="z-20 -my-2.5 flex items-center justify-center">
-                                    <div className="bg-[#111827] border border-white/10 px-2 py-0.5 rounded-full shadow-lg flex items-center gap-1 scale-90">
-                                        <span className="material-symbols-outlined text-[10px] text-green-400 font-black">south</span>
-                                        <span className="text-[10px] font-black text-white/90">
+                                <div className="z-20 -my-2 flex items-center justify-center">
+                                    <div className="bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 px-2 py-0.5 rounded-full shadow-lg flex items-center gap-1 scale-90">
+                                        <span className="material-symbols-outlined text-[10px] text-green-500 dark:text-green-400 font-black">south</span>
+                                        <span className="text-[10px] font-black text-gray-900 dark:text-white/90">
                                             {conversions[idx + 1].toFixed(0)}%
                                         </span>
                                     </div>
@@ -202,13 +215,13 @@ function Funnel({ id, config, data, loading, error, isEditMode }: WidgetProps) {
 
             {/* Lost deals footer */}
             {lostStage && lostStage.count > 0 && (
-                <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between relative z-10 transition-opacity hover:opacity-100 opacity-60">
+                <div className="mt-4 pt-3 border-t border-gray-200 dark:border-white/5 flex items-center justify-between relative z-10 transition-opacity hover:opacity-100 opacity-60">
                     <div className="flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
-                        <span className="text-[11px] font-medium text-gray-400">Perdidos</span>
+                        <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Perdidos</span>
                     </div>
-                    <span className="text-[11px] font-black text-red-400">
-                        {lostStage.count} deals • {formatCurrency(lostStage.total_value)}
+                    <span className="text-[11px] font-black text-red-500 dark:text-red-400">
+                        {lostStage.count} deals • {formatCurrency(Number(lostStage.total_value ?? 0))}
                     </span>
                 </div>
             )}

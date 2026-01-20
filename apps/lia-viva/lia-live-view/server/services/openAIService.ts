@@ -30,17 +30,27 @@ export class OpenAIService {
             { role: 'user', content: prompt || "Olá" }
         ];
 
+        // v5.2: Migração para API 'tools' (functions foi deprecado em gpt-4o-mini)
+        const formattedTools = tools?.length ? tools.map(t => ({ type: 'function' as const, function: t })) : undefined;
+
         const response = await this.openai.chat.completions.create({
             model,
             messages: messages as any,
-            temperature: 0.7,
+            temperature: 0.4,
             max_tokens: 1024,
-            functions: tools,
+            tools: formattedTools,
+            tool_choice: formattedTools ? 'auto' : undefined,
         });
 
         const choice = response.choices?.[0]?.message;
         const text = choice?.content || '';
-        const function_call = choice?.function_call || null;
+
+        // v5.2: Extrair function_call do novo formato tool_calls
+        const toolCall = choice?.tool_calls?.[0];
+        const function_call = toolCall ? {
+            name: toolCall.function.name,
+            arguments: toolCall.function.arguments
+        } : null;
 
         const usage = {
             inputTokens: response.usage?.prompt_tokens || 0,

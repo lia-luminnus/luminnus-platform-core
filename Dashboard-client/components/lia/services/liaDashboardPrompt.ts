@@ -155,7 +155,8 @@ export function mapFunctionCallToLiaAction(call: GPTFunctionCall): LiaActionPayl
                         targetWidgetType: args.targetWidgetType,
                         targetWidgetTitle: args.targetWidgetTitle,
                         newWidgetType: args.newWidgetType,
-                        newWidgetConfig: args.newWidgetConfig || { title: args.newWidgetTitle }
+                        newWidgetConfig: args.newWidgetConfig || { title: args.newWidgetTitle },
+                        pre_state_hash: args.pre_state_hash
                     }
                 };
 
@@ -166,10 +167,21 @@ export function mapFunctionCallToLiaAction(call: GPTFunctionCall): LiaActionPayl
                     payload: { layout: args.layout || 'auto' }
                 };
 
+            case 'dashboardAddWidget':
             case 'DASHBOARD_ADD_WIDGET':
                 return {
                     type: 'DASHBOARD_ADD_WIDGET',
-                    payload: args
+                    payload: {
+                        widgetType: args.widgetType,
+                        config: args.widgetConfig || { title: args.title, metric: args.metric },
+                        position: args.position || (args.x !== undefined ? {
+                            x: args.x,
+                            y: args.y,
+                            w: args.w,
+                            h: args.h
+                        } : undefined),
+                        pre_state_hash: args.pre_state_hash
+                    }
                 };
 
             case 'DASHBOARD_REMOVE_WIDGET':

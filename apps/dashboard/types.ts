@@ -113,7 +113,9 @@ export type ModuleId =
   | 'settings'
   | 'plan'
   | 'support'
-  | 'integrations';
+  | 'integrations'
+  | 'whatsapp_agent'
+  | 'whatsapp_admin';
 
 export interface Integration {
   id: string;

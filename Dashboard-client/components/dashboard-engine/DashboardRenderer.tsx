@@ -7,14 +7,20 @@
  * - Gráficos lado a lado
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useContext } from 'react';
 import GridLayout, { WidthProvider, Layout } from 'react-grid-layout';
 import DashboardEditor from './DashboardEditor';
 import { Loader2, Settings, Save, X, Plus, Edit3 } from 'lucide-react';
 import { useDashboard } from './DashboardContext';
-import { renderWidget, WIDGET_METADATA, isWidgetAvailableForPlan } from './WidgetRegistry';
+import { LanguageContext } from '../../contexts/LanguageContext';
+import { renderWidget, WIDGET_METADATA, isWidgetAvailableForPlan, WIDGET_METRIC_DEFAULTS } from './WidgetRegistry';
+import { normalizeWidgetType } from './widgetTypes';
 import { LayoutItem, WidgetConfig } from './types';
 import { useEffect } from 'react';
+import LiaFloatingChat from '../lia/LiaFloatingChat';
+import toast from 'react-hot-toast';
+import { Bot, Zap } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -33,16 +39,36 @@ function useWidgetData(tenantId: string, widgetId: string, config: WidgetConfig,
         if (!tenantId || !config) return;
         try {
             setLoading(true);
-            const metricKey = config.metric || config.metrics?.[0];
+
+            // Get metric from config, or use default for widget type
+            let metricKey = config.metric || config.metrics?.[0];
+
+            // Fallback to widget type defaults if no metric configured
+            if (!metricKey && config.type) {
+                const defaults = WIDGET_METRIC_DEFAULTS[config.type];
+                metricKey = defaults?.metrics?.[0];
+            }
+
             if (!metricKey) return;
 
             const today = new Date();
             const endDate = today.toISOString().split('T')[0];
             const start = new Date(today);
-            const range = globals?.dateRange || 'last_30_days';
+            const range = globals?.dateRange || globals?.period || 'last_30_days';
 
-            if (range === 'last_7_days') start.setDate(start.getDate() - 7);
-            else if (range === 'last_30_days') start.setDate(start.getDate() - 30);
+            // Map period to days
+            let daysBack = 30;
+            if (range === 'day' || range === 'last_1_day') daysBack = 1;
+            else if (range === 'week' || range === 'last_7_days') daysBack = 7;
+            else if (range === 'month' || range === 'last_30_days') daysBack = 30;
+            else if (range === 'year' || range === 'last_365_days') daysBack = 365;
+
+            // Heatmap needs more historical context to look "complete"
+            if (config.type === 'heatmap_calendar' && daysBack < 180) {
+                daysBack = 180; // Show last 6 months by default
+            }
+
+            start.setDate(start.getDate() - daysBack);
 
             const startDate = start.toISOString().split('T')[0];
             const queryType = getQueryType(config.type);
@@ -53,12 +79,26 @@ function useWidgetData(tenantId: string, widgetId: string, config: WidgetConfig,
                 start_date: startDate,
                 end_date: endDate,
                 type: queryType,
+                limit: (config.type === 'heatmap_calendar' ? '400' : (config.config?.limit?.toString() || '10'))
             });
 
             const response = await fetch(`/api/metrics/query?${params}`);
+
             if (response.ok) {
                 const result = await response.json();
                 let finalData = result.data !== undefined ? result.data : result;
+
+                // Handle double-wrapped data (e.g., { data: { data: [] } })
+                if (finalData && typeof finalData === 'object' && !Array.isArray(finalData) && finalData.data) {
+                    finalData = finalData.data;
+                }
+
+                // If still not an array but has rows or items, extract them
+                if (finalData && typeof finalData === 'object' && !Array.isArray(finalData)) {
+                    if (Array.isArray(finalData.rows)) finalData = finalData.rows;
+                    else if (Array.isArray(finalData.items)) finalData = finalData.items;
+                    else if (Array.isArray(finalData.records)) finalData = finalData.records;
+                }
 
                 if (queryType === 'kpi' && Array.isArray(finalData)) {
                     finalData = finalData.find((m: any) => m.metric_key === metricKey) || null;
@@ -82,10 +122,12 @@ function useWidgetData(tenantId: string, widgetId: string, config: WidgetConfig,
 }
 
 function getQueryType(t: string) {
-    if (t === 'kpi_card') return 'kpi';
-    if (t === 'funnel') return 'funnel';
-    if (['donut_breakdown', 'bar_grouped', 'bar_horizontal', 'pie_chart'].includes(t)) return 'breakdown';
-    if (t.includes('table')) return 'table';
+    const normalized = normalizeWidgetType(t) || t;
+    if (normalized === 'kpi_card') return 'kpi';
+    if (normalized === 'funnel') return 'funnel';
+    if (normalized === 'alerts_list') return 'alerts';
+    if (['donut_breakdown', 'bar_grouped', 'bar_horizontal', 'pie_chart', 'table_rank'].includes(normalized)) return 'breakdown';
+    if (normalized.includes('table')) return 'table';
     return 'timeseries';
 }
 
@@ -101,7 +143,6 @@ function WidgetWrapper({ id, config, tenantId, globals, plan, isEditMode, onEdit
     const handleEdit = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        console.log('[WidgetWrapper] Abrindo editor para:', id);
         onEdit();
     };
 
@@ -145,16 +186,94 @@ function WidgetWrapper({ id, config, tenantId, globals, plan, isEditMode, onEdit
 
 export default function DashboardRenderer({ tenantId, plan = 'pro', isEditable = true }: { tenantId: string; plan?: any; isEditable?: boolean }) {
     const { state, updateLayout, saveDashboard, removeWidget, toggleEditMode } = useDashboard();
+    const { t, language } = useContext(LanguageContext);
     const { config, isLoading, isEditMode } = state;
     const [editingWidgetId, setEditingWidgetId] = useState<string | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'year'>('month');
 
-    const onLayoutChange = useCallback((current: Layout[]) => {
+    const navigate = useNavigate();
+
+    // ============================================
+    // Real-time Anomaly Toasts
+    // ============================================
+    useEffect(() => {
+        if (!tenantId) return;
+
+        const checkAnomalies = async () => {
+            try {
+                const params = new URLSearchParams({
+                    tenant_id: tenantId,
+                    type: 'alerts',
+                    limit: '5'
+                });
+                const response = await fetch(`/api/metrics/query?${params}`);
+                if (response.ok) {
+                    const result = await response.json();
+                    const alerts = result.data || result;
+
+                    if (Array.isArray(alerts)) {
+                        const criticalAnomaly = alerts.find(a =>
+                            a.alert_type === 'error' &&
+                            a.alert_metadata?.source === 'anomaly' &&
+                            new Date(a.alert_timestamp).getTime() > (Date.now() - 300000) // Last 5 mins
+                        );
+
+                        if (criticalAnomaly) {
+                            toast((t) => (
+                                <div className="flex items-start gap-3 p-1">
+                                    <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center shrink-0 border border-red-500/20 overflow-hidden">
+                                        <img src="/images/lia-bust.png" alt="LIA" className="w-full h-full object-cover scale-[1.3] transform translate-y-1" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-1.5 mb-0.5">
+                                            <p className="text-sm font-bold text-gray-900 dark:text-white">LIA detectou uma anomalia!</p>
+                                            <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+                                        </div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 leading-relaxed">{criticalAnomaly.alert_message}</p>
+                                        <div className="flex gap-3">
+                                            <button
+                                                onClick={() => {
+                                                    toast.dismiss(t.id);
+                                                    navigate('/lia');
+                                                    // Opcionalmente disparar evento para iniciar chat
+                                                    setTimeout(() => {
+                                                        window.dispatchEvent(new CustomEvent('lia-open-chat', { detail: criticalAnomaly }));
+                                                    }, 500);
+                                                }}
+                                                className="text-[10px] font-black text-brand-primary uppercase hover:underline flex items-center gap-1 bg-brand-primary/10 px-2 py-1 rounded-md"
+                                            >
+                                                Investigar Agora
+                                            </button>
+                                            <button
+                                                onClick={() => toast.dismiss(t.id)}
+                                                className="text-[10px] font-bold text-gray-400 uppercase hover:text-gray-600 dark:hover:text-gray-200"
+                                            >
+                                                Ignorar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ), { duration: 10000, id: 'anomaly-toast' });
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('[AnomalyCheck] Error:', err);
+            }
+        };
+
+        checkAnomalies();
+        const interval = setInterval(checkAnomalies, 300000); // Every 5 mins
+        return () => clearInterval(interval);
+    }, [tenantId]);
+
+    const onLayoutChange = useCallback((current: GridLayout.Layout[]) => {
         if (!isEditMode) return;
         updateLayout(current.map(l => ({ id: l.i, x: l.x, y: l.y, w: l.w, h: l.h })));
     }, [isEditMode, updateLayout]);
 
-    // Layout: 4 KPIs no topo, gráficos embaixo lado a lado
+    // Layout memoization
     const displayLayout = useMemo(() => {
         if (!config?.layout) return [];
 
@@ -162,11 +281,11 @@ export default function DashboardRenderer({ tenantId, plan = 'pro', isEditable =
         const kpis = items.filter(i => config.widgets[i.id]?.type === 'kpi_card');
         const charts = items.filter(i => config.widgets[i.id]?.type !== 'kpi_card');
 
-        // Detecta layout corrompido
+        // Detect layout issues
         const needsReset = items.length > 1 && items.every(item => item.x === 0);
 
         if (needsReset) {
-            const fixed: Layout[] = [];
+            const fixed: GridLayout.Layout[] = [];
 
             kpis.forEach((item, idx) => {
                 fixed.push({ i: item.id, x: (idx % 4) * 3, y: Math.floor(idx / 4) * 2, w: 3, h: 2, minW: 2, static: !isEditMode });
@@ -191,21 +310,29 @@ export default function DashboardRenderer({ tenantId, plan = 'pro', isEditable =
         }));
     }, [config?.layout, config?.widgets, isEditMode]);
 
-    if (isLoading) return <div className="h-full flex items-center justify-center bg-[#0a0d14]"><Loader2 className="w-10 h-10 animate-spin text-brand-primary" /></div>;
-    if (!config) return <div className="h-full flex items-center justify-center bg-[#0a0d14] text-gray-500">Carregando...</div>;
+    // Memoize globals to prevent infinite re-fetch loops in widgets
+    const globals = useMemo(() => ({
+        ...config?.globals,
+        period,
+        language
+    }), [config?.globals, period, language]);
+
+    if (isLoading) return <div className="h-full flex items-center justify-center bg-gray-50 dark:bg-[#0a0d14]"><Loader2 className="w-10 h-10 animate-spin text-brand-primary" /></div>;
+    if (!config) return <div className="h-full flex items-center justify-center bg-gray-50 dark:bg-[#0a0d14] text-gray-500">{t('loadingDashboardEngine')}</div>;
 
     const today = new Date();
-    const dateString = today.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const localeMap: Record<string, string> = { pt: 'pt-BR', en: 'en-US', es: 'es-ES' };
+    const dateString = today.toLocaleDateString(localeMap[language] || 'pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
 
     return (
-        <div className="flex flex-col h-full bg-[#0a0d14] text-white overflow-hidden">
-            {/* Header Compacto - Igual à Imagem 2 */}
-            <div className="flex-none px-6 py-3 flex items-center justify-between border-b border-white/5">
-                <span className="text-sm text-gray-400">Dashboard</span>
+        <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0a0d14] text-gray-900 dark:text-white overflow-hidden">
+            {/* Header Compacto */}
+            <div className="flex-none px-6 py-3 flex items-center justify-between border-b border-gray-200 dark:border-white/5">
+                <span className="text-sm text-gray-600 dark:text-gray-400">{t('dashboard')}</span>
                 {isEditable && !isEditMode && (
-                    <button onClick={toggleEditMode} className="flex items-center gap-1.5 text-gray-400 hover:text-white text-sm transition-all">
+                    <button onClick={toggleEditMode} className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white text-sm transition-all">
                         <Edit3 className="w-3.5 h-3.5" />
-                        Editar
+                        {t('editWidget')}
                     </button>
                 )}
                 {isEditMode && (
@@ -213,20 +340,41 @@ export default function DashboardRenderer({ tenantId, plan = 'pro', isEditable =
                         {state.pendingChanges && (
                             <div className="flex items-center gap-2 px-2 py-1 bg-amber-500/10 rounded-lg">
                                 <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
-                                <span className="text-[10px] text-amber-500 uppercase font-bold">Não salvo</span>
+                                <span className="text-[10px] text-amber-500 uppercase font-bold">{t('notSaved')}</span>
                             </div>
                         )}
-                        <button onClick={toggleEditMode} className="text-gray-400 hover:text-white text-sm">Cancelar</button>
-                        <button onClick={() => saveDashboard().then(toggleEditMode)} disabled={!state.pendingChanges} className={`h-8 px-4 rounded-lg bg-brand-primary text-white text-sm font-medium flex items-center gap-1.5 ${!state.pendingChanges ? 'opacity-50' : ''}`}><Save className="w-3.5 h-3.5" />Salvar</button>
+                        <button onClick={toggleEditMode} className="text-gray-400 hover:text-white text-sm">{t('cancel')}</button>
+                        <button onClick={() => saveDashboard().then(toggleEditMode)} disabled={!state.pendingChanges} className={`h-8 px-4 rounded-lg bg-brand-primary text-white text-sm font-medium flex items-center gap-1.5 ${!state.pendingChanges ? 'opacity-50' : ''}`}><Save className="w-3.5 h-3.5" />{t('saveChanges')}</button>
                         <button onClick={() => setShowAddModal(true)} className="w-8 h-8 bg-white/10 text-white rounded-lg flex items-center justify-center"><Plus className="w-4 h-4" /></button>
                     </div>
                 )}
             </div>
 
-            {/* Título */}
-            <div className="px-6 pt-4 pb-2">
-                <h1 className="text-xl font-bold tracking-tight">RELATÓRIO DE INTELIGÊNCIA</h1>
-                <p className="text-xs text-gray-500 capitalize">{dateString}</p>
+            {/* Título + Filtro de Período */}
+            <div className="px-6 pt-4 pb-2 flex items-center justify-between">
+                <div>
+                    <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">{t('intelligenceReport')}</h1>
+                    <p className="text-xs text-gray-500 capitalize">{dateString}</p>
+                </div>
+                <div className="flex items-center gap-1 bg-gray-100 dark:bg-white/5 p-1 rounded-xl">
+                    {[
+                        { key: 'day', label: t('daily') },
+                        { key: 'week', label: t('weekly') },
+                        { key: 'month', label: t('monthly') },
+                        { key: 'year', label: t('yearly') }
+                    ].map((p) => (
+                        <button
+                            key={p.key}
+                            onClick={() => setPeriod(p.key as any)}
+                            className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${period === p.key
+                                ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30'
+                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/5'
+                                }`}
+                        >
+                            {p.label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* Grid */}
@@ -248,7 +396,7 @@ export default function DashboardRenderer({ tenantId, plan = 'pro', isEditable =
                                 id={item.i}
                                 config={config.widgets[item.i]}
                                 tenantId={tenantId}
-                                globals={config.globals}
+                                globals={globals}
                                 plan={plan}
                                 isEditMode={isEditMode}
                                 onEdit={() => setEditingWidgetId(item.i)}
@@ -263,7 +411,7 @@ export default function DashboardRenderer({ tenantId, plan = 'pro', isEditable =
                 {isEditMode && (
                     <button
                         onClick={() => setShowAddModal(true)}
-                        className="w-full mt-4 p-6 border-2 border-dashed border-white/20 rounded-2xl text-gray-400 hover:text-white hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all flex items-center justify-center gap-3"
+                        className="w-full mt-4 p-6 border-2 border-dashed border-gray-300 dark:border-white/20 rounded-2xl text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:border-brand-primary/50 hover:bg-brand-primary/5 transition-all flex items-center justify-center gap-3"
                     >
                         <Plus className="w-6 h-6" />
                         <span className="text-sm font-medium">Adicionar Widget</span>
@@ -271,7 +419,16 @@ export default function DashboardRenderer({ tenantId, plan = 'pro', isEditable =
                 )}
             </div>
 
-            <DashboardEditor isOpen={showAddModal || !!editingWidgetId} onClose={() => { setShowAddModal(false); setEditingWidgetId(null); }} plan={plan} mode={editingWidgetId ? 'edit' : 'add'} editingWidgetId={editingWidgetId || undefined} />
+            <DashboardEditor
+                isOpen={showAddModal || !!editingWidgetId}
+                onClose={() => { setShowAddModal(false); setEditingWidgetId(null); }}
+                plan={plan}
+                mode={editingWidgetId ? 'edit' : 'add'}
+                editingWidgetId={editingWidgetId || undefined}
+            />
+
+            {/* Floating Chat Button */}
+            <LiaFloatingChat tenantId={tenantId} />
 
             <style dangerouslySetInnerHTML={{ __html: `.react-grid-item.react-grid-placeholder{background:rgba(139,92,246,0.1)!important;border-radius:1rem!important;border:2px dashed rgba(139,92,246,0.4)!important}.scrollbar-hide::-webkit-scrollbar{display:none}.scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none}` }} />
         </div>

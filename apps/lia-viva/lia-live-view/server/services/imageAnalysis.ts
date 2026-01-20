@@ -135,18 +135,17 @@ Mensagem do usuário: ${userMessage}
 
 Retorne análise técnica profissional.`,
 
-    'ui-analysis': `Você é um UX/UI designer experiente.
-
+    'ui-analysis': `Você é um especialista em interfaces de usuário (UI) e sistemas operacionais.
+    
 TAREFA:
-1. Analise a interface mostrada
-2. Identifique problemas de UX
-3. Avalie acessibilidade
-4. Sugira melhorias de design
-5. Proponha correções específicas
+1. Identifique EXATAMENTE o que está na tela (quais abas estão abertas, quais botões estão selecionados, quais mensagens estão visíveis).
+2. Identifique o estado atual da interface (ex: aba selecionada, itens marcados, popups abertos).
+3. Se houver uma seta ou marcação do usuário, foque no que ela aponta.
+4. Identifique qualquer erro, warning ou comportamento inesperado na interface.
 
 Mensagem do usuário: ${userMessage}
 
-Seja específico e orientado a ações.`,
+Seja extremamente observador. Não presuma nada que não esteja visualmente comprovado no print.`,
 
     'document-extraction': `Você é um assistente de extração de documentos.
 
@@ -176,17 +175,17 @@ Seja analítico e orientado a insights.`,
 
 Mensagem do usuário: ${userMessage}`,
 
-    'technical-analysis': `Você é um assistente técnico experiente.
+    'technical-analysis': `Você é um analista técnico de sistemas.
 
 Analise a imagem tecnicamente e forneça:
-1. Identificação do contexto
-2. Análise técnica detalhada
-3. Problemas identificados (se houver)
-4. Sugestões de melhoria ou correção
+1. Identificação precisa do contexto e da aplicação mostrada.
+2. Descrição do estado atual dos elementos (ex: checkboxes marcados, campos preenchidos, tabs ativas).
+3. Diagnóstico de falhas ou comportamentos anômalos visíveis.
+4. Plano de ação imediato para resolver qualquer problema identificado.
 
 Mensagem do usuário: ${userMessage}
 
-Seja técnico e preciso.`,
+Seja direto, técnico e foque na funcionalidade, não na estética.`,
   };
 
   return prompts[type] || prompts['technical-analysis'];

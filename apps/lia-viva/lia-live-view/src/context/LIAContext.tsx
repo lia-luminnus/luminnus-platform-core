@@ -1259,11 +1259,25 @@ export function LIAProvider({ children }: LIAProviderProps) {
       console.log('🗣️ [user-transcript] Recebido:', text);
       const scopeKey = activeScopeRef.current;
       if (scopeKey) {
+        // v5.5: DEDUPLICAÇÃO - Se o usuário acabou de enviar essa mesma mensagem via texto, 
+        // ignorar a sincronização do socket (que serve para outros dispositivos/abas)
+        const currentMessages = messagesByScopeRef.current[scopeKey] || [];
+        const lastMsg = currentMessages[currentMessages.length - 1];
+        const now = Date.now();
+
+        if (lastMsg &&
+          lastMsg.type === 'user' &&
+          lastMsg.content === text &&
+          (now - lastMsg.timestamp) < 2000) {
+          console.log('🛡️ [LIAContext] Mensagem duplicada detectada (sync ignorado)');
+          return;
+        }
+
         const userMessage: Message = {
           id: `user_${Date.now()}`,
           type: 'user',
           content: text,
-          timestamp: Date.now()
+          timestamp: now
         };
         if (addToScopeRef.current) {
           // No escopo unificado, mode é irrelevante para a chave mas mantemos por compatibilidade
@@ -1501,6 +1515,18 @@ export function LIAProvider({ children }: LIAProviderProps) {
     const isImage = file.file.type.startsWith('image/');
     const prompt = text.trim() || 'Analise este arquivo em detalhes.';
 
+    // v2.3: Criar URL estável a partir do base64 para evitar problemas com blob URL revogado
+    let stablePreviewUrl = file.preview;
+    try {
+      const arrayBuffer = await file.file.arrayBuffer();
+      const base64 = btoa(
+        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+      stablePreviewUrl = `data:${file.file.type};base64,${base64}`;
+    } catch (e) {
+      console.warn('⚠️ Não foi possível criar data URL, usando preview original');
+    }
+
     // 1. Adicionar mensagem do usuário COM attachment ao chat (ESCOPO CORRETO)
     const userMessage: Message = {
       id: `user_${Date.now()}`,
@@ -1510,14 +1536,15 @@ export function LIAProvider({ children }: LIAProviderProps) {
       attachments: [{
         name: file.file.name,
         type: isImage ? 'image' : 'document',
-        url: file.preview
+        url: stablePreviewUrl // v2.3: Data URL estável que não é revogado
       }]
     };
     addMessageToScope(scopeKey, userMessage);
-    console.log('📎 Mensagem com attachment adicionada ao escopo:', scopeKey);
+    console.log('📎 Mensagem com attachment adicionada ao escopo:', scopeKey, 'URL length:', stablePreviewUrl?.length);
 
     // 2. Ativar loading para fase de UPLOAD (animação Luminnus)
     setIsProcessingUpload(true);
+
 
     try {
       // 3. Converter arquivo para base64
@@ -1535,7 +1562,11 @@ export function LIAProvider({ children }: LIAProviderProps) {
       formData.append('file', file.file);
       formData.append('prompt', prompt);
       formData.append('conversationId', convId);
-      // userId e tenantId são opcionais - o backend usa defaults se não enviados
+      // v1.2.1: Enviar userId e userPlan para detecção correta no Execution Router
+      console.log(`🔐 [sendMessageWithFiles] Enviando: userId="${userId}", tenantId="${tenantId}", plan="${plan}"`);
+      if (userId) formData.append('userId', userId);
+      if (tenantId) formData.append('tenantId', tenantId);
+      if (plan) formData.append('userPlan', plan);
 
 
       // Desativar loading de upload, ativar typing bubbles (aguardando resposta da AI)
@@ -1546,6 +1577,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         method: 'POST',
         body: formData,
       });
+
 
 
       if (!response.ok) {
@@ -2136,6 +2168,32 @@ export function LIAProvider({ children }: LIAProviderProps) {
       console.error('❌ Erro ao parar Gemini Live:', error);
     }
   }, [handleGeminiLiveEvent]);
+
+  // v5.8: SYNC VOZ - Recuperar estado da sessão se o componente remontar (troca de aba/app)
+  useEffect(() => {
+    const activeSession = geminiLiveService.getSession();
+    if (activeSession && activeSession.isActive) {
+      console.log('🔄 [LIAContext] Sessão de voz ativa detectada! Sincronizando interface...');
+      setIsLiveActive(true);
+      setIsListening(activeSession.isListening);
+      setIsSpeaking(activeSession.isSpeaking);
+
+      // Re-atachar o listener de eventos para garantir que as transcrições continuem chegando ao chat
+      geminiLiveService.addEventListener(handleGeminiLiveEvent);
+
+      // Sincronizar ID da conversa se disponível
+      if (activeSession.id && activeSession.id.startsWith('conv_')) {
+        setCurrentConversationId(activeSession.id);
+        currentIdRef.current = activeSession.id;
+        setActiveScope(activeSession.id);
+      }
+    }
+
+    return () => {
+      // Limpar listener ao desmontar para evitar duplicidade se remontar depois
+      geminiLiveService.removeEventListener(handleGeminiLiveEvent);
+    };
+  }, [handleGeminiLiveEvent, setActiveScope]);
 
   // ======================================================================
   // MÉTODOS DE MEMÓRIA

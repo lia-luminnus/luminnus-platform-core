@@ -91,6 +91,7 @@ export interface WidgetConfig {
 
 export interface GlobalFilters {
     dateRange: DateRangePreset;
+    period?: 'day' | 'week' | 'month' | 'year'; // Added for dashboard period sync
     customDateStart?: string;
     customDateEnd?: string;
     currency: string;
@@ -326,6 +327,7 @@ export interface DashboardSnapshot {
     }>;
     widgetCount: number;
     active_widget_types: WidgetType[];
+    next_suggested_position?: { x: number; y: number; w: number; h: number };
     layout_summary: string;
     summary: string;
 }

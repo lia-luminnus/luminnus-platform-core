@@ -1,3 +1,7 @@
+---
+description: Detalhamento técnico da arquitetura multi-motor (GPT + Gemini) e fluxos de contexto.
+---
+
 # Arquitetura Híbrida LIA: IA Multi-Motor & Contexto Unificado
 
 Este documento detalha o ecossistema atual da LIA, explicando as responsabilidades do **GPT-4o** e **Gemini 2.0**, as tecnologias de voz e como o sistema mantém a paridade entre Admin e Dashboard.
@@ -10,10 +14,11 @@ Este documento detalha o ecossistema atual da LIA, explicando as responsabilidad
 | :--- | :--- | :--- |
 | **Backend Core** | Node.js / Express | Orquestração, Autenticação, Persistência (Supabase) |
 | **Comunicação** | Socket.IO | Stream de eventos em tempo real, Chat e Voz Padrão |
-| **Motor de Texto/Lógica** | **GPT-4o-mini** | Raciocínio, Execução de Ferramentas (17 tools), Chat |
+| **Motor de Texto/Lógica** | **GPT-4o-mini** | Raciocínio, Execução de Ferramentas (20+ tools), Chat |
 | **Motor de Voz Live** | **Gemini 2.0 Flash** | Voz contínua (hands-free) de baixa latência |
 | **STT (Voz para Texto)** | OpenAI Whisper | Transcrição para o fluxo de voz padrão |
 | **TTS (Texto para Voz)** | OpenAI TTS (Voz: Nova) | Resposta de áudio para o fluxo de voz padrão |
+| **Routing de Execução** | **Execution Router (AIRouter)** | Triagem de intenções de ação e bypass para tools reais |
 
 ---
 
@@ -23,10 +28,16 @@ Este documento detalha o ecossistema atual da LIA, explicando as responsabilidad
 Usado no **Chat (Texto)** e **Voz Padrão** (Botão de microfone).
 - **Responsabilidades**:
   - Processar mensagens de texto.
-  - Executar as **17 ferramentas de negócio** (Google Sheets, Gmail, Gerar Gráficos, Image Gen, etc.).
+  - Executar as **20+ ferramentas de negócio** (Google Sheets, Gmail, Calendar, Google Docs, Gerar Gráficos, Image Gen, etc.).
   - Salvar e carregar memórias profundas no Supabase.
   - Lidar com análise de arquivos e multimodalidade estruturada.
 - **Conexão**: Via Socket.IO através do backend.
+
+### C. Execution Router (AIRouter.ts)
+Integrado ao fluxo de chat para gerenciar a execução de ações externas.
+- **Modo ACTION**: Identifica quando o usuário quer realizar uma tarefa (ex: "enviar email").
+- **Bypass de Tools Reais**: Se a ferramenta já estiver implementada (Gmail, Calendar, etc.), o roteador permite a passagem direta para o GPT-4o-mini utilizar a `ToolService`.
+- **Placeholder**: Se a ação for identificada mas não houver ferramenta pronta, retorna uma mensagem de "em desenvolvimento".
 
 ### B. Gemini 2.0 Flash-exp (O "Voz-Realtime")
 Usado no **Live Mode** (Conversação contínua).

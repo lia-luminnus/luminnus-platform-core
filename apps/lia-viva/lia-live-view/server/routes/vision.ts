@@ -155,14 +155,20 @@ export function setupVisionRoutes(app: Express) {
             const { OutputGovernance } = await import('../services/outputGovernance.js');
             const enrichedPrompt = OutputGovernance.enrichPrompt(finalPrompt, [{ type: file.mimetype }]);
 
-            // 2. Processar via AIRouter (Pipeline Híbrido v1.1.1)
+            // 2. Processar via AIRouter (Pipeline Híbrido v1.2.1)
             // Para Word, enviamos o texto extraído; para outros, o arquivo original
+            // v1.2.1: Incluir userPlan e connections para detecção correta de Admin/Plano
+            const userPlan = req.body.userPlan || 'free';
+            const connections = req.body.connections || {};
+
             let result = await AIRouter.route({
                 userId,
                 tenantId,
                 prompt: enrichedPrompt,
                 conversationId: req.body.conversationId, // v1.1.2: Para contexto
                 userIntent,
+                userPlan, // v1.2.1: Plano do usuário para Execution Router
+                connections, // v1.2.1: Conexões ativas para verificação de capacidades
                 files: (analysisType === 'archive' || isWordDoc) ? [] : [{
                     mimetype: effectiveMimetype,
                     data: base64Data,
@@ -171,30 +177,36 @@ export function setupVisionRoutes(app: Express) {
                 }]
             });
 
+
             // =====================================================
             // OUTPUT GOVERNANCE v1.3 - Validação, Retry, Formatação
             // =====================================================
-            try {
-                const { OutputGovernance } = await import('../services/outputGovernance.js');
-                const { OpenAIService } = await import('../services/openAIService.js');
+            // Skip governance if it's an execution router fallback/placeholder
+            if (!result.detailPayload?.isFallback) {
+                try {
+                    const { OutputGovernance } = await import('../services/outputGovernance.js');
+                    const { OpenAIService } = await import('../services/openAIService.js');
 
-                const governed = await OutputGovernance.forMultiModal(
-                    result.text || '',
-                    finalPrompt,
-                    async (retryPrompt) => {
-                        const retryResult = await OpenAIService.chat(retryPrompt, [], 'gpt-4o-mini');
-                        return retryResult.text;
-                    },
-                    [{ type: file.mimetype }]
-                );
+                    const governed = await OutputGovernance.forMultiModal(
+                        result.text || '',
+                        finalPrompt,
+                        async (retryPrompt) => {
+                            const retryResult = await OpenAIService.chat(retryPrompt, [], 'gpt-4o-mini');
+                            return retryResult.text;
+                        },
+                        [{ type: file.mimetype }]
+                    );
 
-                result = { ...result, text: governed.markdown, detailPayload: governed.detailPayload };
+                    result = { ...result, text: governed.markdown, detailPayload: governed.detailPayload };
 
-                if (governed.retryAttempts > 0 || governed.secretsDetected) {
-                    console.log(`📋 [OutputGovernance] MultiModal: ${governed.contractType}, Retries: ${governed.retryAttempts}`);
+                    if (governed.retryAttempts > 0 || governed.secretsDetected) {
+                        console.log(`📋 [OutputGovernance] MultiModal: ${governed.contractType}, Retries: ${governed.retryAttempts}`);
+                    }
+                } catch (govError) {
+                    console.warn('⚠️ [OutputGovernance] Erro na governança multimodal:', govError);
                 }
-            } catch (govError) {
-                console.warn('⚠️ [OutputGovernance] Erro na governança multimodal:', govError);
+            } else {
+                console.log(`🛡️ [OutputGovernance] Skipped for Execution Router response.`);
             }
 
             // 3. Upload do arquivo para Supabase Storage (v2.0 - Persistência)

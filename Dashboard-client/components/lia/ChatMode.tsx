@@ -9,10 +9,11 @@
  * - Conversation isolation by scope
  */
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useContext } from "react";
 import { Send, Mic, MicOff, Paperclip, X, FileText, ImageIcon, Video, File, Loader2 } from "lucide-react";
 import { useLIA } from "./LIAContext";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { LanguageContext } from "../../contexts/LanguageContext";
 
 const LIA_AVATAR_URL = "/images/lia-bust.png";
 
@@ -53,6 +54,7 @@ export function ChatMode() {
         isSpeaking,
         isLiveActive,
     } = useLIA();
+    const { t } = useContext(LanguageContext);
 
     // Conversation management
     const [chatConversationId, setChatConversationId] = useState<string | null>(null);
@@ -109,15 +111,15 @@ export function ChatMode() {
     const [phasedThinkingText, setPhasedThinkingText] = useState("LIA está pensando...");
     useEffect(() => {
         if (isTyping) {
-            setPhasedThinkingText("LIA está pensando...");
+            setPhasedThinkingText(t('typingThinking'));
             const timer = setTimeout(() => {
-                setPhasedThinkingText("LIA está gerando resposta...");
+                setPhasedThinkingText(t('typingGenerating'));
             }, 2000);
             return () => clearTimeout(timer);
         } else {
-            setPhasedThinkingText("LIA está pensando...");
+            setPhasedThinkingText(t('typingThinking'));
         }
-    }, [isTyping]);
+    }, [isTyping, t]);
 
     // Scroll to bottom
     useEffect(() => {
@@ -157,14 +159,14 @@ export function ChatMode() {
     const handleSend = async () => {
         if (!inputValue.trim() && pendingFiles.length === 0) return;
 
-        const content = inputValue || (pendingFiles.length > 0 ? `Analise estas imagens` : "");
+        const content = inputValue || (pendingFiles.length > 0 ? t('analyzeImages') : "");
 
         const filesWithData = pendingFiles
             .filter(pf => pf.file && typeof pf.file === 'object' && 'name' in pf.file)
             .map(pf => ({ file: pf.file as File }));
 
         if (filesWithData.length > 0 && sendMessageWithFiles) {
-            await sendMessageWithFiles(content, filesWithData);
+            await sendMessageWithFiles(content, filesWithData, 'chat');
         } else {
             sendTextMessage(content);
         }
@@ -225,7 +227,7 @@ export function ChatMode() {
                     if (transcription) {
                         setInputValue(transcription);
                     } else {
-                        alert("Não foi possível transcrever o áudio. Tente novamente.");
+                        alert(t('transcribeError'));
                     }
 
                     audioChunksRef.current = [];
@@ -235,26 +237,13 @@ export function ChatMode() {
                 setIsRecording(true);
             } catch (err) {
                 console.error("Erro ao acessar microfone:", err);
-                alert("Não foi possível acessar o microfone. Verifique as permissões do navegador.");
+                alert(t('micAccessError'));
             }
         }
     };
 
     return (
         <div className="relative h-full w-full flex flex-col bg-[#0d1525]">
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-white/10">
-                <h2 className="text-lg font-bold">
-                    <span className="text-cyan-400">LIA</span>
-                    <span className="text-gray-500"> | </span>
-                    <span className="text-gray-300">Chat Mode</span>
-                </h2>
-                <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`} />
-                    <span className="text-xs text-gray-400">{isConnected ? "Conectado" : "Desconectado"}</span>
-                </div>
-            </div>
-
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {messages.length === 0 ? (
@@ -262,9 +251,9 @@ export function ChatMode() {
                         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-cyan-500/20 to-purple-500/20 flex items-center justify-center mb-4 border border-cyan-500/30">
                             <span className="text-4xl">💬</span>
                         </div>
-                        <h3 className="text-xl font-bold text-cyan-400 mb-2">Bem-vindo ao Chat</h3>
+                        <h3 className="text-xl font-bold text-cyan-400 mb-2">{t('welcomeToChat')}</h3>
                         <p className="text-gray-400 max-w-md">
-                            Envie mensagens, arquivos ou use o microfone para interagir com a LIA.
+                            {t('welcomeChatDesc')}
                         </p>
                     </div>
                 ) : (
@@ -273,14 +262,14 @@ export function ChatMode() {
                             <div key={message.id} className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
                                 {message.type === "lia" && (
                                     <div className="w-10 h-10 rounded-full overflow-hidden mr-3 flex-shrink-0 border-2 border-cyan-500/30 shadow-lg shadow-cyan-500/10">
-                                        <img src={LIA_AVATAR_URL} alt="LIA" className="w-full h-full object-cover" />
+                                        <img src={LIA_AVATAR_URL} alt="LIA" className="w-full h-full object-cover scale-[1.4] origin-top" />
                                     </div>
                                 )}
                                 <div className={`${message.type === "user" ? "max-w-[85%]" : "flex-1 max-w-[85%]"}`}>
                                     <div
-                                        className={`rounded-2xl px-5 py-4 shadow-xl ${message.type === 'user'
-                                            ? 'bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-br-none border border-white/10'
-                                            : 'bg-white/5 border border-white/10 text-gray-100 rounded-bl-none backdrop-blur-md'
+                                        className={`rounded-xl px-3 py-2 ${message.type === 'user'
+                                            ? 'bg-indigo-600/80 text-white'
+                                            : 'text-gray-100'
                                             }`}
                                     >
                                         {message.type === 'lia' ? (
@@ -378,7 +367,7 @@ export function ChatMode() {
                                     handleSend();
                                 }
                             }}
-                            placeholder={isTranscribing ? "Transcrevendo..." : "Digite sua mensagem..."}
+                            placeholder={isTranscribing ? t('transcribing') : t('typeMessagePlaceholder')}
                             disabled={isTranscribing}
                             rows={1}
                             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all disabled:opacity-50 resize-none overflow-y-auto min-h-[48px] max-h-[200px]"
@@ -394,7 +383,7 @@ export function ChatMode() {
                                 ? "bg-purple-500/20 border border-purple-500 text-purple-400"
                                 : "bg-white/5 border border-white/10 text-gray-400 hover:text-cyan-400 hover:border-cyan-500/30"
                             } disabled:opacity-50 disabled:cursor-not-allowed`}
-                        title={isRecording ? "Parar gravação" : "Gravar áudio"}
+                        title={isRecording ? t('stopRecording') : t('startRecording')}
                     >
                         {isTranscribing ? (
                             <Loader2 className="w-5 h-5 animate-spin" />

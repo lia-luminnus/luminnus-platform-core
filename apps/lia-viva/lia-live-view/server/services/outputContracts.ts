@@ -41,6 +41,7 @@ G) Sinceridade: Se não puder fazer algo, diga "Ainda estou sendo desenvolvida p
 H) Entrega: Humanizada, PT-BR e acionável. Use EMOJIS (caracteres reais como 😉, 😊) para expressar sentimentos no final das frases. NUNCA escreva o nome do emoji por extenso (ex: "Rosto piscando").
 I) REPLICAGEM: Se o usuário enviar um print/foto de planilha, use OBRIGATORIAMENTE createProFinancialSheet. Nunca descreva o print, REPLIQUE-O.
 J) SEM TUTORIAL: É proibido dar passos manuais. Use a ferramenta e entregue o link.
+K) SEM SIMULAÇÃO: Nunca invente resultados de busca ou e-mails. Se não houver dados reais da ferramenta, diga que não encontrou.
 `;
 
     // Palavras-chave para detecção de intenção
@@ -71,6 +72,8 @@ J) SEM TUTORIAL: É proibido dar passos manuais. Use a ferramenta e entregue o l
         action_execution: [
             'criar planilha', 'gerar planilha', 'crie uma planilha', 'faz uma planilha',
             'criar documento', 'gerar doc', 'enviar email', 'agendar evento',
+            'listar emails', 'ver emails', 'quais emails', 'emails de hoje', 'meus emails',
+            'procurar email', 'buscar email', 'search emails', 'list emails',
             'create spreadsheet', 'make a sheet', 'sheets', 'docs', 'no excel', 'excel'
         ],
         incident: [
@@ -217,11 +220,12 @@ J) SEM TUTORIAL: É proibido dar passos manuais. Use a ferramenta e entregue o l
 - createProFinancialSheet: PARA TUDO QUE FOR "PRO", "DASHBOARD", "PROFISSIONAL" ou "IGUAL AO PRINT".
 - updateGoogleSheet: Para EDITAR, MELHORAR ou AJUSTAR planilhas existentes.
 - createGoogleSheet: Apenas para listas BÁSICAS e SIMPLES (sem formatação).
+- listGmailMessages / searchGmail: PARA QUALQUER BUSCA OU LISTAGEM DE E-MAILS.
 
-⚠️ REGRAS CRÍTICAS DE PLANILHAS:
-1. REPLICAGEM DE LAYOUT: Se houver imagem, use analyzeFile + createProFinancialSheet.
-2. NUNCA dê passos manuais ou tutoriais. EXECUTE e entregue o link.
-3. Se o usuário diz "tente novamente", ele quer que você use uma ferramenta MELHOR (Pro) e não que repita a simples.
+⚠️ REGRAS CRÍTICAS DE EXECUÇÃO:
+1. GMAIL: Nunca simule e-mails. Se a ferramenta retornar lista vazia, informe exatamente isso.
+2. LAYOUT: Se houver imagem, use analyzeFile + createProFinancialSheet.
+3. DIRETO: Nunca dê passos manuais. EXECUTE e entregue o link.
 4. REUTILIZAÇÃO: Use o spreadsheetId do contexto para edições (updateGoogleSheet).
 
 📋 COMO ENCONTRAR O spreadsheetId:

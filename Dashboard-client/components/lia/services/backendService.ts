@@ -31,7 +31,7 @@ class BackendService {
      * Recupera contexto de autenticação global e userId do localStorage
      */
     public getAuthContext(): { userId: string | null; tenantId: string | null; headers: HeadersInit } {
-        const storedAuth = localStorage.getItem('sb-dashboard-client-auth');
+        const storedAuth = localStorage.getItem('sb-dashboard-auth');
         const headers: any = { 'Content-Type': 'application/json' };
         let userId: string | null = null;
         let tenantId: string | null = null;
@@ -567,6 +567,189 @@ class BackendService {
         } catch (error) {
             console.error('❌ Erro ao obter live token:', error);
             return null;
+        }
+    }
+
+    /**
+     * Busca configurações do Agente WhatsApp
+     */
+    async getWhatsAppSettings(): Promise<any | null> {
+        try {
+            const { tenantId, headers } = this.getAuthContext();
+            const response = await fetch(`${BACKEND_URL}/api/whatsapp/settings?tenantId=${tenantId}`, {
+                method: 'GET',
+                headers
+            });
+            const data = await response.json();
+            return data.ok ? data.settings : null;
+        } catch (error) {
+            console.error('❌ Erro ao buscar settings do WhatsApp:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Salva configurações do Agente WhatsApp
+     */
+    async saveWhatsAppSettings(settings: any): Promise<boolean> {
+        try {
+            const { tenantId, headers } = this.getAuthContext();
+            const response = await fetch(`${BACKEND_URL}/api/whatsapp/settings`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ ...settings, tenant_id: tenantId })
+            });
+            return response.ok;
+        } catch (error) {
+            console.error('❌ Erro ao salvar settings do WhatsApp:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Salva credenciais da Meta Cloud API
+     */
+    async saveWhatsAppConfig(phone_number: string, config_json: any): Promise<boolean> {
+        try {
+            const { tenantId, headers } = this.getAuthContext();
+            const response = await fetch(`${BACKEND_URL}/api/whatsapp/config`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ tenant_id: tenantId, phone_number, config_json })
+            });
+            return response.ok;
+        } catch (error) {
+            console.error('❌ Erro ao salvar config do WhatsApp:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Busca conexões do WhatsApp (credenciais)
+     */
+    async getWhatsAppConnections(): Promise<any[]> {
+        try {
+            const { tenantId, headers } = this.getAuthContext();
+            const response = await fetch(`${BACKEND_URL}/api/whatsapp/connections?tenantId=${tenantId}`, {
+                method: 'GET',
+                headers
+            });
+            const data = await response.json();
+            return data.ok ? data.connections : [];
+        } catch (error) {
+            console.error('❌ Erro ao buscar conexões do WhatsApp:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Faz upload de documento para Playbook Operacional
+     */
+    async uploadPlaybookDocument(file: File, playbookName: string): Promise<any> {
+        try {
+            const { tenantId } = this.getAuthContext();
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('tenantId', tenantId || '');
+            formData.append('playbookName', playbookName);
+
+            const response = await fetch(`${BACKEND_URL}/api/whatsapp/playbooks/upload`, {
+                method: 'POST',
+                body: formData // Fetch gerencia Content-Type para FormData automaticamente
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('❌ Erro ao subir documento de playbook:', error);
+            return { ok: false, error: String(error) };
+        }
+    }
+
+    /**
+     * Obtém recomendação de playbook via IA
+     */
+    async getPlaybookRecommendation(objective: string, tone: string, playbookName: string): Promise<any> {
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/whatsapp/playbooks/recommend`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ objective, tone, playbookName })
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('❌ Erro ao obter recomendação de playbook:', error);
+            return { ok: false, error: String(error) };
+        }
+    }
+
+    /**
+     * Lista conversas do WhatsApp do tenant
+     */
+    async listWhatsAppConversations(): Promise<any[]> {
+        try {
+            const { tenantId, headers } = this.getAuthContext();
+            const response = await fetch(`${BACKEND_URL}/api/whatsapp/conversations?tenantId=${tenantId}`, {
+                method: 'GET',
+                headers
+            });
+            const data = await response.json();
+            return data.ok ? data.conversations : [];
+        } catch (error) {
+            console.error('❌ Erro ao listar conversas do WhatsApp:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Envia mensagem via WhatsApp e salva no banco
+     */
+    async sendWhatsAppMessage(to: string, text: string, conversationId: string): Promise<boolean> {
+        try {
+            const { tenantId, headers } = this.getAuthContext();
+            const response = await fetch(`${BACKEND_URL}/api/whatsapp/send`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ tenantId, to, text, conversationId })
+            });
+            return response.ok;
+        } catch (error) {
+            console.error('❌ Erro ao enviar mensagem do WhatsApp:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Busca detalhes da conversa e mensagens do WhatsApp
+     */
+    async getWhatsAppConversation(conversationId: string): Promise<{ conversation: any, messages: any[] } | null> {
+        try {
+            const { headers } = this.getAuthContext();
+            const response = await fetch(`${BACKEND_URL}/api/whatsapp/conversations/${conversationId}`, {
+                method: 'GET',
+                headers
+            });
+            const data = await response.json();
+            return data.ok ? { conversation: data.conversation, messages: data.messages } : null;
+        } catch (error) {
+            console.error('❌ Erro ao buscar mensagens do WhatsApp:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Alterna modo copiloto (IA) na conversa
+     */
+    async toggleWhatsAppCopilot(conversationId: string, enabled: boolean): Promise<boolean> {
+        try {
+            const { headers } = this.getAuthContext();
+            const response = await fetch(`${BACKEND_URL}/api/whatsapp/conversations/${conversationId}/copilot`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ enabled })
+            });
+            return response.ok;
+        } catch (error) {
+            console.error('❌ Erro ao alternar modo copiloto:', error);
+            return false;
         }
     }
 }

@@ -203,13 +203,75 @@ Ações detectadas via `detectDashboardIntent` seguem o fluxo:
 3. A LIA aguarda o ACK antes de transicionar status de "Thinking".
 4. Erros no ACK geram feedback imediato (Voice/Text).
 
-7) Governança “Não Mexer no que Funciona”
-7.1 Zonas
-Zona	Regra
-CORE_STABLE	não alterar sem autorização explícita
-UI_STABLE	alterar com cautela e validação visual
-EXPERIMENTAL	livre
-7.2 Controle real
+6.6 Governança da Camada Operacional (v4.3)
+Toda ação executada em sistemas externos (CRM, Financeiro, Suporte) deve:
+1. **Ser Auditável**: Registrar um evento no banco (tabela `whatsapp_events` ou logs unificados).
+2. **Rastreabilidade**: Retornar o ID do objeto criado (Lead ID, Ticket ID, Charge ID) ao usuário.
+3. **Confirmação de Plano**: Verificar se a ação é permitida pelo plano (Start/Plus/Pro) antes de chamar a tool.
+4. **Bypass de Alucinação**: Se a ferramenta falhar, a LIA deve admitir e sugerir ação alternativa humana ou reprocessamento.
+5. **Persistência de Arquivos**: Documentos gerados (planilhas, docs) devem usar IDs persistentes (se o usuário pedir alteração, edita-se o mesmo arquivo).
+
+## 7) Governança e Zonas de Estabilidade
+
+Para garantir a evolução segura do sistema, dividimos o código em zonas de risco:
+
+### 🔴 CORE_STABLE (PROIBIDO ALTERAR SEM AUTORIZAÇÃO)
+Áreas críticas que sustentam a operação. **Exige aprovação explícita** do owner e Change Request.
+
+| Pasta/Arquivo | Descrição |
+|---------------|-----------|
+| `apps/lia-viva/lia-live-view/server/realtime/**` | Comunicação Socket.IO realtime |
+| `apps/lia-viva/lia-live-view/server/config/supabase.js` | Persistência Supabase |
+| `apps/lia-viva/lia-live-view/server/services/memoryService.ts` | Memórias da LIA |
+| `apps/lia-viva/lia-live-view/server/services/toolService.ts` | Tools e Functions |
+| `apps/lia-viva/lia-live-view/server/services/aiRouter.ts` | Execution Router (Triagem/Action) |
+| `apps/lia-viva/lia-live-view/server/assistants/gpt4-mini.js` | Integração GPT-4o (Core) |
+| `apps/lia-viva/lia-live-view/server/personality/**` | Personalidade da LIA |
+| `Dashboard-client/contexts/DashboardAuthContext.tsx` | Autenticação Client |
+| `admin-panel/src/contexts/AuthContext.tsx` | Autenticação Admin |
+
+### 🟡 UI_STABLE (Cuidado ao alterar)
+Componentes aprovados. Requerem validação visual rigorosa.
+
+| Pasta/Arquivo | Descrição |
+|---------------|-----------|
+| `admin-panel/src/components/lia/**` | Componentes LIA Admin |
+| `Dashboard-client/components/lia/**` | Componentes LIA Client |
+
+### 🟢 EXPERIMENTAL (Livre)
+| Pasta/Arquivo | Descrição |
+|---------------|-----------|
+| `packages/shared/**` | Shared em desenvolvimento |
+| `apps/*/tests/**` | Suítes de teste |
+| `Dashboard-client/components/dashboard-engine/widgetTypes.ts` | SSOT de Widgets |
+
+---
+
+## 🏛️ Arquitetura SSOT e Unificação
+
+As seguintes regras são inegociáveis para evitar o "sangramento" do código:
+
+### 1. Widgets SSOT
+- **Proibido** duplicar metadados de widgets fora do `widgetTypes.ts`.
+- O `WidgetRegistry.tsx` e o `systemManifest.ts` **devem** importar de `widgetTypes.ts`.
+- Qualquer novo widget deve ser registrado primeiro no array `WIDGET_TYPES` do `widgetTypes.ts`.
+
+### 2. Mente Única (Unified Entrypoint)
+- **Proibido** criar fluxos de input que ignorem o `handleUserInput` no `LIAContext.tsx`.
+- Transcrições de voz e texto devem convergir para este método para garantir consistência de snapshot e intenção.
+
+### 3. Protocolo de Ação (ACK Roundtrip)
+- **Obrigatório** usar o protocolo transacional v3.0 para alterar estado do dashboard.
+- Ações devem conferir o `pre_state_hash` (snapshot) antes de aplicar patches.
+
+### 4. Padrões de UI (Prompt & Notifications)
+- **Obrigatório**: Bolhas de notificação ou "prompts" contextuais (ex: "Resumo pronto") devem ser sempre **descartáveis** pelo usuário (botão X).
+- Notificações não devem persistir entre sessões se forem fechadas manualmente.
+- Ao abrir o chat, qualquer notificação flutuante ativa do chat deve ser ocultada automaticamente.
+
+---
+
+## 8) Controle Real e DoD (Definition of Done)
 
 Branch protection em main/release
 

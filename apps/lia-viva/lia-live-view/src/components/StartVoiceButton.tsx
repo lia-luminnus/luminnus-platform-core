@@ -64,9 +64,9 @@ export function StartVoiceButton({
   }, []);
 
   const sizeClasses = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-base',
-    lg: 'px-5 py-3 text-lg',
+    sm: 'px-3 py-1.5 text-xs',
+    md: 'px-4 py-2 text-sm',
+    lg: 'px-5 py-2.5 text-base',
   };
 
   const handleToggle = async () => {
@@ -92,7 +92,7 @@ export function StartVoiceButton({
   const baseStyles = `
     rounded-lg transition-all font-medium whitespace-nowrap
     ${isLiveActive
-      ? 'bg-[rgba(255,0,255,0.3)] border-2 border-[#ff00ff] text-[#ff00ff] animate-pulse shadow-[0_0_20px_rgba(255,0,255,0.5)]'
+      ? 'bg-[rgba(255,0,255,0.2)] border border-[#ff00ff] text-[#ff00ff] shadow-[0_0_10px_rgba(255,0,255,0.3)]'
       : liaMode === 'DIAGNOSTIC'
         ? 'bg-[rgba(255,165,0,0.2)] border-2 border-[rgba(255,165,0,0.6)] text-[#ffa500] hover:border-[#ffa500]'
         : 'bg-[rgba(0,243,255,0.1)] border-2 border-[rgba(0,243,255,0.3)] text-[rgba(224,247,255,0.8)] hover:text-[#00f3ff] hover:border-[#00f3ff]'
@@ -107,19 +107,19 @@ export function StartVoiceButton({
     return (
       <button
         onClick={handleToggle}
-        disabled={!isConnected}
+        disabled={!isConnected && !isLiveActive}
         className={baseStyles}
         title={isLiveActive ? 'Parar conversa por voz' : 'Iniciar conversa por voz (Gemini Live)'}
       >
         {isLiveActive ? (
           <span className="flex items-center gap-2">
-            Stop speaking 🔇
+            Parar de falar 🔇
             {isListening && (
               <span className="inline-block w-2 h-2 bg-[#ff00ff] rounded-full animate-ping" />
             )}
           </span>
         ) : (
-          <span>Start speak 🗣️</span>
+          <span>Começar a falar 🗣️</span>
         )}
       </button>
     );
@@ -131,7 +131,7 @@ export function StartVoiceButton({
       {/* Botão principal */}
       <button
         onClick={handleToggle}
-        disabled={!isConnected}
+        disabled={!isConnected && !isLiveActive}
         className={`
           ${baseStyles}
           rounded-r-none border-r-0
@@ -139,15 +139,15 @@ export function StartVoiceButton({
         title={isLiveActive ? 'Parar conversa por voz' : `Iniciar conversa (${liaMode === 'DIAGNOSTIC' ? 'Diagnóstico' : 'Normal'})`}
       >
         {isLiveActive ? (
-          <span className="flex items-center gap-2">
-            Stop speaking 🔇
+          <span className="flex items-center gap-1.5">
+            Ouvindo... 🔇
             {isListening && (
-              <span className="inline-block w-2 h-2 bg-[#ff00ff] rounded-full animate-ping" />
+              <span className="inline-block w-1.5 h-1.5 bg-[#ff00ff] rounded-full animate-ping" />
             )}
           </span>
         ) : (
           <span className="flex items-center gap-1">
-            {liaMode === 'DIAGNOSTIC' ? '🔧 Diagnóstico' : 'Start speak 🗣️'}
+            {liaMode === 'DIAGNOSTIC' ? '🔧 Diagnóstico' : 'Falar 🗣️'}
           </span>
         )}
       </button>
@@ -185,7 +185,7 @@ export function StartVoiceButton({
           >
             <span>🗣️</span>
             <div>
-              <div className="font-medium">Start Speak (Normal)</div>
+              <div className="font-medium">Começar a Falar (Normal)</div>
               <div className="text-xs text-gray-500">Conversa padrão com LIA</div>
             </div>
             {liaMode === 'NORMAL' && <span className="ml-auto">✓</span>}

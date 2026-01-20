@@ -20,6 +20,7 @@ export const MODULE_REGISTRY: Record<ModuleId, ModuleDefinition> = {
   medical_records: { id: 'medical_records', translationKey: 'medicalRecords', icon: 'medical_services', path: '/records' },
   sales: { id: 'sales', translationKey: 'sales', icon: 'point_of_sale', path: '/sales' },
   reports: { id: 'reports', translationKey: 'reports', icon: 'bar_chart', path: '/reports' },
+  whatsapp_agent: { id: 'whatsapp_agent', translationKey: 'whatsappAgent', icon: 'chat', path: '/whatsapp' },
 
   // Core System
   plan: { id: 'plan', translationKey: 'plan', icon: 'credit_card', path: '/plan', isCore: true },
@@ -32,10 +33,10 @@ export const MODULE_REGISTRY: Record<ModuleId, ModuleDefinition> = {
 // Keys match the normalized segment_keys used in Onboarding and database
 export const CATEGORY_PRESETS: Record<string, ModuleId[]> = {
   // Serviços Técnicos
-  services_technical: ['dashboard', 'integrations', 'lia', 'calendar', 'crm', 'files', 'financial', 'automations', 'plan', 'settings', 'support'],
+  services_technical: ['dashboard', 'integrations', 'lia', 'calendar', 'crm', 'files', 'financial', 'automations', 'whatsapp_agent', 'plan', 'settings', 'support'],
 
   // Profissionais Liberais
-  professionals: ['dashboard', 'integrations', 'lia', 'crm', 'calendar', 'files', 'financial', 'automations', 'reports', 'plan', 'settings', 'support'],
+  professionals: ['dashboard', 'integrations', 'lia', 'crm', 'calendar', 'files', 'financial', 'automations', 'whatsapp_agent', 'reports', 'plan', 'settings', 'support'],
 
   // Saúde & Bem-Estar
   health_wellbeing: ['dashboard', 'integrations', 'lia', 'calendar', 'medical_records', 'financial', 'files', 'crm', 'plan', 'settings', 'support'],
@@ -59,7 +60,7 @@ export const CATEGORY_PRESETS: Record<string, ModuleId[]> = {
   content_creatives: ['dashboard', 'integrations', 'lia', 'projects', 'files', 'crm', 'calendar', 'plan', 'settings', 'support'],
 
   // Serviços Empresariais
-  business_services: ['dashboard', 'integrations', 'lia', 'crm', 'financial', 'reports', 'files', 'team', 'automations', 'plan', 'settings', 'support'],
+  business_services: ['dashboard', 'integrations', 'lia', 'crm', 'financial', 'reports', 'whatsapp_agent', 'files', 'team', 'automations', 'plan', 'settings', 'support'],
 
   // Educação & Treinamento
   education_training: ['dashboard', 'integrations', 'lia', 'calendar', 'files', 'crm', 'financial', 'plan', 'settings', 'support'],
@@ -100,7 +101,7 @@ export const getModules = (activeIds: ModuleId[]): ModuleDefinition[] => {
     'dashboard', 'integrations', 'crm', 'lia', 'calendar', 'files',
     'projects', 'stock', 'sales', 'properties', 'medical_records', 'logistics',
     'automations', 'financial', 'reports', 'team',
-    'settings', 'plan', 'support'
+    'settings', 'plan', 'support', 'whatsapp_agent'
   ];
 
   return preferredOrder

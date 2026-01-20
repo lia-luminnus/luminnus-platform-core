@@ -1,7 +1,7 @@
 
 import React, { useContext } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LanguageContext } from '../App';
+import { LanguageContext } from '../contexts/LanguageContext';
 import { useAppStore } from '../store/useAppStore';
 import { getModules } from '../config/modules';
 import { useDashboardAuth } from '../contexts/DashboardAuthContext';

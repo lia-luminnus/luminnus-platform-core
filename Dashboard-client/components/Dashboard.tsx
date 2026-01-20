@@ -3,7 +3,7 @@ import React, { useContext, useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import Header from './Header';
-import { LanguageContext } from '../App';
+import { LanguageContext } from '../contexts/LanguageContext';
 import { useAppStore } from '../store/useAppStore';
 import { Skeleton } from './ui/Skeleton';
 import toast from 'react-hot-toast';
@@ -148,7 +148,7 @@ const Dashboard: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               className="glass-panel bg-white dark:bg-white/5 rounded-3xl p-8 border border-gray-200 dark:border-white/10 shadow-xl"
             >
-              <h3 className="font-black text-xl mb-8 uppercase tracking-tighter text-gray-800 dark:text-white">Relatório de Atividade</h3>
+              <h3 className="font-black text-xl mb-8 uppercase tracking-tighter text-gray-800 dark:text-white">{t('activityReport')}</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
                 {stats.map((stat, i) => (
                   <motion.div

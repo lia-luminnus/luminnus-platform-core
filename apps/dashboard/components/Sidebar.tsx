@@ -10,9 +10,13 @@ const Sidebar: React.FC = () => {
   const location = useLocation();
   const { t } = useContext(LanguageContext);
   const { isSidebarCollapsed, toggleSidebar, activeModules } = useAppStore();
-  const { signOut } = useDashboardAuth();
+  const { signOut, profile } = useDashboardAuth();
+  const isAdmin = profile?.role === 'admin';
 
-  const navItems = getModules(activeModules);
+  const navItems = getModules(activeModules).filter(m => {
+    if (m.id === 'whatsapp_admin') return isAdmin;
+    return true;
+  });
 
   return (
     <aside

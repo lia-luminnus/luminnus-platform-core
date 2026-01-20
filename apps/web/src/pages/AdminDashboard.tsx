@@ -18,6 +18,7 @@ import AdminMetrics from "@/components/admin/AdminMetrics";
 import AdminSupport from "@/components/admin/AdminSupport";
 import AdminLiaCoreUpdates from "@/components/admin/AdminLiaCoreUpdates";
 import AdminLIAContainer from "@/components/admin/AdminLIAContainer";
+import AdminWhatsAppGovernance from "@/components/admin/AdminWhatsAppGovernance";
 import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -71,6 +72,8 @@ const AdminDashboard = () => {
         return <AdminLIAContainer />;
       case "users":
         return <AdminUsers />;
+      case "whatsapp-admin":
+        return <AdminWhatsAppGovernance />;
       case "companies":
         return <AdminCompanies />;
       case "lia-config":
@@ -84,7 +87,7 @@ const AdminDashboard = () => {
       case "plans":
         return <AdminPlans />;
       case "integrations":
-        return <AdminIntegrations />;
+        return <AdminIntegrations onSectionChange={setActiveSection} />;
       case "metrics":
         return <AdminMetrics />;
       case "support":
@@ -107,6 +110,7 @@ const AdminDashboard = () => {
       case "lia-chat": return "Assistente LIA";
       case "lia-viva": return "LIA (Painel Completo)";
       case "users": return "Gerenciar Usuários";
+      case "whatsapp-admin": return "Governança WhatsApp";
       case "companies": return "Gestão de Empresas";
       case "lia-config": return "Configurações da LIA";
       case "lia-core-updates": return "LIA Core Updates";

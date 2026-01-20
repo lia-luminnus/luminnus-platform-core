@@ -105,9 +105,8 @@ export class GeminiLiveService {
 
     // v4.29 & v5.3: Gatilhos para Forçar Tool Call quando Gemini não decide
     private static SEARCH_TRIGGERS = [
-        'cotação', 'preço', 'valor', 'quanto', 'quanto custa', 'quanto está',
+        'cotação', 'preço', 'valor', 'quanto custa', 'quanto está',
         'euro', 'dólar', 'bitcoin', 'real', 'libra', 'iene',
-        'hoje', 'agora', 'atual', 'atualmente', 'neste momento',
         'notícias', 'notícia', 'acontecendo', 'últimas'
     ];
     private static WEATHER_TRIGGERS = ['clima', 'tempo', 'previsão', 'temperatura', 'vai chover', 'tá frio', 'tá quente'];
@@ -670,6 +669,9 @@ export class GeminiLiveService {
             } else if (forcedTool === 'places') {
                 console.log('📍 [Forçando] Detectado gatilho de lugares, forçando getLocation...');
                 await this.executeForcedPlaces(userTextForTrigger);
+            } else if (forcedTool === 'dashboard') {
+                console.log('📊 [Forçando] Detectado gatilho de dashboard, forçando snapshot...');
+                await this.executeForcedDashboard();
             } else if (liaText) {
                 const sanitizedLia = sanitizeForTTS(liaText);
                 if (sanitizedLia) {
@@ -828,7 +830,7 @@ export class GeminiLiveService {
     /**
      * v5.3: Detecta qual ferramenta forçar se o Gemini hesitar
      */
-    private detectForcedTool(userText: string, liaResponse: string, geminiCalledTool: boolean): 'search' | 'weather' | 'time' | 'directions' | 'places' | null {
+    private detectForcedTool(userText: string, liaResponse: string, geminiCalledTool: boolean): 'search' | 'weather' | 'time' | 'directions' | 'places' | 'dashboard' | null {
         if (!userText || geminiCalledTool || this.forcedActionDone) return null;
 
         const lowerText = userText.toLowerCase();
@@ -843,7 +845,8 @@ export class GeminiLiveService {
         if (GeminiLiveService.TIME_TRIGGERS.some(t => lowerText.includes(t)) && isGeneric) return 'time';
         // v5.2: Não forçar clima se for query de rota (redundante agora com directions acima mas mantemos segurança)
         if (GeminiLiveService.WEATHER_TRIGGERS.some(t => lowerText.includes(t)) && isGeneric) return 'weather';
-        if (GeminiLiveService.SEARCH_TRIGGERS.some(t => lowerText.includes(t)) && isGeneric) return 'search';
+        if (GeminiLiveService.SEARCH_TRIGGERS.some(t => lowerText.includes(t)) && isGeneric && !lowerText.includes('dashboard') && !lowerText.includes('gráfico')) return 'search';
+        if ((lowerText.includes('dashboard') || lowerText.includes('gráfico') || lowerText.includes('widget') || lowerText.includes('tabela')) && isGeneric) return 'dashboard';
 
         return null;
     }
@@ -1140,6 +1143,45 @@ export class GeminiLiveService {
             }
         } catch (err) {
             console.error('❌ Erro no forçador de lugares:', err);
+        } finally {
+            this.isWaitingForTool = false;
+            this.emitEvent({ type: 'tool-active', data: false });
+        }
+    }
+
+    private async executeForcedDashboard(): Promise<void> {
+        this.forcedActionDone = true;
+        this.isWaitingForTool = true;
+        this.emitEvent({ type: 'tool-active', data: true });
+        this.emitEvent({ type: 'lia-transcript', data: "Vou verificar seu dashboard agora..." });
+
+        try {
+            const response = await fetch(`${this.config.apiUrl}/api/tools/execute`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    toolName: 'dashboardGetSnapshot',
+                    args: {},
+                    userId: this.config.userId,
+                    tenantId: this.config.tenantId,
+                }),
+            });
+
+            const result = await response.json();
+            const data = result.data || result.result;
+            const message = data?.layout_summary
+                ? `Dashboard verificado. Atualmente você tem ${data.widgets.length} widgets: ${data.layout_summary}.`
+                : "Dashboard verificado. As alterações foram aplicadas.";
+
+            this.emitEvent({ type: 'lia-transcript', data: message });
+
+            if (this.config.callbacks?.persistMessage && this.currentConversationId) {
+                this.config.callbacks.persistMessage('assistant', message, this.currentConversationId);
+            }
+
+            await this.injectToGemini(`[SISTEMA: Dashboard atualizado: ${JSON.stringify(data)}]`);
+        } catch (err) {
+            console.error('❌ Erro no forçador de dashboard:', err);
         } finally {
             this.isWaitingForTool = false;
             this.emitEvent({ type: 'tool-active', data: false });

@@ -145,17 +145,17 @@ export function ChatMode() {
   const audioChunksRef = useRef<Blob[]>([])
 
   // Logic for phased thinking text (Thinking -> Generating)
-  const [phasedThinkingText, setPhasedThinkingText] = useState("Lia Thinking...")
+  const [phasedThinkingText, setPhasedThinkingText] = useState("Lia Pensando...")
   useEffect(() => {
     if (isTyping) {
-      setPhasedThinkingText("Lia Thinking...")
+      setPhasedThinkingText("Lia Pensando...")
       const timer = setTimeout(() => {
-        setPhasedThinkingText("Lia Generating...")
+        setPhasedThinkingText("Lia Gerando...")
       }, 2000)
       return () => clearTimeout(timer)
     } else {
       // Reset when not typing
-      setPhasedThinkingText("Lia Thinking...")
+      setPhasedThinkingText("Lia Pensando...")
     }
   }, [isTyping])
 
@@ -322,9 +322,9 @@ export function ChatMode() {
                   className="w-full h-full object-cover object-top"
                 />
               </div>
-              <h3 className="text-xl font-bold text-[#00f3ff] mb-2">Welcome to LIA Chat</h3>
+              <h3 className="text-xl font-bold text-[#00f3ff] mb-2">Bem-vindo ao Chat da LIA</h3>
               <p className="text-[rgba(224,247,255,0.5)] max-w-md">
-                Send me a message, upload files, documents, or images. I'm here to help you with anything you need.
+                Envie-me uma mensagem, anexe arquivos, documentos ou imagens. Estou aqui para ajudar em tudo o que você precisar.
               </p>
             </div>
           ) : (
@@ -447,7 +447,7 @@ export function ChatMode() {
                   }
                   // Shift+Enter permite quebra de linha naturalmente
                 }}
-                placeholder={isTranscribing ? "Transcrevendo..." : "Type a message or use voice..."}
+                placeholder={isTranscribing ? "Transcrevendo..." : "Digite uma mensagem ou use a voz..."}
                 disabled={isTranscribing}
                 rows={1}
                 className="w-full px-5 py-4 bg-[rgba(10,20,40,0.6)] border border-[rgba(0,243,255,0.3)] rounded-xl text-[#e0f7ff] placeholder-[rgba(224,247,255,0.4)] focus:outline-none focus:border-[#00f3ff] focus:shadow-[0_0_15px_rgba(0,243,255,0.2)] transition-all disabled:opacity-50 resize-none overflow-y-auto min-h-[56px] max-h-[300px]"

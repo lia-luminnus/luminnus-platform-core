@@ -22,6 +22,7 @@ interface FileMetadata {
     processing_time_ms?: number;
     tokens_used?: number;
     extracted_metadata?: any;
+    intent_mode?: string;
 }
 
 /**
@@ -101,29 +102,47 @@ export class FileService {
      */
     static async saveMetadata(meta: FileMetadata) {
         try {
+            const payload: any = {
+                tenant_id: meta.tenant_id,
+                user_id: meta.user_id,
+                file_name: meta.file_name,
+                file_type: meta.file_type,
+                file_size: meta.file_size,
+                storage_path: meta.storage_path,
+                storage_url: meta.storage_url,
+                file_hash: meta.file_hash || this.calculateHash(meta.file_name),
+                parse_method: meta.parse_method,
+                status: meta.status,
+                error_message: meta.error_message,
+                processing_time_ms: meta.processing_time_ms,
+                tokens_used: meta.tokens_used,
+                extracted_metadata: meta.extracted_metadata || {},
+                intent_mode: meta.intent_mode,
+                updated_at: new Date().toISOString()
+            };
+
             const { data, error } = await supabaseClient
                 .from('files')
-                .upsert({
-                    tenant_id: meta.tenant_id,
-                    user_id: meta.user_id,
-                    file_name: meta.file_name,
-                    file_type: meta.file_type,
-                    file_size: meta.file_size,
-                    storage_path: meta.storage_path,
-                    storage_url: meta.storage_url,
-                    file_hash: meta.file_hash || this.calculateHash(meta.file_name),
-                    parse_method: meta.parse_method,
-                    status: meta.status,
-                    error_message: meta.error_message,
-                    processing_time_ms: meta.processing_time_ms,
-                    tokens_used: meta.tokens_used,
-                    extracted_metadata: meta.extracted_metadata || {},
-                    updated_at: new Date().toISOString()
-                })
+                .upsert(payload)
                 .select()
                 .single();
 
-            if (error) throw error;
+            if (error) {
+                // Se o erro for "coluna não encontrada" (PGRST204), tenta salvar sem intent_mode
+                // Isso acontece quando o cache do PostgREST está desatualizado após uma migração
+                if (error.code === 'PGRST204' || error.message?.includes('intent_mode')) {
+                    console.warn('⚠️ [FileService] Coluna intent_mode não encontrada no cache do DB. Salvando sem ela.');
+                    delete payload.intent_mode;
+                    const retry = await supabaseClient
+                        .from('files')
+                        .upsert(payload)
+                        .select()
+                        .single();
+                    if (retry.error) throw retry.error;
+                    return retry.data;
+                }
+                throw error;
+            }
             return data;
         } catch (error) {
             console.error('[FileService] Erro ao salvar metadados:', error);
@@ -220,9 +239,35 @@ export class FileService {
     }
 
     /**
+     * Recupera a análise de um arquivo (simulado ou do banco)
+     */
+    static async getFileAnalysis(fileId: string) {
+        try {
+            const { data: file } = await supabaseClient
+                .from('files')
+                .select('*')
+                .eq('id', fileId)
+                .single();
+
+            if (!file) throw new Error('Arquivo não encontrado.');
+
+            return {
+                success: true,
+                file_name: file.file_name,
+                analysis: file.extracted_metadata?.analysis || 'Análise automática indisponível no momento.',
+                metadata: file.extracted_metadata || {}
+            };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
      * Gera um hash simples para o arquivo (SHA256)
      */
     private static calculateHash(content: string): string {
         return crypto.createHash('sha256').update(content + Date.now()).digest('hex');
     }
 }
+
+export const fileService = FileService;

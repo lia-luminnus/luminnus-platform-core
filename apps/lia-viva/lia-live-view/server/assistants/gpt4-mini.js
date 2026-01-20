@@ -120,17 +120,18 @@ export async function runGpt4Mini(userText, options = {}) {
     const message = choice?.message || null;
 
     // Handle both old function_call and new tool_calls formats
+    let tool_calls = [];
     let function_call = null;
+
     if (message?.tool_calls && message.tool_calls.length > 0) {
-      const toolCall = message.tool_calls[0];
-      if (toolCall.type === 'function') {
-        function_call = {
-          name: toolCall.function.name,
-          arguments: toolCall.function.arguments
-        };
-      }
+      tool_calls = message.tool_calls.map(tc => ({
+        name: tc.function.name,
+        arguments: tc.function.arguments
+      }));
+      function_call = tool_calls[0];
     } else if (message?.function_call) {
       function_call = message.function_call;
+      tool_calls = [function_call];
     }
 
     const text = (message?.content ?? "").trim();
@@ -140,12 +141,10 @@ export async function runGpt4Mini(userText, options = {}) {
       conversationId: conv,
       event: "response",
       textPreview: text.slice(0, 400),
-      function_call: function_call
-        ? { name: function_call.name, argumentsPreview: (function_call.arguments || "").slice(0, 400) }
-        : null
+      tool_calls_count: tool_calls.length
     });
 
-    return { text, function_call };
+    return { text, function_call, tool_calls };
   } catch (err) {
     console.error('❌ [runGpt4Mini] Erro na chamada OpenAI:', err);
     appendLog(GPT_LOG, { time: Date.now(), conversationId: conv, event: "error", error: String(err) });

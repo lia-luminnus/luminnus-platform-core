@@ -363,6 +363,12 @@ const Integrations: React.FC = () => {
     const blockedCount = INTEGRATIONS.filter(i => !canAccess(i)).length;
 
     const handleConnect = (integration: IntegrationDef) => {
+        // Redirecionamento especial para WhatsApp Admin Governance se o usuário for Admin
+        if (integration.id === 'whatsapp' && isAdminAccess) {
+            navigate('/admin/whatsapp');
+            return;
+        }
+
         if (!canAccess(integration)) {
             toast.error(`Upgrade para o plano ${integration.planRequired.toUpperCase()} para acessar`);
             return;

@@ -24,8 +24,6 @@ class DiagnosticService {
     broadcastStep(userId: string, action: string, details: any) {
         if (!this.io) return;
 
-        // Emitimos para a sala do usuário (tenant/user) para que apenas ele veja
-        // Mas como é admin root, podemos emitir para uma sala global de admin se necessário
         const payload = {
             timestamp: new Date().toISOString(),
             action,
@@ -33,11 +31,73 @@ class DiagnosticService {
             type: 'thought'
         };
 
-        // Emitir para todos os admins conectados (sala tenant:0000...)
-        // No futuro, podemos filtrar por userId específico
         this.io.emit('diagnostic:thought', payload);
-
         console.log(`🧠 [Thought] ${action}: ${JSON.stringify(details)}`);
+    }
+
+    /**
+     * Retorna o status de saúde do sistema
+     */
+    async getHealth() {
+        return {
+            status: 'healthy',
+            uptime: process.uptime(),
+            memory: process.memoryUsage(),
+            timestamp: new Date().toISOString(),
+            version: '4.1.0'
+        };
+    }
+
+    /**
+     * Retorna logs recentes (simulado ou do arquivo)
+     */
+    async getLogs(limit: number = 50, level: string = 'all') {
+        return {
+            success: true,
+            message: `Aqui estão os últimos ${limit} logs do sistema (${level}).`,
+            logs: [
+                { timestamp: new Date().toISOString(), level: 'info', message: 'Sistema operacional normal.' },
+                { timestamp: new Date().toISOString(), level: 'info', message: 'Conexão com banco de dados ativa.' }
+            ]
+        };
+    }
+
+    /**
+     * Lê um arquivo do projeto (protegido)
+     */
+    async readFile(filePath: string) {
+        try {
+            const fs = await import('fs');
+            const path = await import('path');
+
+            const fullPath = path.resolve(process.cwd(), filePath);
+            if (!fullPath.startsWith(process.cwd())) {
+                throw new Error('Acesso negado: fora do diretório do projeto.');
+            }
+
+            const content = fs.readFileSync(fullPath, 'utf-8');
+            return {
+                success: true,
+                path: filePath,
+                content: content.substring(0, 5000)
+            };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Retorna o mapa do projeto (estrutura de pastas)
+     */
+    async getMap() {
+        return {
+            success: true,
+            structure: {
+                apps: ['lia-viva', 'web'],
+                packages: ['shared', 'api', 'ui'],
+                supabase: ['migrations', 'functions']
+            }
+        };
     }
 }
 

@@ -1,11 +1,4 @@
-/**
- * Line Timeseries Widget
- * 
- * Gráfico de linha/área para séries temporais
- * Suporta múltiplas métricas sobrepostas
- */
-
-import React, { useMemo } from 'react';
+import React, { useMemo, useContext } from 'react';
 import { Loader2 } from 'lucide-react';
 import {
     LineChart,
@@ -19,6 +12,7 @@ import {
     AreaChart,
 } from 'recharts';
 import { WidgetProps, MetricTimeseriesPoint } from '../types';
+import { LanguageContext } from '../../../contexts/LanguageContext';
 
 // ============================================
 // Helpers
@@ -42,7 +36,9 @@ function formatDate(dateStr: string): string {
 // ============================================
 
 function LineTimeseries({ id, config, data, loading, error, isEditMode }: WidgetProps) {
-    const { title, metrics, config: widgetConfig } = config;
+    const { t } = useContext(LanguageContext);
+    const { metrics, type, config: widgetConfig } = config;
+    const title = t(`widget_${type}_name` as any);
     const showArea = widgetConfig?.showArea !== false;
     const smoothCurve = widgetConfig?.smoothCurve !== false;
 
@@ -59,7 +55,7 @@ function LineTimeseries({ id, config, data, loading, error, isEditMode }: Widget
 
     if (loading) {
         return (
-            <div className="h-full w-full rounded-2xl p-4 bg-white/5 border border-white/10 flex items-center justify-center">
+            <div className="h-full w-full rounded-2xl p-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 flex items-center justify-center">
                 <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
             </div>
         );
@@ -76,12 +72,12 @@ function LineTimeseries({ id, config, data, loading, error, isEditMode }: Widget
     // Empty state
     if (!chartData || chartData.length === 0) {
         return (
-            <div className="h-full w-full rounded-2xl p-4 bg-white/5 border border-white/10 flex flex-col">
-                <h3 className="text-sm font-semibold text-white mb-2">{title}</h3>
+            <div className="h-full w-full rounded-2xl p-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 flex flex-col">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">{title}</h3>
                 <div className="flex-1 flex items-center justify-center">
                     <div className="text-center">
                         <span className="material-symbols-outlined text-4xl text-gray-600 mb-2">show_chart</span>
-                        <p className="text-sm text-gray-500">Sem dados para o período</p>
+                        <p className="text-sm text-gray-500">{t('noDataForPeriod') || 'Sem dados para o período'}</p>
                     </div>
                 </div>
             </div>
@@ -92,8 +88,8 @@ function LineTimeseries({ id, config, data, loading, error, isEditMode }: Widget
     const DataComponent = showArea ? Area : Line;
 
     return (
-        <div className={`h-full w-full rounded-2xl p-4 bg-white/5 border border-white/10 flex flex-col ${isEditMode ? 'cursor-move' : ''}`}>
-            <h3 className="text-sm font-semibold text-white mb-3">{title}</h3>
+        <div className={`h-full w-full rounded-2xl p-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 flex flex-col ${isEditMode ? 'cursor-move' : ''}`}>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">{title}</h3>
 
             <div className="flex-1 min-h-0">
                 <ResponsiveContainer width="100%" height="100%">
@@ -126,9 +122,11 @@ function LineTimeseries({ id, config, data, loading, error, isEditMode }: Widget
                                 border: '1px solid #374151',
                                 borderRadius: '8px',
                                 fontSize: '12px',
+                                color: '#fff'
                             }}
-                            formatter={(value: number) => [formatCurrency(value), 'Valor']}
-                            labelStyle={{ color: '#9ca3af' }}
+                            itemStyle={{ color: '#fff' }}
+                            labelStyle={{ color: '#fff', fontWeight: 'bold' }}
+                            formatter={(value: number) => [formatCurrency(value), t(`metric_${config.metric}` as any) || 'Valor']}
                         />
                         {showArea ? (
                             <Area
@@ -156,3 +154,4 @@ function LineTimeseries({ id, config, data, loading, error, isEditMode }: Widget
 }
 
 export default LineTimeseries;
+

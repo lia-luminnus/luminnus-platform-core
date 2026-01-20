@@ -103,12 +103,12 @@ export const DynamicRenderer: React.FC<DynamicRendererProps> = ({
           backgroundColor:
             data.chartType === 'pie'
               ? [
-                  'rgba(0, 243, 255, 0.8)',
-                  'rgba(188, 19, 254, 0.8)',
-                  'rgba(255, 107, 107, 0.8)',
-                  'rgba(78, 205, 196, 0.8)',
-                  'rgba(255, 195, 0, 0.8)'
-                ]
+                'rgba(0, 243, 255, 0.8)',
+                'rgba(188, 19, 254, 0.8)',
+                'rgba(255, 107, 107, 0.8)',
+                'rgba(78, 205, 196, 0.8)',
+                'rgba(255, 195, 0, 0.8)'
+              ]
               : 'rgba(0, 243, 255, 0.6)',
           borderColor:
             data.chartType === 'line'
@@ -141,7 +141,7 @@ export const DynamicRenderer: React.FC<DynamicRendererProps> = ({
           font: {
             family: 'Inter, system-ui, sans-serif',
             size: 16,
-            weight: 'bold'
+            weight: 'bold' as const
           }
         },
         tooltip: {
@@ -155,15 +155,15 @@ export const DynamicRenderer: React.FC<DynamicRendererProps> = ({
       scales:
         data.chartType !== 'pie'
           ? {
-              x: {
-                ticks: { color: '#ccc' },
-                grid: { color: 'rgba(255, 255, 255, 0.1)' }
-              },
-              y: {
-                ticks: { color: '#ccc' },
-                grid: { color: 'rgba(255, 255, 255, 0.1)' }
-              }
+            x: {
+              ticks: { color: '#ccc' },
+              grid: { color: 'rgba(255, 255, 255, 0.1)' }
+            },
+            y: {
+              ticks: { color: '#ccc' },
+              grid: { color: 'rgba(255, 255, 255, 0.1)' }
             }
+          }
           : undefined
     };
 
@@ -249,7 +249,7 @@ export const DynamicRenderer: React.FC<DynamicRendererProps> = ({
             download={data.fileName}
             className="px-4 py-2 bg-gradient-to-r from-[#00f3ff] to-[#bc13fe] text-white rounded-lg hover:opacity-80 transition-opacity"
           >
-            Download
+            Baixar
           </a>
         </div>
         {data.metadata && (
@@ -303,7 +303,7 @@ export const DynamicRenderer: React.FC<DynamicRendererProps> = ({
 
         {data.codePatches && data.codePatches.length > 0 && (
           <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
-            <h4 className="text-lg font-bold text-white mb-3">🔧 Code Patches</h4>
+            <h4 className="text-lg font-bold text-white mb-3">🔧 Correções de Código</h4>
             <div className="space-y-4">
               {data.codePatches.map((patch, index) => (
                 <div key={index} className="bg-gray-800 rounded p-3">
@@ -318,7 +318,7 @@ export const DynamicRenderer: React.FC<DynamicRendererProps> = ({
                       </pre>
                     </div>
                     <div>
-                      <p className="text-xs text-green-400 mb-1">Fixed:</p>
+                      <p className="text-xs text-green-400 mb-1">Corrigido:</p>
                       <pre className="text-xs bg-green-900/20 p-2 rounded overflow-x-auto">
                         {patch.fixedCode}
                       </pre>

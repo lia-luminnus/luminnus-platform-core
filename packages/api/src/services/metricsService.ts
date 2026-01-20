@@ -45,6 +45,15 @@ interface MetricKPISummary {
     trend: 'up' | 'down' | 'stable';
 }
 
+export interface MetricAlert {
+    id: string;
+    type: 'info' | 'warning' | 'success' | 'error';
+    title: string;
+    message: string;
+    timestamp: string;
+    metadata?: any;
+}
+
 // ============================================
 // Service
 // ============================================
@@ -188,6 +197,36 @@ export class MetricsService {
         }
     }
 
+    /**
+     * Query alerts and notifications
+     */
+    async queryAlerts(tenantId: string, limit: number = 10): Promise<MetricAlert[]> {
+        try {
+            const { data, error } = await this.supabase.rpc('rpc_get_unified_alerts', {
+                p_tenant_id: tenantId,
+                p_limit: limit,
+            });
+
+            if (error) {
+                console.error('[MetricsService] Unified alerts error:', error);
+                return this.getFallbackAlerts();
+            }
+
+            // Map RPC result fields to Alert interface
+            return (data || []).map((item: any) => ({
+                id: item.alert_id,
+                type: item.alert_type,
+                title: item.alert_title,
+                message: item.alert_message,
+                timestamp: item.alert_timestamp,
+                metadata: item.alert_metadata
+            }));
+        } catch (err) {
+            console.error('[MetricsService] Unified alerts exception:', err);
+            return this.getFallbackAlerts();
+        }
+    }
+
     // ============================================
     // Fallback Data (Estado Zero / Demo)
     // ============================================
@@ -243,6 +282,18 @@ export class MetricsService {
             { stage: 'proposal', stage_order: 3, count: 0, total_value: 0, avg_probability: 55 },
             { stage: 'negotiation', stage_order: 4, count: 0, total_value: 0, avg_probability: 75 },
             { stage: 'won', stage_order: 5, count: 0, total_value: 0, avg_probability: 100 },
+        ];
+    }
+
+    private getFallbackAlerts(): MetricAlert[] {
+        return [
+            {
+                id: 'welcome',
+                type: 'success',
+                title: 'Bem-vindo à LIA',
+                message: 'Seu dashboard está operante. Comece agendando prazos ou analisando seu financeiro.',
+                timestamp: new Date().toISOString()
+            }
         ];
     }
 }

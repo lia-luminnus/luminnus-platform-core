@@ -11,6 +11,8 @@ import { X, Plus, Search, Palette, BarChart3, Settings2, Trash2, Save } from 'lu
 import { useDashboard } from './DashboardContext';
 import { WIDGET_METADATA, getWidgetsByCategory, isWidgetAvailableForPlan } from './WidgetRegistry';
 import { WidgetType, WidgetConfig, LayoutItem } from './types';
+import { LanguageContext } from '../../contexts/LanguageContext';
+
 
 // ============================================
 // Types
@@ -41,15 +43,17 @@ const WIDGET_COLORS = [
 // ============================================
 
 function AddWidgetPanel({ plan, onAdd }: { plan: string; onAdd: (key: WidgetType) => void }) {
+    const { t } = React.useContext(LanguageContext);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
     const categories = [
-        { id: 'kpi', label: 'KPIs', icon: 'trending_up' },
-        { id: 'chart', label: 'Gráficos', icon: 'bar_chart' },
-        { id: 'table', label: 'Tabelas', icon: 'table_chart' },
-        { id: 'special', label: 'Especiais', icon: 'auto_awesome' },
+        { id: 'kpi', label: t('kpiWidgets'), icon: 'trending_up' },
+        { id: 'chart', label: t('chartWidgets'), icon: 'bar_chart' },
+        { id: 'table', label: t('tableWidgets'), icon: 'table_chart' },
+        { id: 'special', label: t('specialWidgets'), icon: 'auto_awesome' },
     ];
+
 
     const filteredWidgets = useMemo(() => {
         let widgets = getWidgetsByCategory(selectedCategory as any);
@@ -70,7 +74,7 @@ function AddWidgetPanel({ plan, onAdd }: { plan: string; onAdd: (key: WidgetType
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Buscar widgets..."
+                        placeholder={t('searchWidgets')}
                         className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-primary/50"
                     />
                 </div>
@@ -78,7 +82,8 @@ function AddWidgetPanel({ plan, onAdd }: { plan: string; onAdd: (key: WidgetType
 
             {/* Categories */}
             <div className="flex gap-2 p-4 overflow-x-auto border-b border-white/10">
-                <button onClick={() => setSelectedCategory(null)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${selectedCategory === null ? 'bg-brand-primary text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}>Todos</button>
+                <button onClick={() => setSelectedCategory(null)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${selectedCategory === null ? 'bg-brand-primary text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}>{t('allWidgets')}</button>
+
                 {categories.map(cat => (
                     <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-1 ${selectedCategory === cat.id ? 'bg-brand-primary text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}>
                         <span className="material-symbols-outlined text-sm">{cat.icon}</span>
@@ -99,10 +104,11 @@ function AddWidgetPanel({ plan, onAdd }: { plan: string; onAdd: (key: WidgetType
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                        <h3 className="text-sm font-semibold text-white">{widget.name}</h3>
+                                        <h3 className="text-sm font-semibold text-white">{t(`widget_${widget.widget_key}_name` as any)}</h3>
                                         {!isAvailable && <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-400">{widget.plan_min}</span>}
                                     </div>
-                                    <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{widget.description}</p>
+                                    <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{t(`widget_${widget.widget_key}_desc` as any)}</p>
+
                                 </div>
                                 {isAvailable && <Plus className="w-5 h-5 text-gray-400 shrink-0" />}
                             </div>
@@ -113,9 +119,10 @@ function AddWidgetPanel({ plan, onAdd }: { plan: string; onAdd: (key: WidgetType
                 {filteredWidgets.length === 0 && (
                     <div className="text-center py-8">
                         <span className="material-symbols-outlined text-4xl text-gray-600">widgets</span>
-                        <p className="text-gray-500 text-sm mt-2">Nenhum widget encontrado</p>
+                        <p className="text-gray-500 text-sm mt-2">{t('noWidgetsFound')}</p>
                     </div>
                 )}
+
             </div>
         </>
     );
@@ -126,8 +133,10 @@ function AddWidgetPanel({ plan, onAdd }: { plan: string; onAdd: (key: WidgetType
 // ============================================
 
 function EditWidgetPanel({ widgetId, onClose, onRemove }: { widgetId: string; onClose: () => void; onRemove: () => void }) {
+    const { t } = React.useContext(LanguageContext);
     const { state, updateWidget } = useDashboard();
     const widgetConfig = state.config?.widgets[widgetId];
+
 
     const [title, setTitle] = useState(widgetConfig?.title || '');
     const [color, setColor] = useState(widgetConfig?.color || 'blue');
@@ -141,7 +150,7 @@ function EditWidgetPanel({ widgetId, onClose, onRemove }: { widgetId: string; on
         }
     }, [widgetConfig]);
 
-    if (!widgetConfig) return <div className="p-4 text-gray-500">Widget não encontrado</div>;
+    if (!widgetConfig) return <div className="p-4 text-gray-500">{t('widgetNotFound')}</div>;
 
     const metadata = WIDGET_METADATA[widgetConfig.type];
     const supportedMetrics = metadata?.supported_metrics || [];
@@ -159,20 +168,17 @@ function EditWidgetPanel({ widgetId, onClose, onRemove }: { widgetId: string; on
                     <div className="w-12 h-12 rounded-xl bg-brand-primary/10 flex items-center justify-center">
                         <span className="material-symbols-outlined text-brand-primary">{metadata?.icon || 'widgets'}</span>
                     </div>
-                    <div>
-                        <h3 className="text-white font-semibold">{metadata?.name || 'Widget'}</h3>
-                        <p className="text-xs text-gray-400">{metadata?.description}</p>
-                    </div>
                 </div>
             </div>
 
             {/* Edit Form */}
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
+
                 {/* Title */}
                 <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                         <Settings2 className="w-4 h-4 inline mr-2" />
-                        Título
+                        {t('widgetTitle')}
                     </label>
                     <input
                         type="text"
@@ -186,7 +192,7 @@ function EditWidgetPanel({ widgetId, onClose, onRemove }: { widgetId: string; on
                 <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                         <Palette className="w-4 h-4 inline mr-2" />
-                        Cor
+                        {t('widgetColor')}
                     </label>
                     <div className="flex flex-wrap gap-1.5">
                         {WIDGET_COLORS.map(c => (
@@ -194,7 +200,7 @@ function EditWidgetPanel({ widgetId, onClose, onRemove }: { widgetId: string; on
                                 key={c.id}
                                 onClick={() => setColor(c.value)}
                                 className={`w-8 h-8 rounded-md ${c.class} transition-all ${color === c.value ? 'ring-2 ring-white scale-110' : 'opacity-50 hover:opacity-100'}`}
-                                title={c.label}
+                                title={t(`color_${c.id}` as any)}
                             />
                         ))}
                     </div>
@@ -205,7 +211,7 @@ function EditWidgetPanel({ widgetId, onClose, onRemove }: { widgetId: string; on
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
                             <BarChart3 className="w-4 h-4 inline mr-2" />
-                            Métrica
+                            {t('widgetMetric')}
                         </label>
                         <select
                             value={metric}
@@ -213,7 +219,7 @@ function EditWidgetPanel({ widgetId, onClose, onRemove }: { widgetId: string; on
                             className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-brand-primary/50"
                         >
                             {supportedMetrics.map(m => (
-                                <option key={m} value={m} className="bg-gray-900">{m.replace(/_/g, ' ').toUpperCase()}</option>
+                                <option key={m} value={m} className="bg-gray-900">{t(`metric_${m}` as any)}</option>
                             ))}
                         </select>
                     </div>
@@ -221,8 +227,8 @@ function EditWidgetPanel({ widgetId, onClose, onRemove }: { widgetId: string; on
 
                 {/* Replace Widget */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Substituir Widget</label>
-                    <p className="text-xs text-gray-500 mb-3">Escolha outro tipo de widget para substituir este</p>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">{t('replaceWidget')}</label>
+                    <p className="text-xs text-gray-500 mb-3">{t('replaceWidgetDesc')}</p>
                     <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
                         {getWidgetsByCategory(null).map(w => (
                             <button
@@ -231,25 +237,27 @@ function EditWidgetPanel({ widgetId, onClose, onRemove }: { widgetId: string; on
                                 className={`p-2 rounded-lg text-left border transition-all ${widgetConfig.type === w.widget_key ? 'border-brand-primary bg-brand-primary/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
                             >
                                 <span className="material-symbols-outlined text-sm text-brand-primary">{w.icon}</span>
-                                <p className="text-[10px] text-white mt-0.5 truncate">{w.name}</p>
+                                <p className="text-[10px] text-white mt-0.5 truncate">{t(`widget_${w.widget_key}_name` as any)}</p>
                             </button>
                         ))}
                     </div>
                 </div>
+
             </div>
 
             {/* Actions */}
             <div className="p-4 border-t border-white/10 flex gap-3">
                 <button onClick={onRemove} className="flex-1 h-10 px-4 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 flex items-center justify-center gap-2 transition-all">
                     <Trash2 className="w-4 h-4" />
-                    Remover
+                    {t('removeWidget')}
                 </button>
                 <button onClick={handleSave} className="flex-1 h-10 px-4 rounded-lg bg-brand-primary text-white hover:brightness-110 flex items-center justify-center gap-2 transition-all">
                     <Save className="w-4 h-4" />
-                    Salvar
+                    {t('saveWidget')}
                 </button>
             </div>
-        </div>
+
+        </div >
     );
 }
 
@@ -258,7 +266,9 @@ function EditWidgetPanel({ widgetId, onClose, onRemove }: { widgetId: string; on
 // ============================================
 
 function DashboardEditor({ isOpen, onClose, plan, mode, editingWidgetId }: DashboardEditorProps) {
+    const { t } = React.useContext(LanguageContext);
     const { state, addWidget, removeWidget } = useDashboard();
+
 
     const handleAddWidget = (widgetKey: WidgetType) => {
         const metadata = WIDGET_METADATA[widgetKey];
@@ -266,7 +276,7 @@ function DashboardEditor({ isOpen, onClose, plan, mode, editingWidgetId }: Dashb
 
         const config: WidgetConfig = {
             type: widgetKey,
-            title: metadata.name,
+            title: t(`widget_${widgetKey}_name` as any),
             icon: metadata.icon,
             metric: metadata.supported_metrics[0],
             config: { ...metadata.default_config },
@@ -306,8 +316,9 @@ function DashboardEditor({ isOpen, onClose, plan, mode, editingWidgetId }: Dashb
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-white/10">
                     <h2 className="text-lg font-semibold text-white">
-                        {mode === 'add' ? 'Adicionar Widget' : 'Editar Widget'}
+                        {mode === 'add' ? t('addWidget') : t('editWidget')}
                     </h2>
+
                     <button onClick={onClose} className="p-1 rounded-lg hover:bg-white/10 transition-colors">
                         <X className="w-5 h-5 text-gray-400" />
                     </button>

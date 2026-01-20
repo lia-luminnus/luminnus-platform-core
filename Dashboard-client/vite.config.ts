@@ -21,17 +21,17 @@ export default defineConfig(({ mode }) => {
       // Em PRODUÇÃO o proxy NÃO existe - tudo usa URLs absolutas
       // ===========================================================
       proxy: {
-        // All API routes go to Express backend (port 5000)
+        // All API routes go to LIA Backend (port 3000)
         '/api': {
-          target: 'http://127.0.0.1:5000',
+          target: 'http://127.0.0.1:3000',
           changeOrigin: true,
         },
         '/chat': {
-          target: 'http://127.0.0.1:5000',
+          target: 'http://127.0.0.1:3000',
           changeOrigin: true,
         },
         '/socket.io': {
-          target: 'http://127.0.0.1:5000',
+          target: 'http://127.0.0.1:3000',
           ws: true,
           changeOrigin: true,
         },

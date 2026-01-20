@@ -1,4 +1,5 @@
-import './config/envLoader.js';
+import './config/envLoader.js';// [RELOAD_TRIGGER] v4.0.1 - Applying personality updates
+const RELOAD_STAMP = "2026-01-16T18:35:00";
 // ===========================================================
 // LIA UNIFIED SERVER - Port 3000
 // Frontend (Vite) + Backend (Express + Socket.io + WebRTC)
@@ -49,6 +50,7 @@ import { setupVisionRoutes } from './routes/vision.js';
 import { setupMultimodalRoutes } from './routes/multimodal.js';
 import { setupDocumentRoutes } from './routes/documents.js';
 import { setupToolRoutes } from './routes/tools.js';
+import { setupIntegrationsRoutes } from './routes/integrations.js';
 import { setupImageRoutes } from './routes/image.js';
 import { setupConversationRoutes } from './routes/conversations.js';
 import { setupEmotionRoutes } from './routes/emotion.js';
@@ -56,6 +58,14 @@ import { setupAvatarRoutes } from './routes/avatar.js';
 import { setupFilesRoutes } from './routes/files.js';
 import { setupVersionRoutes } from './routes/version.js';
 import adminRoutes from './routes/admin.js';
+import { setupWhatsAppRoutes, setupWhatsAppIntegrationRoutes } from './routes/whatsapp.js';
+import { setupWhatsAppWebhookRoutes } from './routes/whatsapp-webhook.js';
+import whatsappAdminRoutes from './routes/whatsapp-admin.js';
+import { setupDashboardRoutes } from './routes/dashboard.js';
+import { setupGoogleAuthRoutes } from './routes/google-auth.js';
+import WhatsAppIntelligence from './services/whatsappIntelligence.js';
+import { setSocketIO } from './services/eventBusService.js';
+
 
 // Realtime
 import { setupRealtime } from './realtime/realtime.js';
@@ -130,6 +140,8 @@ const io = new Server(httpServer, {
   },
   transports: ['websocket', 'polling']
 });
+
+setSocketIO(io);
 
 // Compartilhar io com as rotas via app.set
 app.set('io', io);
@@ -255,14 +267,25 @@ async function startServer() {
   setupMultimodalRoutes(app);
   setupToolRoutes(app);  // Weather, Places, Directions, Translate
   setupImageRoutes(app); // Image generation (Nano Banana + DALL-E)
-  setupConversationRoutes(app); // Conversation history management
+  setupConversationRoutes(app);
+  setupWhatsAppRoutes(app); // Conversation history management
+  setupWhatsAppWebhookRoutes(app);
   setupEmotionRoutes(app);       // Emotion decode for Avatar
   setupAvatarRoutes(app, openai); // Avatar Studio test API
   setupFilesRoutes(app); // Files management API (v2.0)
   setupVersionRoutes(app); // System Version & Update Broadcast
+  setupDashboardRoutes(app); // Dashboard engine
+  setupIntegrationsRoutes(app); // Hub & Integrations
+  setupWhatsAppIntegrationRoutes(app); // WhatsApp Integration Management (for Hub)
+  setupGoogleAuthRoutes(app); // Google OAuth Integration
+
+  // WhatsApp Intelligence Initialization
+  WhatsAppIntelligence.init();
+
 
   // Admin Diagnostic Routes (Admin-Only, protected by adminGate)
   app.use('/api/admin', adminRoutes);
+  app.use('/api/admin/whatsapp', whatsappAdminRoutes);
 
   console.log('✅ Core LIA Functions loaded');
 
@@ -346,7 +369,7 @@ async function startServer() {
   // Unified architecture: Single port for all services
   const PORT = process.env.PORT || 3000;
 
-  httpServer.listen(Number(PORT), '127.0.0.1', () => {
+  httpServer.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`🚀 LIA Unified Server ready on http://127.0.0.1:${PORT} [${process.env.NODE_ENV || 'dev'}]`);
   }).on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {

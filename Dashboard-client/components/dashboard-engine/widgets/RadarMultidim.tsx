@@ -34,7 +34,7 @@ function RadarMultidim({ id, config, data, loading, error, isEditMode }: WidgetP
 
     if (loading) {
         return (
-            <div className="h-full w-full rounded-2xl p-4 bg-white/5 border border-white/10 flex items-center justify-center">
+            <div className="h-full w-full rounded-2xl p-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 flex items-center justify-center">
                 <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
             </div>
         );
@@ -49,8 +49,8 @@ function RadarMultidim({ id, config, data, loading, error, isEditMode }: WidgetP
     }
 
     return (
-        <div className={`h-full w-full rounded-2xl p-4 bg-white/5 border border-white/10 flex flex-col ${isEditMode ? 'cursor-move' : ''}`}>
-            <h3 className="text-sm font-semibold text-white mb-3">{title}</h3>
+        <div className={`h-full w-full rounded-2xl p-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 flex flex-col ${isEditMode ? 'cursor-move' : ''}`}>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">{title}</h3>
 
             <div className="flex-1 min-h-0 relative">
                 <ResponsiveContainer width="100%" height="100%">
@@ -81,7 +81,8 @@ function RadarMultidim({ id, config, data, loading, error, isEditMode }: WidgetP
                                 fontWeight: 'bold',
                                 color: '#fff'
                             }}
-                            itemStyle={{ color: COLOR }}
+                            itemStyle={{ color: '#fff' }}
+                            labelStyle={{ color: '#fff', marginBottom: '4px' }}
                             formatter={(value: number) => [formatValue(value), 'Valor']}
                         />
                         <Radar

@@ -90,8 +90,8 @@ router.get('/google', async (req, res) => {
 
         let redirectBase = process.env.APP_URL || `${protocol}://${host}`;
         if (redirectBase.includes('localhost:5000') || redirectBase.includes('127.0.0.1:5000')) {
-            console.log('[OAuth Google] Ambiente local detectado, forçando redirect para porta 3000 (autorizada no console)');
-            redirectBase = 'http://localhost:3000';
+            console.log('[OAuth Google] Ambiente local detectado na porta 5000');
+            redirectBase = 'http://localhost:5000';
         }
 
         const redirectUri = `${redirectBase}/api/auth/google/callback`;
@@ -273,7 +273,7 @@ router.get('/google/callback', async (req, res) => {
         const host = req.get('host');
         const protocol = req.protocol;
         let redirectBase = process.env.APP_URL || `${protocol}://${host}`;
-        if (redirectBase.includes('localhost:5000') || redirectBase.includes('127.0.0.1:5000')) {
+        if (redirectBase.includes('localhost:3000') || redirectBase.includes('127.0.0.1:3000')) {
             redirectBase = 'http://localhost:3000';
         }
         const redirectUri = `${redirectBase}/api/auth/google/callback`;

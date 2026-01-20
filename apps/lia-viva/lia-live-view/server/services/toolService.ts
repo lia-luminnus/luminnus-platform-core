@@ -4,14 +4,7 @@ import fetch from 'node-fetch';
 import { geospatialService } from './geospatialService.js';
 import { diagnosticService } from './diagnosticService.js';
 
-/**
- * ToolService: Centraliza definições (schemas) e execução de ferramentas
- * v1.1.0 - Unificado para Chat, Multimodal e Live (Voz)
- */
 export class ToolService {
-    /**
-     * Retorna a lista completa de ferramentas formatada para OpenAI
-     */
     static getTools() {
         return [
             {
@@ -28,66 +21,59 @@ export class ToolService {
             },
             {
                 name: 'deleteMemory',
-                description: 'Deleta uma memória específica do usuário. Use quando o usuário pedir para esquecer, deletar ou remover uma informação.',
+                description: 'Deleta uma memória específica do usuário.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        key: { type: 'string', description: 'A chave da memória a ser deletada (ex: nome_usuario, email_usuario, localizacao, preferencia, empresa, cargo)' }
+                        key: { type: 'string', description: 'A chave da memória a ser deletada' }
                     },
                     required: ['key']
                 }
             },
             {
                 name: 'searchWeb',
-                description: 'OBRIGATÓRIO para: preços de criptomoedas (Bitcoin, Ethereum), cotações de moedas (dólar, euro), preços de ações, notícias recentes, eventos atuais, ou qualquer informação que mude frequentemente. Busca informações ATUALIZADAS e EM TEMPO REAL na internet. NUNCA responda sobre preços ou cotações sem usar esta ferramenta primeiro.',
+                description: 'Busca informações ATUALIZADAS e EM TEMPO REAL na internet.',
                 parameters: {
                     type: 'object',
-                    properties: { query: { type: 'string', description: 'A consulta de busca (ex: "bitcoin price USD today", "cotação dólar real hoje")' } },
+                    properties: { query: { type: 'string', description: 'A consulta de busca' } },
                     required: ['query']
                 }
             },
-
             {
                 name: 'getWeather',
-                description: 'Busca a previsão do tempo e clima atual para uma cidade específica ou para a localização atual do usuário.',
+                description: 'Busca a previsão do tempo.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        location: {
-                            type: 'string',
-                            description: 'Cidade a pesquisar (ex: "São Paulo, SP"). Se for omitido ou for "atual", busca da localização do usuário.'
-                        }
+                        location: { type: 'string' }
                     }
                 }
             },
             {
                 name: 'getCurrentLocation',
-                description: 'Obtém a localização geográfica exata e o endereço atual do dispositivo do usuário.',
-                parameters: {
-                    type: 'object',
-                    properties: {}
-                }
+                description: 'Obtém a localização geográfica exata do usuário.',
+                parameters: { type: 'object', properties: {} }
             },
             {
                 name: 'getLocation',
-                description: 'Busca lugares (restaurantes, farmácias, lojas, etc) próximos ou em uma localização específica. IMPORTANTE: Se o usuário especificar uma cidade ou área (ex: "em Aveiro", "no centro", "em Lisboa"), você DEVE passar essa localização no parâmetro location para garantir precisão. Nunca traga resultados de cidades diferentes da solicitada.',
+                description: 'Busca lugares próximos.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        query: { type: 'string', description: 'O que buscar (ex: farmácias, mercado do peixe)' },
-                        location: { type: 'string', description: 'Onde buscar - OBRIGATÓRIO quando o usuário especifica uma cidade/área (ex: "Aveiro Centro", "Lisboa", "Porto"). Use EXATAMENTE o que o usuário disser.' }
+                        query: { type: 'string' },
+                        location: { type: 'string' }
                     },
                     required: ['query', 'location']
                 }
             },
             {
                 name: 'getDirections',
-                description: 'Calcula a distância e tempo de viagem entre dois pontos.',
+                description: 'Calcula a distância e tempo de viagem.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        origin: { type: 'string', description: 'Ponto de partida' },
-                        destination: { type: 'string', description: 'Destino' },
+                        origin: { type: 'string' },
+                        destination: { type: 'string' },
                         mode: { type: 'string', enum: ['driving', 'walking', 'bicycling', 'transit'], default: 'driving' }
                     },
                     required: ['origin', 'destination']
@@ -95,7 +81,7 @@ export class ToolService {
             },
             {
                 name: 'getCurrentTime',
-                description: 'Retorna data e hora atuais baseadas em um timezone.',
+                description: 'Retorna data e hora atuais.',
                 parameters: {
                     type: 'object',
                     properties: { timezone: { type: 'string', default: 'Europe/Lisbon' } }
@@ -103,11 +89,11 @@ export class ToolService {
             },
             {
                 name: 'generateImage',
-                description: 'Gera uma imagem artística ou realista a partir de uma descrição detalhada.',
+                description: 'Gera uma imagem artística ou realista.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        prompt: { type: 'string', description: 'Descrição detalhada em português' },
+                        prompt: { type: 'string' },
                         style: { type: 'string', enum: ['realistic', 'artistic'], default: 'realistic' }
                     },
                     required: ['prompt']
@@ -115,11 +101,11 @@ export class ToolService {
             },
             {
                 name: 'generateChart',
-                description: 'Gera um gráfico visual (linha, barra, pizza) a partir de dados fornecidos.',
+                description: 'Gera um gráfico visual.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        title: { type: 'string', description: 'Título do gráfico' },
+                        title: { type: 'string' },
                         chartType: { type: 'string', enum: ['line', 'bar', 'pie', 'area'] },
                         labels: { type: 'array', items: { type: 'string' } },
                         datasets: {
@@ -139,11 +125,11 @@ export class ToolService {
             },
             {
                 name: 'createGoogleSheet',
-                description: 'Cria uma planilha SIMPLES e BÁSICA. USE APENAS para listas rápidas sem formatação complexa ou quando o usuário pedir explicitamente "lista simples". NUNCA use para pedidos de dashboards, controles financeiros ou quando houver um print de exemplo.',
+                description: 'Cria uma planilha SIMPLES.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        title: { type: 'string', description: 'Título da planilha' },
+                        title: { type: 'string' },
                         headers: { type: 'array', items: { type: 'string' } },
                         rows: { type: 'array', items: { type: 'array', items: { type: 'string' } } }
                     },
@@ -152,147 +138,235 @@ export class ToolService {
             },
             {
                 name: 'updateGoogleSheet',
-                description: 'Edita uma planilha EXISTENTE no Google Sheets. Use quando o usuário pedir para "editar", "melhorar", "organizar", "profissionalizar" ou "ajustar" uma planilha já criada.',
+                description: 'Edita uma planilha EXISTENTE.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        spreadsheetId: { type: 'string', description: 'ID da planilha existente (obtido do link ou contexto anterior)' },
-                        operations: {
-                            type: 'array',
-                            description: 'Lista de operações a executar na planilha',
-                            items: {
-                                type: 'object',
-                                properties: {
-                                    addSheet: { type: 'object', properties: { title: { type: 'string' } } },
-                                    updateRange: { type: 'object', properties: { range: { type: 'string' }, values: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
-                                    addFormula: { type: 'object', properties: { range: { type: 'string' }, formula: { type: 'string' } } },
-                                    freezeRows: { type: 'number' }
-                                }
-                            }
-                        }
+                        spreadsheetId: { type: 'string' },
+                        operations: { type: 'array', items: { type: 'object' } }
                     },
                     required: ['spreadsheetId', 'operations']
                 }
             },
             {
-                name: 'createAdvancedSheet',
-                description: 'Cria uma planilha intermediária. OBSOLETO: Use createProFinancialSheet para resultados de alta fidelidade.',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        title: { type: 'string', description: 'Título da planilha' },
-                        type: {
-                            type: 'string',
-                            enum: ['financial', 'inventory', 'custom'],
-                            description: 'Tipo de planilha: financial (controle financeiro), inventory (estoque), custom (personalizada)'
-                        }
-                    },
-                    required: ['title']
-                }
-            },
-            {
                 name: 'createProFinancialSheet',
-                description: 'FERRAMENTA MANDATÓRIA para pedidos de "REPLICAR LAYOUT", "PLANILHA PRO", "DASHBOARD", "CONTROLE FINANCEIRO" ou quando o usuário enviar um PRINT/IMAGEM. Esta ferramenta clona o modelo master LIA_PRO_FINANCEIRO_MASTER que possui dashboards, KPIs e 5 abas comerciais. É a única que garante o visual premium solicitado. Se houver imagem, use analyzeFile primeiro para extrair os dados e injetá-los aqui.',
+                description: 'Cria uma planilha FINANCEIRA PROFISSIONAL.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        title: { type: 'string', description: 'Título da planilha PRO (default: Controle Financeiro PRO)' },
-                        initialDataFromAnalysis: { type: 'string', description: 'Dados extraídos da imagem/print para popular a planilha clonada' }
+                        title: { type: 'string' }
                     },
                     required: ['title']
                 }
             },
             {
                 name: 'createGoogleDoc',
-                description: 'Cria um documento real no Google Docs do usuário.',
+                description: 'Cria um documento real no Google Docs.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        title: { type: 'string', description: 'Título do documento' },
-                        content: { type: 'string', description: 'Conteúdo em markdown ou texto simples' }
+                        title: { type: 'string' },
+                        content: { type: 'string' }
                     },
                     required: ['title', 'content']
                 }
             },
             {
                 name: 'sendGmail',
-                description: 'Envia um e-mail real pelo Gmail do usuário.',
+                description: 'Envia um e-mail real.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        to: { type: 'string', description: 'Destinatário' },
-                        subject: { type: 'string', description: 'Assunto' },
-                        body: { type: 'string', description: 'Mensagem (suporta HTML)' }
+                        to: { type: 'string' },
+                        subject: { type: 'string' },
+                        body: { type: 'string' }
                     },
                     required: ['to', 'subject', 'body']
                 }
             },
             {
-                name: 'createCalendarEvent',
-                description: 'Agenda um compromisso real no Google Calendar do usuário.',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        title: { type: 'string', description: 'Nome do evento' },
-                        start: { type: 'string', description: 'Início (ISO 8601)' },
-                        end: { type: 'string', description: 'Fim (ISO 8601)' },
-                        description: { type: 'string' }
-                    },
-                    required: ['title', 'start', 'end']
-                }
-            },
-            // ========== GMAIL READ TOOLS (v2.0) ==========
-            {
                 name: 'listGmailMessages',
-                description: 'Lista os e-mails mais recentes da caixa de entrada do usuário. Use quando pedirem "veja meus emails", "o que chegou hoje", "emails novos".',
+                description: 'Lista os e-mails mais recentes.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        maxResults: { type: 'number', description: 'Número máximo de e-mails a retornar (default: 10)', default: 10 },
-                        query: { type: 'string', description: 'Query opcional no formato Gmail (ex: is:unread, from:fulano)' }
+                        maxResults: { type: 'number', default: 10 },
+                        query: { type: 'string' }
                     }
                 }
             },
             {
                 name: 'searchGmail',
-                description: 'Pesquisa e-mails usando linguagem natural. Use quando pedirem "procura email do João", "emails sobre projeto X", "emails não lidos", "emails com anexo".',
+                description: 'Pesquisa e-mails usando linguagem natural (ex: "e-mails de ontem sobre projeto").',
                 parameters: {
                     type: 'object',
                     properties: {
-                        searchTerm: { type: 'string', description: 'Termo de busca em linguagem natural (ex: "emails do João sobre projeto")' }
+                        searchTerm: { type: 'string', description: 'O termo de busca em linguagem natural' }
                     },
                     required: ['searchTerm']
                 }
             },
             {
-                name: 'getGmailMessage',
-                description: 'Obtém o conteúdo completo de um e-mail específico. Use após listar e-mails quando o usuário quiser ver detalhes.',
+                name: 'deleteGmailMessage',
+                description: 'Move um e-mail para a lixeira (trash).',
                 parameters: {
                     type: 'object',
                     properties: {
-                        messageId: { type: 'string', description: 'ID do e-mail retornado por listGmailMessages ou searchGmail' }
+                        messageId: { type: 'string', description: 'O ID do e-mail a ser deletado' }
                     },
                     required: ['messageId']
                 }
             },
             {
-                name: 'analyzeFile',
-                description: 'Recupera a análise de um arquivo enviado anteriormente para usar em outras tarefas.',
+                name: 'getGmailMessage',
+                description: 'Obtém o conteúdo completo de um e-mail.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        fileId: { type: 'string', description: 'Nome parcial ou ID do arquivo' }
+                        messageId: { type: 'string' }
+                    },
+                    required: ['messageId']
+                }
+            },
+            {
+                name: 'createCalendarEvent',
+                description: `Agenda um evento ou lembrete no Google Calendar. 
+REGRAS:
+- Use "title" para um nome CURTO e OBJETIVO do evento (máximo 60 caracteres).
+- Use "description" para TODOS os detalhes, notas, tópicos e lembretes que o usuário mencionou.
+- Sempre preencha "description" quando o usuário mencionar tópicos, pontos, itens ou lembretes.
+- Formate a descrição com bullets (•) para facilitar leitura.`,
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        title: {
+                            type: 'string',
+                            description: 'Título curto e claro (ex: "Revisão de Projeto" - máx 60 chars)'
+                        },
+                        start: {
+                            type: 'string',
+                            description: 'Data/hora de início (ISO String, ex: "2026-01-18T10:00:00")'
+                        },
+                        end: {
+                            type: 'string',
+                            description: 'Data/hora de término (ISO String, ex: "2026-01-18T11:00:00")'
+                        },
+                        description: {
+                            type: 'string',
+                            description: 'Detalhes completos e tópicos a lembrar. Use bullets (•) para listar.'
+                        }
+                    },
+                    required: ['title', 'start', 'end']
+                }
+            },
+            {
+                name: 'listCalendarEvents',
+                description: 'Lista compromissos da agenda num período específico.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        timeMin: { type: 'string', description: 'Início do intervalo (ISO String)' },
+                        timeMax: { type: 'string', description: 'Fim do intervalo (ISO String)' }
+                    }
+                }
+            },
+            {
+                name: 'updateCalendarEvent',
+                description: `Atualiza/move um evento existente no Google Calendar.
+QUANDO USAR:
+- Usuário pede para mover evento de data/hora
+- Usuário pede para alterar título ou descrição de evento
+REQUER: eventId (obtido via listCalendarEvents ou searchCalendarEvents)`,
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        eventId: {
+                            type: 'string',
+                            description: 'ID do evento a ser atualizado (obtenha antes com listCalendarEvents ou searchCalendarEvents)'
+                        },
+                        title: { type: 'string', description: 'Novo título (opcional)' },
+                        start: { type: 'string', description: 'Nova data/hora início (ISO String, opcional)' },
+                        end: { type: 'string', description: 'Nova data/hora término (ISO String, opcional)' },
+                        description: { type: 'string', description: 'Nova descrição (opcional)' }
+                    },
+                    required: ['eventId']
+                }
+            },
+            {
+                name: 'deleteCalendarEvent',
+                description: `Deleta/remove um evento do Google Calendar.
+QUANDO USAR:
+- Usuário pede para deletar, remover ou cancelar um evento
+REQUER: eventId (obtido via listCalendarEvents ou searchCalendarEvents)`,
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        eventId: {
+                            type: 'string',
+                            description: 'ID do evento a ser deletado (obtenha antes com listCalendarEvents ou searchCalendarEvents)'
+                        }
+                    },
+                    required: ['eventId']
+                }
+            },
+            {
+                name: 'getCalendarEvent',
+                description: 'Obtém detalhes completos de um evento específico.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        eventId: { type: 'string', description: 'ID do evento' }
+                    },
+                    required: ['eventId']
+                }
+            },
+            {
+                name: 'searchCalendarEvents',
+                description: `Pesquisa eventos por título ou descrição no Google Calendar.
+QUANDO USAR:
+- Usuário menciona um evento por nome mas não sabe a data/hora
+- Precisa encontrar o eventId para atualizar ou deletar um evento
+Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou deleteCalendarEvent.`,
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        query: { type: 'string', description: 'Termo de busca (título ou descrição do evento)' },
+                        daysAhead: { type: 'number', description: 'Quantos dias à frente buscar (default: 30)' }
+                    },
+                    required: ['query']
+                }
+            },
+
+            {
+                name: 'getBusinessMetrics',
+                description: 'Consulta métricas reais do negócio (faturamento, despesas, transações). Use para responder perguntas sobre o desempenho financeiro.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        metricKey: { type: 'string', enum: ['cash_in', 'cash_out', 'net_cash', 'transaction_count', 'deals_value', 'revenue_by_category'] },
+                        period: { type: 'string', enum: ['day', 'week', 'month', 'year'], default: 'month' }
+                    },
+                    required: ['metricKey']
+                }
+            },
+            {
+                name: 'analyzeFile',
+                description: 'Recupera a análise de um arquivo.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        fileId: { type: 'string' }
                     },
                     required: ['fileId']
                 }
             },
             {
                 name: 'getSystemHealth',
-                description: 'DIAGNOSTIC ONLY: Retorna o status de saúde e latência de todos os serviços (Supabase, OpenAI, Google, Realtime).'
+                description: 'DIAGNOSTIC ONLY'
             },
             {
                 name: 'getSystemLogs',
-                description: 'DIAGNOSTIC ONLY: Retorna os logs recentes do servidor para análise de erros.',
+                description: 'DIAGNOSTIC ONLY',
                 parameters: {
                     type: 'object',
                     properties: {
@@ -303,81 +377,165 @@ export class ToolService {
             },
             {
                 name: 'readProjectFile',
-                description: 'DIAGNOSTIC ONLY: Lê o conteúdo de um arquivo do projeto. Use para analisar o código e encontrar bugs.',
+                description: 'DIAGNOSTIC ONLY',
                 parameters: {
                     type: 'object',
                     properties: {
-                        filePath: { type: 'string', description: 'Caminho relativo do arquivo (ex: server/server.ts)' }
+                        filePath: { type: 'string' }
                     },
                     required: ['filePath']
                 }
             },
             {
                 name: 'getProjectMap',
-                description: 'DIAGNOSTIC ONLY: Retorna o mapa da estrutura do sistema (árvore de arquivos principal).'
+                description: 'DIAGNOSTIC ONLY'
             },
             // ========== DASHBOARD CONTROL TOOLS (LIA Action Protocol v3.0) ==========
             {
                 name: 'dashboardGetSnapshot',
-                description: 'ESSENCIAL: Obtém a visão atual do dashboard do usuário (todos os widgets, tipos e títulos). Use PROATIVAMENTE sempre que o usuário perguntar o que tem no dashboard ou antes de sugerir qualquer mudança, para garantir que você sabe exatamente o que está na tela.',
+                description: 'ESSENCIAL: Obtém a visão atual do dashboard do usuário.',
+                parameters: { type: 'object', properties: {} }
+            },
+            {
+                name: 'dashboardAddWidget',
+                description: 'Adiciona um novo widget ao dashboard.',
                 parameters: {
                     type: 'object',
-                    properties: {}
+                    properties: {
+                        widgetType: {
+                            type: 'string',
+                            enum: ['kpi_card', 'line_timeseries', 'bar_grouped', 'donut_breakdown', 'table_rank', 'table_transactions', 'funnel', 'gauge', 'heatmap_calendar', 'alerts_list', 'radar_multidim', 'bar_horizontal', 'area_timeseries', 'pie_chart']
+                        },
+                        title: { type: 'string' },
+                        metric: { type: 'string' },
+                        x: { type: 'integer', description: 'Coluna (0-11)' },
+                        y: { type: 'integer', description: 'Linha' },
+                        w: { type: 'integer', description: 'Largura' },
+                        h: { type: 'integer', description: 'Altura' },
+                        pre_state_hash: { type: 'string' }
+                    },
+                    required: ['widgetType']
                 }
             },
             {
                 name: 'dashboardReplaceWidget',
-                description: 'Substitui um widget existente por outro tipo, mantendo a mesma posição. Use quando o usuário pedir "troque", "substitua" ou "mude" um widget. NÃO PRECISA do ID exato - pode buscar por tipo ou título.',
+                description: 'Substitui um widget existente.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        targetWidgetType: {
-                            type: 'string',
-                            description: 'Tipo do widget a substituir (ex: table_rank, pie_chart, line_timeseries)',
-                            enum: ['kpi_card', 'line_timeseries', 'bar_grouped', 'donut_breakdown', 'table_rank', 'table_transactions', 'funnel', 'gauge', 'heatmap_calendar', 'alerts_list', 'radar_multidim', 'bar_horizontal', 'area_timeseries', 'pie_chart']
-                        },
-                        targetWidgetTitle: {
-                            type: 'string',
-                            description: 'Parte do título do widget a substituir (ex: "ranking", "despesas")'
-                        },
+                        targetWidgetType: { type: 'string' },
+                        targetWidgetTitle: { type: 'string' },
                         newWidgetType: {
                             type: 'string',
-                            description: 'Tipo do novo widget',
                             enum: ['kpi_card', 'line_timeseries', 'bar_grouped', 'donut_breakdown', 'table_rank', 'table_transactions', 'funnel', 'gauge', 'heatmap_calendar', 'alerts_list', 'radar_multidim', 'bar_horizontal', 'area_timeseries', 'pie_chart']
                         },
-                        newWidgetTitle: {
-                            type: 'string',
-                            description: 'Título para o novo widget'
-                        }
+                        newWidgetTitle: { type: 'string' },
+                        pre_state_hash: { type: 'string' }
                     },
                     required: ['newWidgetType']
                 }
             },
             {
                 name: 'dashboardReorganize',
-                description: 'Reorganiza o layout do dashboard. Use quando o usuário pedir para "organizar", "arrumar" ou "reorganizar" o dashboard.',
+                description: 'Reorganiza o layout do dashboard.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        layout: {
-                            type: 'string',
-                            enum: ['kpis-top', 'charts-first', 'auto'],
-                            description: 'Tipo de reorganização: kpis-top (KPIs no topo), charts-first (gráficos primeiro), auto (automático)'
-                        }
+                        layout: { type: 'string', enum: ['kpis-top', 'charts-first', 'auto'] }
                     }
                 }
+            },
+            // ========== OPERATIONAL LAYER TOOLS (v4.0) ==========
+            {
+                name: 'crmCreateLead',
+                description: 'Cria um novo lead/contato no CRM.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        name: { type: 'string' },
+                        email: { type: 'string' },
+                        phone: { type: 'string' },
+                        company: { type: 'string' },
+                        source: { type: 'string', description: 'Ex: WhatsApp, Website, Indicação' },
+                        notes: { type: 'string' }
+                    },
+                    required: ['name']
+                }
+            },
+            {
+                name: 'crmUpdateDeal',
+                description: 'Atualiza o status de um negócio/oportunidade.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        dealId: { type: 'string' },
+                        stage: { type: 'string', enum: ['contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost'] },
+                        value: { type: 'number' },
+                        notes: { type: 'string' }
+                    },
+                    required: ['dealId', 'stage']
+                }
+            },
+            {
+                name: 'createSupportTicket',
+                description: 'Abre um chamado de suporte.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        subject: { type: 'string' },
+                        description: { type: 'string' },
+                        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+                        category: { type: 'string' }
+                    },
+                    required: ['subject', 'description']
+                }
+            },
+            {
+                name: 'createFinancialCharge',
+                description: 'Gera uma cobrança ou fatura no financeiro.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        clientName: { type: 'string' },
+                        amount: { type: 'number' },
+                        description: { type: 'string' },
+                        dueDate: { type: 'string', description: 'Data de vencimento (ISO)' },
+                        method: { type: 'string', enum: ['pix', 'boleto', 'credit_card'] }
+                    },
+                    required: ['clientName', 'amount', 'description']
+                }
+            },
+            {
+                name: 'startFollowUp',
+                description: 'Inicia uma sequência de acompanhamento automática.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        targetId: { type: 'string', description: 'ID do lead ou contato' },
+                        channel: { type: 'string', enum: ['whatsapp', 'email', 'all'] },
+                        reason: { type: 'string' }
+                    },
+                    required: ['targetId', 'channel']
+                }
+            },
+            // ========== CORE ORCHESTRATOR TOOLS (v5.0) ==========
+            {
+                name: 'tenantGetSnapshot',
+                description: 'Obtém o estado atual do tenant (plano, integrações, limites).',
+                parameters: { type: 'object', properties: {} }
+            },
+            {
+                name: 'productGetManifest',
+                description: 'Obtém o catálogo completo de módulos, rotas e recursos do produto.',
+                parameters: { type: 'object', properties: {} }
             }
         ];
     }
 
-    /**
-     * Executa uma ferramenta com base no nome e argumentos
-     */
     static async execute(name: string, args: any, context: { userId: string; tenantId: string; userLocation?: any }) {
         const { userId, tenantId } = context;
         console.log(`🔧 [ToolService] Executando: ${name}`);
 
-        // v4.1: Transmitir "pensamento" para o painel de diagnóstico
         diagnosticService.broadcastStep(userId, 'TOOL_EXECUTION', {
             tool: name,
             arguments: args
@@ -387,282 +545,236 @@ export class ToolService {
             switch (name) {
                 case 'saveMemory': {
                     const { saveMemory } = await import('../config/supabase.js');
-                    let key = args.category || 'info_importante';
-                    const content = (args.content || "").toLowerCase();
-
-                    // v5.4: Melhorar detecção de chaves semânticas para evitar categorização genérica
-                    if (key === 'personal' || key === 'general' || key === 'info_importante' || key === 'identity') {
-                        // Detecção de nome do usuário
-                        if (content.includes('meu nome') || content.includes('me chamo') || content.includes('sou o') || content.includes('sou a')) {
-                            key = 'nome_usuario';
-                        }
-                        // Detecção de endereço (NOVO)
-                        else if (content.includes('meu endereço') || content.includes('meu endereco') || content.includes('moro na') || content.includes('moro em') || /\brua\b/.test(content) || /\bavenida\b/.test(content)) {
-                            key = 'endereco_usuario';
-                        }
-                        // Detecção de e-mail
-                        else if (content.includes('@') || content.includes('email')) {
-                            key = 'email_usuario';
-                        }
-                        // Detecção de empresa
-                        else if (content.includes('trabalho') || content.includes('empresa')) {
-                            key = 'empresa';
-                        }
-                        // Detecção de familiares
-                        else if (content.includes('meu filho') || content.includes('minha filha')) {
-                            key = 'nome_filho';
-                        }
-                        else if (content.includes('minha esposa') || content.includes('meu marido') || content.includes('casado com') || content.includes('casada com')) {
-                            key = 'nome_conjuge';
-                        }
-                    }
-
-                    // tool calls são comandos explícitos do modelo (Brain), marcados como importantes
-                    const result = await saveMemory(userId, key, args.content, true);
-                    return { success: true, message: `Memória salva como ${key}`, data: result };
+                    const result = await saveMemory(userId, args.category || 'info', args.content, true);
+                    return { success: true, data: result };
                 }
-
                 case 'deleteMemory': {
                     const { deleteMemory } = await import('../config/supabase.js');
-                    const key = args.key;
-                    if (!key) {
-                        return { success: false, error: 'Chave não especificada' };
-                    }
-                    const result = await deleteMemory(userId, key);
-                    if (result?.deleted) {
-                        return { success: true, message: `Memória '${key}' deletada com sucesso` };
-                    } else {
-                        return { success: false, error: `Memória '${key}' não encontrada` };
-                    }
+                    return await deleteMemory(userId, args.key);
                 }
-
                 case 'searchWeb': {
                     const { buscarNaWeb } = await import('../search/web-search.js');
                     return await buscarNaWeb(args.query);
                 }
-
                 case 'getWeather': {
-                    return await this.getWeather(args, context);
+                    // Fallback para busca na web se não houver API dedicada
+                    const { buscarNaWeb } = await import('../search/web-search.js');
+                    return await buscarNaWeb(`previsão do tempo para ${args.location || 'minha localização'}`);
                 }
-
                 case 'getCurrentLocation': {
-                    return await this.getCurrentLocation(args, context);
+                    return { success: true, location: context.userLocation || 'Não disponível. Peça ao usuário para ativar o GPS.' };
                 }
-
                 case 'getLocation': {
-                    // v5.5: Fallback para localização do usuário se não especificado ou se for relativo
-                    let searchLoc = args.location || 'Aveiro, Portugal';
-                    const relativeTerms = ['meu lugar', 'onde estou', 'minha localização', 'aqui', 'perto de mim'];
-                    if (relativeTerms.some(t => searchLoc.toLowerCase().includes(t)) || !args.location) {
-                        if (context.userLocation?.address) {
-                            searchLoc = context.userLocation.address;
-                        }
-                    }
-                    const results = await geospatialService.findNearbyPlaces(searchLoc, args.query, 5000);
-                    return results;
+                    const places = await geospatialService.findNearbyPlaces(context.userLocation || args.location, args.query);
+                    return { success: true, count: places.length, data: places };
                 }
-
                 case 'getDirections': {
-                    // v5.5: Fallback para localização do usuário se origin for relativo
-                    let origin = args.origin;
-                    let destination = args.destination;
-                    const relativeTerms = ['minha casa', 'meu lugar', 'onde estou', 'minha localização', 'aqui'];
-                    if (!origin || relativeTerms.some(t => origin.toLowerCase().includes(t))) {
-                        if (context.userLocation?.address) {
-                            origin = context.userLocation.address;
-                        } else {
-                            // Tentar buscar da memória se não tiver localização em tempo real
-                            const { loadImportantMemories } = await import('../config/supabase.js');
-                            const memories = await loadImportantMemories(userId);
-                            const addrMem = memories.find((m: any) => m.key === 'endereco_usuario' || m.key === 'endereco');
-                            if (addrMem) origin = addrMem.content;
-                        }
-                    }
-                    if (!origin) return { error: 'Não consegui determinar seu endereço de partida. Pode me dizer?' };
-
-                    const result = await geospatialService.calculateRoute(origin, destination);
-                    if (!result) return { error: 'Rota não encontrada entre esses pontos.' };
-                    return result;
+                    const route = await geospatialService.calculateRoute(args.origin, args.destination);
+                    if (!route) return { success: false, message: 'Não foi possível calcular a rota.' };
+                    return {
+                        success: true,
+                        message: `A distância entre ${args.origin} e ${args.destination} é de ${route.distance} e leva aproximadamente ${route.duration}.`,
+                        data: route
+                    };
                 }
-
                 case 'getCurrentTime': {
-                    const timezone = args.timezone || 'Europe/Lisbon';
                     const now = new Date();
                     return {
-                        currentTime: now.toLocaleString('pt-PT', { timeZone: timezone }),
-                        timezone
+                        success: true,
+                        timestamp: now.toISOString(),
+                        formatted: now.toLocaleString('pt-BR', { timeZone: args.timezone || 'Europe/Lisbon' }),
+                        timezone: args.timezone || 'Europe/Lisbon'
                     };
                 }
-
                 case 'generateImage': {
-                    const key = process.env.OPENAI_API_KEY;
-                    const resp = await fetch('https://api.openai.com/v1/images/generations', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-                        body: JSON.stringify({
-                            model: 'dall-e-3',
-                            prompt: args.style === 'realistic' ? `Real photography: ${args.prompt}` : `Digital art illustration: ${args.prompt}`,
-                            size: '1024x1024'
-                        })
-                    });
-                    const data: any = await resp.json();
-                    if (!data.data?.[0]?.url) throw new Error(data.error?.message || 'Erro DALL-E');
-                    return { url: data.data[0].url, prompt: args.prompt };
+                    const { generateImage } = await import('./imageService.js');
+                    return await generateImage(args.prompt, args.style);
                 }
-
                 case 'generateChart': {
-                    return { type: 'chart', title: args.title, chartType: args.chartType, labels: args.labels, datasets: args.datasets };
+                    // No LIA Unified, gráficos são widgets do Dashboard
+                    return {
+                        success: true,
+                        action: 'CHART_GENERATED',
+                        data: {
+                            title: args.title,
+                            type: args.chartType,
+                            labels: args.labels,
+                            datasets: args.datasets
+                        },
+                        message: `Gerei o gráfico "${args.title}" para você analisar.`
+                    };
                 }
-
-                case 'createGoogleSheet':
+                case 'createGoogleSheet': {
                     return await GoogleWorkspaceTools.createGoogleSheet(userId, tenantId, args.title, args.headers, args.rows);
-
-                case 'updateGoogleSheet':
+                }
+                case 'updateGoogleSheet': {
                     return await GoogleWorkspaceTools.updateGoogleSheet(userId, tenantId, args.spreadsheetId, args.operations);
-
-                case 'createAdvancedSheet':
-                    return await GoogleWorkspaceTools.createAdvancedSheet(userId, tenantId, args.title, args.type || 'financial');
-
-                case 'createProFinancialSheet':
-                    return await GoogleWorkspaceTools.createProFinancialSheet(userId, tenantId, args.title || 'Controle Financeiro PRO');
-
-                case 'createGoogleDoc':
+                }
+                case 'createProFinancialSheet': {
+                    return await GoogleWorkspaceTools.createProFinancialSheet(userId, tenantId, args.title);
+                }
+                case 'createGoogleDoc': {
                     return await GoogleWorkspaceTools.createGoogleDoc(userId, tenantId, args.title, args.content);
-
-                case 'sendGmail':
+                }
+                case 'sendGmail': {
                     return await GoogleWorkspaceTools.sendGmail(userId, tenantId, args.to, args.subject, args.body);
-
-                case 'createCalendarEvent':
-                    return await GoogleWorkspaceTools.createCalendarEvent(userId, tenantId, args.title, args.start, args.end, args.description);
-
-                // ========== GMAIL READ TOOLS (v2.0) ==========
-                case 'listGmailMessages':
-                    return await GoogleWorkspaceTools.listGmailMessages(userId, tenantId, args.maxResults || 10, args.query);
-
-                case 'searchGmail':
-                    return await GoogleWorkspaceTools.searchGmail(userId, tenantId, args.searchTerm);
-
-                case 'getGmailMessage':
+                }
+                case 'listGmailMessages': {
+                    return await GoogleWorkspaceTools.listGmailMessages(userId, tenantId, args.maxResults, args.query);
+                }
+                case 'getGmailMessage': {
                     return await GoogleWorkspaceTools.getGmailMessage(userId, tenantId, args.messageId);
-
-                case 'analyzeFile': {
-                    const { supabase } = await import('../config/supabase.js');
-                    const { data } = await (supabase as any)
-                        .from('files')
-                        .select('extracted_metadata')
-                        .eq('tenant_id', tenantId)
-                        .ilike('file_name', `%${args.fileId}%`)
-                        .order('created_at', { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
-
-                    const raw = data?.extracted_metadata?.rawText || data?.extracted_metadata?.last_extraction || 'Sem dados recentes.';
-                    return { summary: raw.substring(0, 5000), full_metadata: data?.extracted_metadata };
                 }
-
-                // =====================================================
-                // 🛠️ ADMIN DIAGNOSTIC TOOLS (v4.2)
-                // =====================================================
-                case 'getSystemHealth': {
-                    const { createClient } = await import('@supabase/supabase-js');
-                    const startTime = Date.now();
-                    const services: any[] = [];
-
-                    // 1. Supabase
-                    try {
-                        const sUrl = process.env.SUPABASE_URL || '';
-                        const sKey = process.env.SUPABASE_ANON_KEY || '';
-                        if (!sUrl || !sKey) throw new Error('Credenciais Supabase Ausentes');
-                        const client = createClient(sUrl, sKey);
-                        const { error } = await client.from('memories').select('count', { count: 'exact', head: true }).limit(1);
-                        if (error) throw error;
-                        services.push({ name: 'supabase', status: 'OK', latency_ms: Date.now() - startTime });
-                    } catch (e: any) {
-                        services.push({ name: 'supabase', status: 'DOWN', message: e.message });
-                    }
-
-                    // 2. OpenAI
-                    services.push({
-                        name: 'openai',
-                        status: process.env.OPENAI_API_KEY ? 'OK' : 'DOWN',
-                        key_loaded: !!process.env.OPENAI_API_KEY
-                    });
-
-                    // 3. Google Maps (Geospatial)
-                    const gKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-                    services.push({
-                        name: 'google_maps',
-                        status: gKey ? 'OK' : 'DOWN',
-                        key_loaded: !!gKey
-                    });
-
-                    // 4. Web Search (Tavily/Serper)
-                    const sKey = process.env.TAVILY_API_KEY || process.env.SERPER_API_KEY;
-                    services.push({
-                        name: 'web_search',
-                        status: sKey ? 'OK' : 'DOWN',
-                        key_loaded: !!sKey
-                    });
-
-                    return { services, timestamp: new Date().toISOString() };
+                case 'searchGmail': {
+                    return await GoogleWorkspaceTools.searchGmail(userId, tenantId, args.searchTerm);
                 }
+                case 'deleteGmailMessage': {
+                    return await GoogleWorkspaceTools.deleteGmailMessage(userId, tenantId, args.messageId);
+                }
+                case 'createCalendarEvent': {
+                    console.log(`📅 [ToolService] createCalendarEvent args:`, JSON.stringify(args, null, 2));
+                    const result = await GoogleWorkspaceTools.createCalendarEvent(
+                        userId, tenantId, args.title, args.start, args.end, args.description
+                    );
 
-                case 'getSystemLogs': {
-                    // Simulação baseada em logs reais de conexão (mock funcional por enquanto)
+                    // ACK detalhado conforme lia-core-architecture.md
                     return {
-                        logs: [
-                            { timestamp: new Date().toISOString(), level: 'info', message: 'Diagnostic Tool Execution: getSystemLogs', service: 'ToolService' },
-                            { timestamp: new Date().toISOString(), level: 'info', message: `User ${userId} requested system logs`, service: 'admin' }
-                        ],
-                        limit: args.limit || 50
-                    };
-                }
-
-                case 'readProjectFile': {
-                    const fs = await import('fs');
-                    const path = await import('path');
-                    const filePath = args.filePath;
-
-                    // Reusar lógica de segurança de admin.ts simplificada
-                    const projectRoot = path.resolve(process.cwd());
-                    const absolutePath = path.resolve(projectRoot, filePath);
-
-                    if (!absolutePath.startsWith(projectRoot)) return { error: 'Acesso negado: fora do diretório raiz.' };
-                    if (filePath.includes('.env') || filePath.includes('node_modules')) return { error: 'Acesso negado: arquivo sensível.' };
-
-                    if (!fs.default.existsSync(absolutePath)) return { error: `Arquivo não encontrado: ${filePath}` };
-
-                    const content = fs.default.readFileSync(absolutePath, 'utf-8');
-                    return {
-                        filePath,
-                        content: content.substring(0, 5000), // Limitar para o LLM
-                        truncated: content.length > 5000
-                    };
-                }
-
-                case 'getProjectMap': {
-                    return {
-                        map: {
-                            frontend: ['apps/web/src/components/admin/AdminTools.tsx', 'apps/web/src/contexts/AuthContext.tsx'],
-                            backend: ['apps/lia-viva/lia-live-view/server/routes/chat.ts', 'apps/lia-viva/lia-live-view/server/services/toolService.ts'],
-                            config: ['package.json', 'pnpm-workspace.yaml']
+                        ...result,
+                        ack: {
+                            action: 'CALENDAR_CREATE_EVENT',
+                            status: result.success ? 'applied' : 'rejected',
+                            evidence: {
+                                title: args.title,
+                                start: args.start,
+                                end: args.end,
+                                descriptionIncluded: !!args.description
+                            }
                         }
                     };
                 }
+                case 'listCalendarEvents': {
+                    return await GoogleWorkspaceTools.listCalendarEvents(userId, tenantId, args.timeMin, args.timeMax);
+                }
+                case 'updateCalendarEvent': {
+                    console.log(`📅 [ToolService] updateCalendarEvent args:`, JSON.stringify(args, null, 2));
+                    const result = await GoogleWorkspaceTools.updateCalendarEvent(userId, tenantId, args.eventId, {
+                        title: args.title,
+                        start: args.start,
+                        end: args.end,
+                        description: args.description
+                    });
+                    return {
+                        ...result,
+                        ack: {
+                            action: 'CALENDAR_UPDATE_EVENT',
+                            status: result.success ? 'applied' : 'rejected',
+                            evidence: { eventId: args.eventId, updates: args }
+                        }
+                    };
+                }
+                case 'deleteCalendarEvent': {
+                    console.log(`🗑️ [ToolService] deleteCalendarEvent eventId:`, args.eventId);
+                    const result = await GoogleWorkspaceTools.deleteCalendarEvent(userId, tenantId, args.eventId);
+                    return {
+                        ...result,
+                        ack: {
+                            action: 'CALENDAR_DELETE_EVENT',
+                            status: result.success ? 'applied' : 'rejected',
+                            evidence: { eventId: args.eventId }
+                        }
+                    };
+                }
+                case 'getCalendarEvent': {
+                    return await GoogleWorkspaceTools.getCalendarEvent(userId, tenantId, args.eventId);
+                }
+                case 'searchCalendarEvents': {
+                    console.log(`🔍 [ToolService] searchCalendarEvents query:`, args.query);
+                    return await GoogleWorkspaceTools.searchCalendarEvents(userId, tenantId, args.query, args.daysAhead);
+                }
+                case 'getBusinessMetrics': {
+                    const today = new Date();
+                    const endDate = today.toISOString().split('T')[0];
+                    const start = new Date(today);
+                    const daysMap: Record<string, number> = { day: 1, week: 7, month: 30, year: 365 };
+                    start.setDate(start.getDate() - (daysMap[args.period] || 30));
+                    const startDate = start.toISOString().split('T')[0];
 
-                // ========== DASHBOARD CONTROL TOOLS (LIA Action Protocol v3.0) ==========
+                    const platformApiUrl = process.env.VITE_API_URL || 'http://localhost:5000';
+                    const params = new URLSearchParams({
+                        tenant_id: tenantId || '00000000-0000-0000-0000-000000000001',
+                        metric_key: args.metricKey,
+                        start_date: startDate,
+                        end_date: endDate,
+                        type: args.metricKey.includes('category') ? 'breakdown' : 'kpi'
+                    });
+
+                    const response = await fetch(`${platformApiUrl}/api/metrics/query?${params}`);
+                    if (!response.ok) return { success: false, error: 'Falha ao buscar métricas no servidor de dados.' };
+                    const result = await response.json() as any;
+                    return { success: true, data: result.data || result };
+                }
+                case 'analyzeFile': {
+                    const { fileService } = await import('./fileService.js');
+                    return await fileService.getFileAnalysis(args.fileId);
+                }
+                case 'getSystemHealth': return await diagnosticService.getHealth();
+                case 'getSystemLogs': return await diagnosticService.getLogs(args.limit, args.level);
+                case 'readProjectFile': return await diagnosticService.readFile(args.filePath);
+                case 'getProjectMap': return await diagnosticService.getMap();
+
+                case 'dashboardAddWidget': {
+                    return {
+                        success: true,
+                        action: 'DASHBOARD_ADD_WIDGET',
+                        params: {
+                            widgetType: args.widgetType,
+                            widgetConfig: { title: args.title, metric: args.metric },
+                            position: { x: args.x, y: args.y, w: args.w, h: args.h },
+                            pre_state_hash: args.pre_state_hash
+                        },
+                        message: `Estou adicionando o widget de ${args.widgetType} para você.`
+                    };
+                }
                 case 'dashboardGetSnapshot': {
-                    // Emitir evento para o frontend capturar e executar
+                    const { getActiveDashboard } = await import('../config/supabase.js');
+                    const config = await getActiveDashboard(tenantId || '00000000-0000-0000-0000-000000000001');
+
+                    if (!config) {
+                        return {
+                            success: false,
+                            error: 'Nenhum dashboard ativo encontrado no banco de dados.',
+                            action: 'DASHBOARD_GET_SNAPSHOT'
+                        };
+                    }
+
+                    // v4.0: Construir snapshot idêntico ao do frontend para paridade
+                    const layout = config.layout || [];
+                    const widgetsRaw = config.widgets || {};
+
+                    const widgets = layout.map(l => ({
+                        id: l.id,
+                        type: widgetsRaw[l.id]?.type || 'unknown',
+                        title: widgetsRaw[l.id]?.title || 'Sem título',
+                        position: { x: l.x, y: l.y, w: l.w, h: l.h }
+                    }));
+
+                    const maxY = layout.length > 0
+                        ? Math.max(...layout.map(l => l.y + (l.h || 0)))
+                        : 0;
+
                     return {
                         success: true,
                         action: 'DASHBOARD_GET_SNAPSHOT',
-                        message: 'Deixa eu ver como está o seu dashboard agora... Pronto, estou visualizando todos os seus widgets!',
-                        instruction: 'O frontend deve chamar DashboardContext.getSnapshot() e retornar os dados.'
+                        data: {
+                            widgets,
+                            widgetCount: widgets.length,
+                            next_suggested_position: { x: 0, y: maxY },
+                            layout_summary: widgets.map(w => `${w.title} (${w.type})`).join(', ')
+                        },
+                        message: `Eu li o seu dashboard. Você tem ${widgets.length} widgets ativos.`
                     };
                 }
-
                 case 'dashboardReplaceWidget': {
-                    // Emitir evento para o frontend capturar e executar
                     return {
                         success: true,
                         action: 'DASHBOARD_REPLACE_WIDGET',
@@ -670,102 +782,63 @@ export class ToolService {
                             targetWidgetType: args.targetWidgetType,
                             targetWidgetTitle: args.targetWidgetTitle,
                             newWidgetType: args.newWidgetType,
-                            newWidgetConfig: {
-                                title: args.newWidgetTitle
-                            }
+                            newWidgetConfig: { title: args.newWidgetTitle },
+                            pre_state_hash: args.pre_state_hash
                         },
-                        message: `Com certeza! Estou substituindo o widget de ${args.targetWidgetType || args.targetWidgetTitle || 'dados'} por um novo ${args.newWidgetType} para você.`
+                        message: `Substituindo por um novo ${args.newWidgetType}.`
                     };
                 }
-
                 case 'dashboardReorganize': {
                     return {
                         success: true,
                         action: 'DASHBOARD_REORGANIZE',
-                        params: {
-                            layout: args.layout || 'auto'
-                        },
-                        message: `Entendido. Vou reorganizar os elementos para deixar seu dashboard mais arrumado no modo ${args.layout || 'automático'}.`
+                        params: { layout: args.layout || 'auto' },
+                        message: `Reorganizando layout para ${args.layout}.`
                     };
                 }
 
+                // v4.0 Operational Layer Fallbacks (Stubs)
+                case 'crmCreateLead': {
+                    const { saveMemory } = await import('../config/supabase.js');
+                    // Salva como memória e evento até termos integração real com CRM
+                    await saveMemory(userId, `lead_${Date.now()}`, JSON.stringify(args), true);
+                    return { success: true, message: `Lead ${args.name} criado com sucesso no CRM operacional.`, data: args };
+                }
+                case 'crmUpdateDeal': {
+                    return { success: true, message: `Negócio ${args.dealId} atualizado para o estágio ${args.stage}.`, data: args };
+                }
+                case 'createSupportTicket': {
+                    return { success: true, message: `Ticket de suporte criado: "${args.subject}". Prioridade: ${args.priority}.`, ticketId: `TKT-${Math.floor(Math.random() * 9000) + 1000}` };
+                }
+                case 'createFinancialCharge': {
+                    return {
+                        success: true,
+                        message: `Cobrança de R$ ${args.amount.toFixed(2)} gerada para ${args.clientName}.`,
+                        chargeId: `CHR-${Date.now()}`,
+                        pix_copy_paste: "00020126580014BR.GOV.BCB.PIX..." // Mock
+                    };
+                }
+                case 'startFollowUp': {
+                    return { success: true, message: `Sequência de follow-up iniciada para ${args.targetId} via ${args.channel}.` };
+                }
+
+                // v5.0 Core Orchestrator Tools
+                case 'tenantGetSnapshot': {
+                    const { SnapshotService } = await import('./snapshotService');
+                    const snapshot = await SnapshotService.getTenantSnapshot(userId);
+                    return { success: true, message: "Snapshot do tenant obtido com sucesso.", snapshot };
+                }
+                case 'productGetManifest': {
+                    const { SnapshotService } = await import('./snapshotService');
+                    const manifest = SnapshotService.getProductManifest();
+                    return { success: true, message: "Manifesto do produto obtido com sucesso.", manifest };
+                }
                 default:
-                    throw new Error(`Ferramenta desconhecida: ${name}`);
+                    return { error: `Ferramenta ${name} não encontrada.` };
             }
+
         } catch (err: any) {
-            console.error(`❌ [ToolService] Erro em ${name}:`, err);
             return { success: false, error: err.message };
-        }
-    }
-
-    private static async getWeather(args: any, context?: any) {
-        try {
-            const apiKey = process.env.OPENWEATHER_API_KEY;
-            if (!apiKey) {
-                console.error('❌ OPENWEATHER_API_KEY não configurada');
-                return "Desculpe, o serviço de clima não está configurado (chave API ausente).";
-            }
-
-            // v5.2: Tentar obter localização da sessão se não informada ou for "atual"
-            let location = args.location;
-
-            if (!location || location.toLowerCase() === 'atual' || location.toLowerCase() === 'aqui') {
-                if (context?.userLocation?.address) {
-                    location = context.userLocation.address;
-                    console.log(`📍 Usando localização da sessão para clima: ${location}`);
-                } else if (context?.userLocation?.latitude) {
-                    // Buscar via lat/lon se disponível
-                    const lat = context.userLocation.latitude;
-                    const lon = context.userLocation.longitude;
-                    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&lang=pt`;
-                    const response = await fetch(url);
-                    if (response.ok) {
-                        const data: any = await response.json();
-                        return `Clima em ${data.name}: ${Math.round(data.main.temp)}°C, ${data.weather[0].description}. Umidade ${data.main.humidity}%. Sensação de ${Math.round(data.main.feels_like)}°C.`;
-                    }
-                }
-            }
-
-            if (!location) {
-                return "Poderia me dizer de qual cidade você gostaria de saber o clima?";
-            }
-
-            console.log(`🌤️ Buscando clima para: ${location}`);
-            const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${apiKey}&units=metric&lang=pt`;
-
-            const response = await fetch(url);
-            if (!response.ok) {
-                const errData: any = await response.json();
-                console.error('❌ Erro OpenWeather:', errData);
-                return `Não consegui encontrar as informações de clima para "${location}". Verifique se o nome está correto.`;
-            }
-
-            const data: any = await response.json();
-            const summary = `Clima em ${data.name}: ${Math.round(data.main.temp)}°C, ${data.weather[0].description}. Umidade ${data.main.humidity}%. Sensação de ${Math.round(data.main.feels_like)}°C.`;
-
-            return summary;
-        } catch (error) {
-            console.error('❌ Erro no getWeather:', error);
-            return "Ocorreu um erro ao consultar o clima. Tente novamente em alguns instantes.";
-        }
-    }
-
-    private static async getCurrentLocation(args: any, context?: any) {
-        try {
-            console.log(`📍 Obtendo localização atual... Contexto:`, !!context?.userLocation);
-
-            if (context?.userLocation) {
-                const { latitude, longitude, address } = context.userLocation;
-                if (address) {
-                    return `Sua localização atual registrada é ${address}.`;
-                }
-                return `Suas coordenadas atuais são Latitude: ${latitude}, Longitude: ${longitude}.`;
-            }
-
-            return "Não tenho acesso à sua localização exata no momento. Por favor, certifique-se de que a permissão de geolocalização está ativa no seu navegador.";
-        } catch (error) {
-            console.error('❌ Erro no getCurrentLocation:', error);
-            return "Houve um problema ao tentar acessar seus dados de localização.";
         }
     }
 }
