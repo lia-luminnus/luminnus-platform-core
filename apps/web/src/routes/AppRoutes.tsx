@@ -15,6 +15,7 @@ import AdminConfig from "@/pages/AdminConfig";
 import AdminDashboard from "@/pages/AdminDashboard";
 import Files from "@/pages/Files";
 import OAuthCallback from "@/pages/OAuthCallback";
+import AuthCallback from "@/pages/AuthCallback";
 
 /**
  * AppRoutes Component
@@ -33,6 +34,7 @@ const AppRoutes = () => {
       <Route path="/planos" element={<Plans />} />
       <Route path="/auth" element={<Auth />} />
       <Route path="/oauth-callback" element={<OAuthCallback />} />
+      <Route path="/auth-callback" element={<AuthCallback />} />
       <Route path="/dashboard/*" element={<Dashboard />} />
       <Route path="/area-do-cliente" element={<ClientArea />} />
       <Route path="/minha-conta" element={<MyAccount />} />

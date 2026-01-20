@@ -356,13 +356,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   /**
    * FUNÇÃO DE LOGIN COM GOOGLE
    * Autentica o usuário usando OAuth do Google
-   * Redireciona para a Área do Cliente após sucesso
+   * Redireciona para /oauth-callback que verificará o plano do usuário
    */
   const signInWithGoogle = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/dashboard`,
+        // Redireciona para auth-callback que vai verificar se tem plano
+        redirectTo: `${window.location.origin}/auth-callback`,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
