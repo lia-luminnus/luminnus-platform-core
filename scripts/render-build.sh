@@ -7,15 +7,9 @@ npm install -g pnpm@9.0.0
 # 2. Instalar dependências de todo o monorepo
 pnpm install
 
-# 3. Buildar pacotes internos na ordem correta
-echo "Building @luminnus/shared..."
-pnpm --filter @luminnus/shared build
-
-echo "Building @luminnus/core..."
-pnpm --filter @luminnus/core build
-
-# 4. Buildar o frontend
-echo "Building @luminnus/web..."
-pnpm --filter @luminnus/web build
+# 3. Buildar todo o monorepo usando Turbo
+# Isso garante que a ordem de dependências seja respeitada automaticamente
+echo "Building all packages and apps..."
+pnpm build
 
 echo "Build complete!"
