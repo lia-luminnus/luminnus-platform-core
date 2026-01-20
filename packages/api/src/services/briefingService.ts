@@ -54,16 +54,31 @@ interface GenerateBriefOptions {
 
 class BriefingService {
     private supabase: SupabaseClient;
-    private openai: OpenAI;
+    private _openai: OpenAI | null = null;
 
     constructor() {
         this.supabase = createClient(
             process.env.SUPABASE_URL!,
             process.env.SUPABASE_SERVICE_KEY!
         );
-        this.openai = new OpenAI({
-            apiKey: process.env.OPENAI_API_KEY
-        });
+        // OpenAI is initialized lazily to prevent startup crashes when key is not configured
+    }
+
+    /**
+     * Lazy getter for OpenAI client - only initializes when actually needed
+     */
+    private getOpenAI(): OpenAI {
+        if (!this._openai) {
+            const apiKey = process.env.OPENAI_API_KEY;
+            if (!apiKey) {
+                throw new Error(
+                    '[BriefingService] OPENAI_API_KEY não configurada. ' +
+                    'Configure a variável de ambiente no Render para usar briefings com IA.'
+                );
+            }
+            this._openai = new OpenAI({ apiKey });
+        }
+        return this._openai;
     }
 
     /**
@@ -181,7 +196,7 @@ class BriefingService {
         try {
             const prompt = this.buildInsightPrompt(template, metrics, anomalies, briefType);
 
-            const response = await this.openai.chat.completions.create({
+            const response = await this.getOpenAI().chat.completions.create({
                 model: 'gpt-4o-mini',
                 messages: [
                     {
