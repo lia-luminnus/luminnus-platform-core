@@ -111,25 +111,14 @@ const AccountMenu = () => {
                 <span>Painel Admin</span>
               </Link>
             ) : hasActivePlan ? (
-              <button
-                onClick={async () => {
-                  handleMenuClick();
-                  // Get current session to transfer to dashboard app
-                  const { data: { session: currentSession } } = await supabase.auth.getSession();
-                  if (currentSession) {
-                    // Redirect to modular dashboard at port 3001 with auth bridge
-                    const bridgeUrl = `http://localhost:3001/#/auth-bridge?access_token=${currentSession.access_token}&refresh_token=${currentSession.refresh_token}`;
-                    window.location.href = bridgeUrl;
-                  } else {
-                    // No session, redirect to login
-                    navigate('/auth');
-                  }
-                }}
-                className="flex items-center gap-3 px-4 py-3 text-white hover:bg-white/10 transition-colors duration-200 w-full text-left"
+              <Link
+                to="/dashboard"
+                onClick={handleMenuClick}
+                className="flex items-center gap-3 px-4 py-3 text-white hover:bg-white/10 transition-colors duration-200"
               >
                 <User className="w-5 h-5 text-[#00C2FF]" />
                 <span>Área do Cliente</span>
-              </button>
+              </Link>
             ) : null}
 
             {/* DIVISOR */}

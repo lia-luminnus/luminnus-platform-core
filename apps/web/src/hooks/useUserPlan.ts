@@ -75,6 +75,7 @@ export const useUserPlan = () => {
       const { data, error } = await supabase
         .from('planos')
         .select('*')
+        .eq('user_id', user.id)
         .eq('status', 'ativo')
         .order('created_at', { ascending: false })
         .limit(1)

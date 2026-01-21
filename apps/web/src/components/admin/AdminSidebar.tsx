@@ -144,15 +144,7 @@ export const AdminSidebar = ({
             <Button
               variant="secondary"
               className="mt-2 w-full justify-start bg-indigo-500/20 text-white hover:bg-indigo-500/40 border border-indigo-400/30 transition-all duration-200"
-              onClick={() => {
-                // Redireciona para o Dashboard cliente (porta 3001) via AuthBridge para sincronizar tokens
-                if (session) {
-                  const bridgeUrl = `http://localhost:3001/#/auth-bridge?access_token=${session.access_token}&refresh_token=${session.refresh_token}&admin_access=true`;
-                  window.location.href = bridgeUrl;
-                } else {
-                  window.location.href = "http://localhost:3001";
-                }
-              }}
+              onClick={() => navigate("/dashboard")}
             >
               <LayoutDashboard className="mr-3 h-5 w-5" />
               Dashboard Cliente

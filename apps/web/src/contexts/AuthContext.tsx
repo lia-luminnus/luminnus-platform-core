@@ -296,17 +296,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           .limit(1)
           .maybeSingle();
 
-        // Se tiver plano ativo, redireciona para o dashboard modular (porta 3000)
+        // Se tiver plano ativo, redireciona para o dashboard
         if (planData) {
-          // Get session tokens for AuthBridge
-          const { data: sessionData } = await supabase.auth.getSession();
-          if (sessionData?.session) {
-            const bridgeUrl = `http://localhost:3001/#/integrations?access_token=${sessionData.session.access_token}&refresh_token=${sessionData.session.refresh_token}`;
-            window.location.href = bridgeUrl;
-          } else {
-            // Fallback to main site dashboard
-            window.location.href = '/dashboard';
-          }
+          window.location.href = '/dashboard';
         } else {
           // Se não tiver plano, redireciona para a página principal
           window.location.href = '/';
