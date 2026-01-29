@@ -168,7 +168,7 @@ export function InteractionBar({
                 {/* Input Row */}
                 <div className="flex items-center gap-3 px-4 py-3">
                     {/* Voice Button */}
-                    <StartVoiceButton size="sm" />
+                    <StartVoiceButton size="sm" variant="icon" />
 
                     {/* Text Input */}
                     <textarea

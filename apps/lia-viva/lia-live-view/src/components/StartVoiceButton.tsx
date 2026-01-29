@@ -8,7 +8,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useLIA } from '@/context/LIAContext';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Radio, Mic, MicOff, Square } from 'lucide-react';
 
 // Tipos para o modo LIA
 export type LiaMode = 'NORMAL' | 'DIAGNOSTIC';
@@ -18,6 +18,7 @@ interface StartVoiceButtonProps {
   className?: string;
   isAdminPanel?: boolean; // Se true, mostra o seletor de modo
   onModeChange?: (mode: LiaMode) => void; // Callback quando o modo muda
+  variant?: 'default' | 'icon';
 }
 
 export function StartVoiceButton({
@@ -25,6 +26,7 @@ export function StartVoiceButton({
   className = '',
   isAdminPanel = false,
   onModeChange,
+  variant = 'default',
 }: StartVoiceButtonProps) {
   const {
     isLiveActive,
@@ -98,7 +100,7 @@ export function StartVoiceButton({
         : 'bg-[rgba(0,243,255,0.1)] border-2 border-[rgba(0,243,255,0.3)] text-[rgba(224,247,255,0.8)] hover:text-[#00f3ff] hover:border-[#00f3ff]'
     }
     disabled:opacity-50 disabled:cursor-not-allowed
-    ${sizeClasses[size]}
+    ${variant === 'icon' ? 'p-2 flex items-center justify-center' : sizeClasses[size]}
     ${className}
   `;
 
@@ -112,14 +114,27 @@ export function StartVoiceButton({
         title={isLiveActive ? 'Parar conversa por voz' : 'Iniciar conversa por voz (Gemini Live)'}
       >
         {isLiveActive ? (
-          <span className="flex items-center gap-2">
-            Parar de falar 🔇
-            {isListening && (
-              <span className="inline-block w-2 h-2 bg-[#ff00ff] rounded-full animate-ping" />
-            )}
-          </span>
+          variant === 'icon' ? (
+            <div className="relative">
+              <Square className="w-5 h-5 fill-current" />
+              {isListening && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-[#ff00ff] rounded-full animate-ping" />
+              )}
+            </div>
+          ) : (
+            <span className="flex items-center gap-2">
+              Parar de falar 🔇
+              {isListening && (
+                <span className="inline-block w-2 h-2 bg-[#ff00ff] rounded-full animate-ping" />
+              )}
+            </span>
+          )
         ) : (
-          <span>Começar a falar 🗣️</span>
+          variant === 'icon' ? (
+            <Radio className="w-5 h-5" />
+          ) : (
+            <span>Começar a falar 🗣️</span>
+          )
         )}
       </button>
     );
@@ -139,16 +154,29 @@ export function StartVoiceButton({
         title={isLiveActive ? 'Parar conversa por voz' : `Iniciar conversa (${liaMode === 'DIAGNOSTIC' ? 'Diagnóstico' : 'Normal'})`}
       >
         {isLiveActive ? (
-          <span className="flex items-center gap-1.5">
-            Ouvindo... 🔇
-            {isListening && (
-              <span className="inline-block w-1.5 h-1.5 bg-[#ff00ff] rounded-full animate-ping" />
-            )}
-          </span>
+          variant === 'icon' ? (
+            <div className="relative">
+              <Square className="w-4 h-4 fill-current" />
+              {isListening && (
+                <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-[#ff00ff] rounded-full animate-ping" />
+              )}
+            </div>
+          ) : (
+            <span className="flex items-center gap-1.5">
+              Ouvindo... 🔇
+              {isListening && (
+                <span className="inline-block w-1.5 h-1.5 bg-[#ff00ff] rounded-full animate-ping" />
+              )}
+            </span>
+          )
         ) : (
-          <span className="flex items-center gap-1">
-            {liaMode === 'DIAGNOSTIC' ? '🔧 Diagnóstico' : 'Falar 🗣️'}
-          </span>
+          variant === 'icon' ? (
+            liaMode === 'DIAGNOSTIC' ? <Mic className="w-4 h-4" /> : <Radio className="w-4 h-4" />
+          ) : (
+            <span className="flex items-center gap-1">
+              {liaMode === 'DIAGNOSTIC' ? '🔧 Diagnóstico' : 'Falar 🗣️'}
+            </span>
+          )
         )}
       </button>
 

@@ -320,19 +320,23 @@ export function MultiModal() {
     if (attachedFiles.length > 0) {
       const prompt = inputValue.trim() || 'Verifique este arquivo e identifique qualquer erro ou inconsistência. Se for um print, faça o diagnóstico técnico.'
 
-      // Usar função do context que já faz tudo
-      await sendMessageWithFiles(prompt, attachedFiles)
+      // v7.5: UX OTIMISTA - Limpar estado local IMEDIATAMENTE (antes do await)
+      const currentPrompt = prompt;
+      const currentFiles = [...attachedFiles];
 
-      // Limpar estado local
       setInputValue("")
       setAttachedFiles([])
+
+      // Usar função do context que já faz tudo
+      await sendMessageWithFiles(currentPrompt, currentFiles)
       return
     }
 
     // Mensagem normal sem arquivo
     if (!inputValue.trim()) return
-    sendTextMessage(inputValue, 'multimodal') // v5.4: Passar modo explícito para escopo correto
-    setInputValue("")
+    const text = inputValue;
+    setInputValue("") // v7.5: UX OTIMISTA
+    sendTextMessage(text, 'multimodal') // v5.4: Passar modo explícito para escopo correto
   }
 
   // handleFileSelect mantido abaixo
@@ -696,6 +700,7 @@ export function MultiModal() {
               {/* Start Voice button (Gemini Live) - com seletor de modo no Admin */}
               <StartVoiceButton
                 size="sm"
+                variant="icon"
                 isAdminPanel={typeof window !== 'undefined' && window.location.pathname.includes('admin')}
               />
 
