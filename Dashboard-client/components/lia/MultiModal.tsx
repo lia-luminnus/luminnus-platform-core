@@ -146,7 +146,7 @@ export function MultiModal() {
 
         const content = inputValue || (attachedFiles.length > 0 ? "Analise estes arquivos" : "");
         const filesToSend = [...attachedFiles];
-        
+
         // Limpar UI imediatamente para feedback instantâneo ao usuário
         setInputValue("");
         setAttachedFiles([]);
@@ -461,7 +461,7 @@ export function MultiModal() {
                             </button>
 
                             {/* Voice Call Button - After Send Button (Parity with Admin) */}
-                            <StartVoiceButton size="sm" />
+                            <StartVoiceButton size="sm" variant="icon" />
                         </div>
                     </div>
                 </div>

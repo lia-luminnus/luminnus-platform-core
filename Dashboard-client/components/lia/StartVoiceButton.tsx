@@ -6,13 +6,19 @@
 
 import React from 'react';
 import { useLIA } from './LIAContext';
+import { Radio, Mic, MicOff, Square } from 'lucide-react';
 
 interface StartVoiceButtonProps {
     size?: 'sm' | 'md' | 'lg';
     className?: string;
+    variant?: 'default' | 'icon';
 }
 
-export function StartVoiceButton({ size = 'md', className = '' }: StartVoiceButtonProps) {
+export function StartVoiceButton({
+    size = 'md',
+    className = '',
+    variant = 'default'
+}: StartVoiceButtonProps) {
     const {
         isLiveActive,
         isListening,
@@ -33,8 +39,6 @@ export function StartVoiceButton({ size = 'md', className = '' }: StartVoiceButt
         if (isLiveActive) {
             await stopLiveMode();
         } else {
-            // Garantir que existe uma conversa antes de iniciar o modo de voz
-            // O modo multimodal é onde o StartVoiceButton é mais usado
             const activeMode = 'multimodal';
             if (!activeConversationIdByMode[activeMode]) {
                 console.log('🆕 [StartVoiceButton] Criando conversa automaticamente para modo:', activeMode);
@@ -44,31 +48,47 @@ export function StartVoiceButton({ size = 'md', className = '' }: StartVoiceButt
         }
     };
 
+    // Estilos base do botão
+    const baseStyles = `
+        transition-all font-medium whitespace-nowrap
+        ${isLiveActive
+            ? 'bg-[rgba(255,0,255,0.2)] border border-[#ff00ff] text-[#ff00ff] shadow-[0_0_10px_rgba(255,0,255,0.3)]'
+            : 'bg-[rgba(0,243,255,0.1)] border-2 border-[rgba(0,243,255,0.3)] text-[rgba(224,247,255,0.8)] hover:text-[#00f3ff] hover:border-[#00f3ff]'
+        }
+        disabled:opacity-50 disabled:cursor-not-allowed
+        ${variant === 'icon' ? 'p-3 rounded-xl flex items-center justify-center' : `rounded-lg ${sizeClasses[size]}`}
+        ${className}
+    `;
+
     return (
         <button
             onClick={handleToggle}
             disabled={!isConnected && !isLiveActive}
-            className={`
-        rounded-lg transition-all font-medium whitespace-nowrap
-        ${isLiveActive
-                    ? 'bg-[rgba(255,0,255,0.2)] border border-[#ff00ff] text-[#ff00ff] shadow-[0_0_10px_rgba(255,0,255,0.3)]'
-                    : 'bg-[rgba(0,243,255,0.1)] border-2 border-[rgba(0,243,255,0.3)] text-[rgba(224,247,255,0.8)] hover:text-[#00f3ff] hover:border-[#00f3ff]'
-                }
-        disabled:opacity-50 disabled:cursor-not-allowed
-        ${sizeClasses[size]}
-        ${className}
-      `}
+            className={baseStyles}
             title={isLiveActive ? 'Parar conversa por voz' : 'Iniciar conversa por voz (Gemini Live)'}
         >
             {isLiveActive ? (
-                <span className="flex items-center gap-1.5">
-                    Ouvindo... 🔇
-                    {isListening && (
-                        <span className="inline-block w-1.5 h-1.5 bg-[#ff00ff] rounded-full animate-ping" />
-                    )}
-                </span>
+                variant === 'icon' ? (
+                    <div className="relative">
+                        <Square className="w-5 h-5 fill-current" />
+                        {isListening && (
+                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-[#ff00ff] rounded-full animate-ping" />
+                        )}
+                    </div>
+                ) : (
+                    <span className="flex items-center gap-1.5">
+                        Ouvindo... 🔇
+                        {isListening && (
+                            <span className="inline-block w-1.5 h-1.5 bg-[#ff00ff] rounded-full animate-ping" />
+                        )}
+                    </span>
+                )
             ) : (
-                <span>Falar 🗣️</span>
+                variant === 'icon' ? (
+                    <Radio className="w-5 h-5" />
+                ) : (
+                    <span>Falar 🗣️</span>
+                )
             )}
         </button>
     );
