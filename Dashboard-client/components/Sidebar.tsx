@@ -5,6 +5,7 @@ import { LanguageContext } from '../contexts/LanguageContext';
 import { useAppStore } from '../store/useAppStore';
 import { getModules } from '../config/modules';
 import { useDashboardAuth } from '../contexts/DashboardAuthContext';
+import { toast } from 'react-hot-toast';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
@@ -17,10 +18,13 @@ const Sidebar: React.FC = () => {
 
   const handleLogout = async () => {
     try {
+      toast.loading('Saindo...', { id: 'logout' });
       // O signOut do contexto já cuida do redirecionamento correto (Admin vs User)
       await signOut();
+      toast.success('Até logo!', { id: 'logout' });
     } catch (err) {
       console.error('Erro ao fazer logout:', err);
+      toast.error('Erro ao sair. Redirecionando...', { id: 'logout' });
       // Fallback de emergência caso o signOut falhe
       const landingPage = import.meta.env.VITE_LANDING_PAGE_URL || 'http://localhost:8080';
       window.location.href = landingPage;

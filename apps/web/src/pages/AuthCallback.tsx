@@ -44,16 +44,62 @@ const AuthCallback: React.FC = () => {
                     return;
                 }
 
-                // Check for active plan
-                const { data: planData } = await supabase
-                    .from('planos')
-                    .select('id, status')
+                // Check for active plan - PRIMEIRO: Verificar subscriptions
+                let hasActivePlan = false;
+
+                // 1. Tentar buscar Membership
+                const { data: membership } = await (supabase
+                    .from('tenant_members' as any) as any)
+                    .select('tenant_id')
                     .eq('user_id', user.id)
-                    .eq('status', 'ativo')
                     .maybeSingle();
 
-                if (planData) {
-                    console.log('[AuthCallback] Plano ativo encontrado');
+                // 2. Tentar buscar Assinatura (por tenant ou por user_id)
+                let stripeData = null;
+                if (membership) {
+                    const { data } = await (supabase
+                        .from('subscriptions' as any) as any)
+                        .select('*')
+                        .eq('tenant_id', membership.tenant_id)
+                        .in('status', ['active', 'past_due', 'incomplete'])
+                        .maybeSingle();
+                    stripeData = data;
+                }
+
+                if (!stripeData) {
+                    const { data } = await (supabase
+                        .from('subscriptions' as any) as any)
+                        .select('*')
+                        .eq('user_id', user.id)
+                        .in('status', ['active', 'past_due', 'incomplete'])
+                        .maybeSingle();
+                    stripeData = data;
+                }
+
+                if (stripeData) {
+                    console.log('[AuthCallback] Assinatura ativa encontrada:', stripeData.plan_name);
+                    hasActivePlan = true;
+                }
+
+                // 3. FALLBACK: Verificar profiles.plan_type
+                if (!hasActivePlan) {
+                    const { data: profileRaw } = await supabase
+                        .from('profiles')
+                        .select('plan_type')
+                        .eq('id', user.id)
+                        .maybeSingle();
+
+                    const profile = profileRaw as { plan_type: string } | null;
+                    const validPlanTypes = ['start', 'plus', 'pro', 'cliente'];
+
+                    if (profile?.plan_type && validPlanTypes.includes(profile.plan_type.toLowerCase())) {
+                        console.log('[AuthCallback] Plano encontrado no perfil:', profile.plan_type);
+                        hasActivePlan = true;
+                    }
+                }
+
+                if (hasActivePlan) {
+                    console.log('[AuthCallback] Plano ativo encontrado, redirecionando para Dashboard');
                     const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL || 'http://localhost:3001';
                     setMessage('Redirecionando para o seu Dashboard...');
                     setTimeout(() => {

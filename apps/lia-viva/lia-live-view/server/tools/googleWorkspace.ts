@@ -1298,3 +1298,42 @@ export async function deleteGmailMessage(
     }
 }
 
+/**
+ * ================================================================
+ * TODO: INTEGRAÇÃO FUTURA - Geração de PDF Profissional
+ * ================================================================
+ * 
+ * Quando o módulo reportGenerator.ts estiver implementado, adicione aqui:
+ * 
+ * export async function generatePDFReport(
+ *     userId: string,
+ *     tenantId: string,
+ *     templateCategory: 'financial' | 'commercial' | 'operational',
+ *     reportData: any,
+ *     filename?: string
+ * ): Promise<GoogleActionResponse> {
+ *     try {
+ *         const { generatePDFReport } = await import('./reportGenerator.js');
+ *         const result = await generatePDFReport({
+ *             templateCategory,
+ *             tenantId,
+ *             userId,
+ *             reportData,
+ *             filename
+ *         });
+ * 
+ *         return {
+ *             success: true,
+ *             message: 'PDF gerado com sucesso!',
+ *             url: result.url,
+ *             filename: result.filename
+ *         };
+ *     } catch (error: any) {
+ *         console.error('[GoogleWorkspace] Erro ao gerar PDF:', error);
+ *         return { success: false, message: error.message };
+ *     }
+ * }
+ * 
+ * Depois, registre a tool no toolService.ts
+ */
+

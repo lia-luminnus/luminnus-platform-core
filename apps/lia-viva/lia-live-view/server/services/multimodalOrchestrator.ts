@@ -72,7 +72,8 @@ function classificarIntencao(message: string, hasAttachments: boolean): 'ANALYZE
 
   // v7.5: Verbos de ação real (Ações destrutivas ou de criação sistêmica)
   // v9.0: Usar regex de palavra inteira para evitar falsos positivos
-  const creationKeywords = ['crie', 'gere', 'monte', 'construa', 'salve', 'exporte', 'create', 'generate', 'make', 'faça', 'faz', 'montar'];
+  // v10.1: Adicionar keywords de impressão/PDF
+  const creationKeywords = ['crie', 'gere', 'monte', 'construa', 'salve', 'exporte', 'create', 'generate', 'make', 'faça', 'faz', 'montar', 'imprimir', 'pdf', 'exportar pdf', 'gerar pdf'];
   const actionKeywords = ['deleta', 'apaga', 'exclua', 'move', 'transfira', 'envia', 'agenda', 'marca'];
   const correctionKeywords = ['corrija', 'conserte', 'fix', 'correct'];
   

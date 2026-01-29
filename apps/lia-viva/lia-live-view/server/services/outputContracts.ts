@@ -32,16 +32,14 @@ interface ContractTemplate {
  */
 export class OutputContracts {
 
-    // Instrução Mestra LIA Excelência Operacional v3.0
+    // Instrução Mestra LIA Excelência Operacional v4.0 (SEM assinatura)
     public static readonly MASTER_INSTRUCTION = `
 42: PROTOCOLO OBRIGATÓRIO (A-L):
 A) REGRA DE OURO: NUNCA exiba JSON ou logs técnicos a menos que solicitado.
 B) Idioma: Português do Brasil (PT-BR).
 C) ACTION-FIRST: Comece SEMPRE com o Achado (💡) e a Ação (🚀) em apenas 2 linhas.
 D) CONCISÃO: Máximo 3 parágrafos curtos.
-E) ASSINATURA FIXA:
-LIA | Luminnus
-Equipe Luminnus
+E) ASSINATURA: NÃO incluir assinatura no final da resposta.
 `;
 
     // Instrução Mestra LIMPA para MODO A (Troubleshooting Técnico)
@@ -52,6 +50,18 @@ A) REGRA DE OURO: NUNCA exiba JSON ou logs técnicos a menos que solicitado.
 B) Idioma: Português do Brasil (PT-BR).
 C) CONCISÃO: Máximo 10 linhas no total. Cada seção máximo 2 linhas.
 D) ASSINATURA: Não incluir "LIA | Luminnus" ou "Equipe Luminnus" no final desta resposta.
+`;
+
+    // Instrução Mestra para EMAILS (COM assinatura)
+    public static readonly EMAIL_MASTER_INSTRUCTION = `
+42: PROTOCOLO OBRIGATÓRIO PARA EMAILS:
+A) REGRA DE OURO: NUNCA exiba JSON ou logs técnicos a menos que solicitado.
+B) Idioma: Português do Brasil (PT-BR).
+C) TOM PROFISSIONAL: Use linguagem executiva e cortês.
+D) CONCISÃO: Máximo 3 parágrafos curtos.
+E) ASSINATURA OBRIGATÓRIA (no final do email):
+LIA | Luminnus
+Equipe Luminnus
 `;
 
     // Palavras-chave para detecção de intenção
@@ -100,6 +110,11 @@ D) ASSINATURA: Não incluir "LIA | Luminnus" ou "Equipe Luminnus" no final desta
             'mandar email', 'encaminhar email', 'reenviar email', 'follow-up', 'agendar reunião',
             'marca uma call', 'link da reunião', 'marcar meet'
         ],
+        report_generation: [
+            'imprimir', 'pdf', 'baixar relatório', 'gerar pdf', 'exportar pdf',
+            'criar relatório', 'gerar relatório', 'documento para impressão',
+            'quero imprimir', 'preciso imprimir', 'fazer pdf'
+        ],
         action_execution: [
             'criar planilha', 'gerar planilha', 'crie uma planilha', 'faz uma planilha',
             'criar documento', 'gerar doc', 'create spreadsheet', 'make a sheet',
@@ -124,7 +139,12 @@ D) ASSINATURA: Não incluir "LIA | Luminnus" ou "Equipe Luminnus" no final desta
             return 'email_standard';
         }
 
-        // 2. Action Execution
+        // 2. Report Generation - Prioridade para impressão/PDF
+        if (this.INTENT_KEYWORDS.report_generation.some(kw => lowerPrompt.includes(kw))) {
+            return 'action_execution'; // Reutiliza o contrato action_execution para criar PDF
+        }
+
+        // 3. Action Execution
         if (this.INTENT_KEYWORDS.action_execution.some(kw => lowerPrompt.includes(kw))) {
             return 'action_execution';
         }
@@ -408,7 +428,7 @@ Este contrato é para análise de PRINTS, SCREENSHOTS e EVIDÊNCIAS de erro/bug 
             email_standard: {
                 type: 'email_standard',
                 jsonOnly: false,
-                systemInstructions: `${this.MASTER_INSTRUCTION}
+                systemInstructions: `${this.EMAIL_MASTER_INSTRUCTION}
                 
 🎯 ROUTER DE INTENÇÃO (MODO OBRIGATÓRIO):
 - MODO A — ENVIO / AÇÃO: Pedidos de enviar/responder/reenviar.

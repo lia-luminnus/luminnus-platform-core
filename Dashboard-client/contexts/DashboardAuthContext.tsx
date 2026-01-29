@@ -262,7 +262,20 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const signOut = async () => {
         console.log('[DashboardAuth] Executando logout...');
-        if (supabase) await supabase.auth.signOut();
+        
+        try {
+            if (supabase) {
+                // Adicionamos um timeout para evitar que o logout trave se o Supabase demorar
+                await Promise.race([
+                    supabase.auth.signOut(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 2000))
+                ]);
+            }
+        } catch (error) {
+            console.warn('[DashboardAuth] Erro ou timeout no signOut do Supabase:', error);
+        }
+
+        // SEMPRE limpar o estado local, independente do sucesso do signOut remoto
         setProfile(null);
         setUser(null);
         setSession(null);
@@ -270,11 +283,19 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         // Limpar storage explicitamente
         localStorage.removeItem('sb-dashboard-auth');
-
+        localStorage.removeItem('luminnus-storage');
+        
+        // v4.1: Garantir que o estado de onboarding também seja resetado se necessário
+        // (Isso força o sistema a re-inicializar do zero no próximo login)
+        
         // Redirecionamento para o site principal/admin
         const landingPage = import.meta.env.VITE_LANDING_PAGE_URL || 'http://localhost:8080';
         console.log('[DashboardAuth] Redirecionando para:', landingPage);
-        window.location.href = landingPage;
+        
+        // Pequeno delay para garantir que os estados do React foram aplicados
+        setTimeout(() => {
+            window.location.href = landingPage;
+        }, 100);
     };
 
     return (
