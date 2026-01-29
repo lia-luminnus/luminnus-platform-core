@@ -122,6 +122,9 @@ export class ResponseFormatter {
             case 'action_execution':
                 script += 'A ação solicitada foi concluída com sucesso. Veja os detalhes no chat.';
                 break;
+            case 'email_standard':
+                script += 'Eu preparei o e-mail seguindo o padrão profissional. Veja a prévia no chat.';
+                break;
             default:
                 script += this.summarizeForVoice(rawResponse);
         }

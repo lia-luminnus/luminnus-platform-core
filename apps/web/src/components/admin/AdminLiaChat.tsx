@@ -12,6 +12,8 @@ import { secureStorage } from '@/lib/secureStorage';
 import { startRealtimeSession, stopRealtimeSession } from '@/lib/api/lia-realtime';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { motion } from 'framer-motion';
+import liaAvatar from "@/assets/lia-assistant.png";
 
 /**
  * INTERFACE: Mensagem de Chat
@@ -92,8 +94,8 @@ const AdminLiaChat = () => {
    */
   const loadConversations = async () => {
     try {
-      const { data, error } = await supabase
-        .from('admin_conversations' as any)
+      const { data, error } = await (supabase as any)
+        .from('admin_conversations')
         .select('*')
         .order('updated_at', { ascending: false });
 
@@ -121,14 +123,14 @@ const AdminLiaChat = () => {
    */
   const createNewConversation = async () => {
     try {
-      const { data, error } = await supabase
-        .from('admin_conversations' as any)
+      const { data, error } = await (supabase as any)
+        .from('admin_conversations')
         .insert({
           title: `Conversa ${new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`,
           message_count: 0,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        } as any)
+        })
         .select()
         .single();
 
@@ -169,8 +171,8 @@ const AdminLiaChat = () => {
    */
   const loadConversationMessages = async (conversationId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('admin_chat_messages' as any)
+      const { data, error } = await (supabase as any)
+        .from('admin_chat_messages')
         .select('*')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true });
@@ -199,24 +201,24 @@ const AdminLiaChat = () => {
    */
   const saveMessage = async (conversationId: string, role: 'user' | 'assistant', content: string) => {
     try {
-      const { error } = await supabase
-        .from('admin_chat_messages' as any)
+      const { error } = await (supabase as any)
+        .from('admin_chat_messages')
         .insert({
           conversation_id: conversationId,
           role,
           content,
           created_at: new Date().toISOString(),
-        } as any);
+        });
 
       if (error) throw error;
 
       // Atualizar contagem de mensagens e data de atualização da conversa
-      await supabase
-        .from('admin_conversations' as any)
+      await (supabase as any)
+        .from('admin_conversations')
         .update({
           message_count: messages.length + 1,
           updated_at: new Date().toISOString(),
-        } as any)
+        })
         .eq('id', conversationId);
 
       // Atualizar lista de conversas localmente
@@ -423,8 +425,8 @@ const AdminLiaChat = () => {
 
     try {
       // Deletar mensagens da conversa
-      await supabase
-        .from('admin_chat_messages' as any)
+      await (supabase as any)
+        .from('admin_chat_messages')
         .delete()
         .eq('conversation_id', currentConversationId);
 
@@ -432,9 +434,9 @@ const AdminLiaChat = () => {
       setMessages([]);
 
       // Atualizar contagem de mensagens
-      await supabase
-        .from('admin_conversations' as any)
-        .update({ message_count: 0 } as any)
+      await (supabase as any)
+        .from('admin_conversations')
+        .update({ message_count: 0 })
         .eq('id', currentConversationId);
 
       toast({
@@ -457,14 +459,14 @@ const AdminLiaChat = () => {
   const deleteConversation = async (conversationId: string) => {
     try {
       // Deletar mensagens
-      await supabase
-        .from('admin_chat_messages' as any)
+      await (supabase as any)
+        .from('admin_chat_messages')
         .delete()
         .eq('conversation_id', conversationId);
 
       // Deletar conversa
-      await supabase
-        .from('admin_conversations' as any)
+      await (supabase as any)
+        .from('admin_conversations')
         .delete()
         .eq('id', conversationId);
 
@@ -503,13 +505,46 @@ const AdminLiaChat = () => {
     conv.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Auth Guard
+  const { loading: authLoading } = useAuth();
+
+  if (authLoading) {
+    return (
+      <div className="flex h-[500px] items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex flex-col h-[500px] items-center justify-center text-center p-8 bg-gray-50 rounded-2xl border border-gray-200">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+          <User className="w-8 h-8 text-red-500" />
+        </div>
+        <h3 className="text-xl font-bold text-gray-900 mb-2">Acesso Restrito</h3>
+        <p className="text-gray-500 max-w-md">
+          Você precisa estar logado para acessar o chat administrativo. Por favor, faça login novamente.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* HEADER */}
       <div>
         <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-900 bg-clip-text text-transparent mb-2 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 via-purple-500 to-blue-500 flex items-center justify-center">
-            <Bot className="w-6 h-6 text-white" />
+          <div className="relative w-10 h-10">
+            {/* Pulse Ring */}
+            <motion.div
+              className="absolute inset-0 rounded-full bg-purple-500/30"
+              animate={{ scale: [1, 1.4, 1], opacity: [0.6, 0, 0.6] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            />
+            <div className="relative z-10">
+              <img src={liaAvatar} alt="Lia avatar" className="w-12 h-12 rounded-2xl object-cover object-top border-2 border-purple-200" />
+            </div>
           </div>
           Assistente LIA - Chat Administrativo
           <Badge className="bg-purple-100 text-purple-700 border-purple-300">
@@ -562,11 +597,10 @@ const AdminLiaChat = () => {
                     <div
                       key={conv.id}
                       onClick={() => loadConversationMessages(conv.id)}
-                      className={`p-3 rounded-lg cursor-pointer transition-all group hover:shadow-md ${
-                        currentConversationId === conv.id
-                          ? 'bg-gradient-to-r from-purple-100 to-blue-100 border-2 border-purple-300'
-                          : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
-                      }`}
+                      className={`p-3 rounded-lg cursor-pointer transition-all group hover:shadow-md ${currentConversationId === conv.id
+                        ? 'bg-gradient-to-r from-purple-100 to-blue-100 border-2 border-purple-300'
+                        : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
+                        }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
@@ -603,64 +637,102 @@ const AdminLiaChat = () => {
         {/* CHAT PRINCIPAL */}
         <div className="flex-1 flex flex-col">
           {/* ÁREA DE MENSAGENS */}
-          <Card className="flex-1 bg-white border-2 border-gray-200 overflow-hidden shadow-xl mb-4">
+          {/* ÁREA DE MENSAGENS */}
+          <Card className="flex-1 bg-white border-2 border-gray-200 overflow-hidden shadow-xl mb-4 relative">
             <ScrollArea className="h-full p-6">
-              <div className="space-y-6">
-                {messages.map((message, index) => (
-                  <div
-                    key={message.id || index}
-                    className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
-                  >
-                    {/* Avatar da Lia */}
-                    {message.role === 'assistant' && (
-                      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 via-purple-500 to-blue-500 flex items-center justify-center shadow-lg shadow-purple-500/30">
-                        <Bot className="w-5 h-5 text-white" />
-                      </div>
-                    )}
+              {!currentConversationId ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-8 opacity-60">
+                  <div className="w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center mb-6">
+                    <MessageSquare className="w-10 h-10 text-purple-400" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-800 mb-2">Nenhuma conversa selecionada</h3>
+                  <p className="text-gray-500 max-w-xs">Selecione uma conversa do histórico ou inicie uma nova para falar com a LIA.</p>
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-8 animate-in fade-in zoom-in duration-300">
+                  <div className="relative w-24 h-24 mb-6">
+                    <motion.div
+                      className="absolute inset-0 rounded-2xl bg-purple-500/20"
+                      animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
+                      transition={{ duration: 3, repeat: Infinity }}
+                    />
+                    <img src={liaAvatar} alt="Lia" className="w-full h-full rounded-2xl object-cover object-top shadow-xl" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-800 mb-2">Olá! Eu sou a LIA.</h3>
+                  <p className="text-gray-500 max-w-sm">Estou pronta para ajudar você com insights, gestão e atendimento. Como posso ser útil hoje?</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {messages.map((message, index) => (
+                    <div
+                      key={message.id || index}
+                      className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
+                    >
+                      {/* Avatar da Lia */}
+                      {message.role === 'assistant' && (
+                        <div className="flex-shrink-0 relative w-10 h-10">
+                          {/* Pulse Ring */}
+                          <motion.div
+                            className="absolute inset-0 rounded-2xl bg-purple-500/30"
+                            animate={{ scale: [1, 1.2, 1], opacity: [0.6, 0, 0.6] }}
+                            transition={{ duration: 2, repeat: Infinity }}
+                          />
+                          <div className="relative z-10">
+                            <img src={liaAvatar} alt="Lia avatar" className="w-12 h-12 rounded-2xl object-cover object-top border border-white/10 shadow-lg shadow-purple-500/30" />
+                          </div>
+                        </div>
+                      )}
 
-                    {/* Bolha de mensagem */}
-                    <div className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
-                      <div
-                        className={`max-w-[75%] rounded-2xl px-5 py-3 shadow-md ${
-                          message.role === 'user'
+                      {/* Bolha de mensagem */}
+                      <div className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
+                        <div
+                          className={`max-w-[75%] rounded-2xl px-5 py-3 shadow-md ${message.role === 'user'
                             ? 'bg-gradient-to-br from-purple-600 to-purple-700 text-white'
                             : 'bg-gray-100 text-gray-900 border border-gray-200'
-                        }`}
-                      >
-                        <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                            }`}
+                        >
+                          <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                        </div>
+                        <span className={`text-xs mt-1.5 px-2 ${message.role === 'user' ? 'text-gray-500' : 'text-gray-400'}`}>
+                          {formatTime(message.created_at)}
+                        </span>
                       </div>
-                      <span className={`text-xs mt-1.5 px-2 ${message.role === 'user' ? 'text-gray-500' : 'text-gray-400'}`}>
-                        {formatTime(message.created_at)}
-                      </span>
-                    </div>
 
-                    {/* Avatar do Usuário */}
-                    {message.role === 'user' && (
-                      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center shadow-lg shadow-purple-500/30">
-                        <User className="w-5 h-5 text-white" />
+                      {/* Avatar do Usuário */}
+                      {message.role === 'user' && (
+                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center shadow-lg shadow-purple-500/30">
+                          <User className="w-5 h-5 text-white" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Loading indicator with updated Avatar */}
+                  {loading && (
+                    <div className="flex gap-3 justify-start animate-in fade-in duration-200">
+                      <div className="flex-shrink-0 relative w-10 h-10">
+                        <motion.div
+                          className="absolute inset-0 rounded-2xl bg-purple-500/30"
+                          animate={{ scale: [1, 1.2, 1], opacity: [0.6, 0, 0.6] }}
+                          transition={{ duration: 2, repeat: Infinity }}
+                        />
+                        <div className="relative z-10">
+                          <img src={liaAvatar} alt="Lia avatar" className="w-12 h-12 rounded-2xl object-cover object-top border border-white/10 shadow-lg shadow-purple-500/30" />
+                        </div>
                       </div>
-                    )}
-                  </div>
-                ))}
-
-                {/* Loading indicator */}
-                {loading && (
-                  <div className="flex gap-3 justify-start animate-in fade-in duration-200">
-                    <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 via-purple-500 to-blue-500 flex items-center justify-center shadow-lg shadow-purple-500/30">
-                      <Bot className="w-5 h-5 text-white" />
-                    </div>
-                    <div className="bg-gray-100 text-gray-900 border border-gray-200 rounded-2xl px-5 py-3 shadow-md">
-                      <div className="flex gap-1.5">
-                        <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                        <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                        <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                      <div className="bg-gray-100 text-gray-900 border border-gray-200 rounded-2xl px-5 py-3 shadow-md">
+                        <div className="flex gap-1.5">
+                          <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                          <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                          <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                <div ref={messagesEndRef} />
-              </div>
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
             </ScrollArea>
           </Card>
 
@@ -692,11 +764,10 @@ const AdminLiaChat = () => {
                 variant="ghost"
                 size="sm"
                 onClick={toggleMicrofone}
-                className={`text-xs transition-all rounded-full px-3 py-1.5 h-auto ${
-                  micAtivo
-                    ? 'text-red-600 hover:text-red-700 hover:bg-red-50 animate-pulse'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
+                className={`text-xs transition-all rounded-full px-3 py-1.5 h-auto ${micAtivo
+                  ? 'text-red-600 hover:text-red-700 hover:bg-red-50 animate-pulse'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
               >
                 {micAtivo ? (
                   <>

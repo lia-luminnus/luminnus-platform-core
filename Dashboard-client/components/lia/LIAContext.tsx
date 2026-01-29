@@ -16,6 +16,10 @@ import { mapFunctionCallToLiaAction } from './services/liaDashboardPrompt';
 import { detectDashboardIntent } from './services/liaIntentDetector';
 // v8.2: LOCAL ANSWER SERVICE - Import estático para interceptação síncrona
 import { tryLocalAnswer, isLocalQuery } from './services/localAnswerService';
+// v9.0: INTENT ROUTER & RESPONSE GATE - SSOT Protocol Enforcement
+import { classifyIntent, detectAttachmentType, getIncidentTemplateInstruction, getHybridTemplateInstruction, IntentMode, ContextScope, QuickAction } from './services/intentRouter';
+import { validateResponse, suggestQuickActions, recordTelemetry } from './services/responseGate';
+
 
 // ======================================================================
 // TYPES
@@ -187,6 +191,7 @@ export interface LIAState {
     userId: string | null;
     tenantId: string | null;
     plan: string | null;
+    userRole: string | null;
 
     // Outros
     clearMessages: () => void;
@@ -248,12 +253,14 @@ export function LIAProvider({ children }: LIAProviderProps) {
     }, []);
 
     // Estado do Usuário
-    const { user, initialized: authInitialized, plan: authPlan } = useDashboardAuth();
+    const { user, initialized: authInitialized, plan: authPlan, profile: authProfile } = useDashboardAuth();
     const [userId, setUserId] = useState<string | null>(null);
     const [tenantId, setTenantId] = useState<string | null>(null);
     const [plan, setPlanState] = useState<string | null>(null);
+    const [userRole, setUserRole] = useState<string | null>(null);
     const userIdRef = useRef<string | null>(null);
     const tenantIdRef = useRef<string | null>(null);
+    const userRoleRef = useRef<string | null>(null);
 
     // ======================================================================
     // ESTADOS POR ESCOPO (scope = mode:conversationId)
@@ -291,6 +298,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
     const activeScopeRef = useRef<string | null>(null);
     const creatingRef = useRef<Record<string, boolean>>({}); // Trava de criação concorrente
     const lastMessageSentRef = useRef<{ text: string, timestamp: number } | null>(null);
+    const lastIntentRef = useRef<Record<string, any | null>>({}); // v9.0: Store intents per scope
+    const rerouteCountRef = useRef<Record<string, number>>({}); // v9.0: Prevent infinite loops
 
     // CRITICAL: Refs for functions to stabilize useEffect dependencies
     const addToScopeRef = useRef<((message: Message, mode?: 'chat' | 'multimodal' | 'live', convId?: string) => void) | null>(null);
@@ -301,7 +310,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
     useEffect(() => {
         userIdRef.current = userId;
         tenantIdRef.current = tenantId;
-    }, [userId, tenantId]);
+        userRoleRef.current = userRole;
+    }, [userId, tenantId, userRole]);
 
     // v2.6: MENTE ÚNICA - Sincronizar Usuário e Autenticação do multi-tenant
     useEffect(() => {
@@ -312,12 +322,14 @@ export function LIAProvider({ children }: LIAProviderProps) {
                     const authData = JSON.parse(storedAuth);
                     const uId = authData.user?.id || null;
                     const userPlan = authData.user?.app_metadata?.plan || null;
+                    const role = authData.user?.app_metadata?.role || authProfile?.role || 'client';
                     if (uId) {
                         const activePlan = authPlan || user?.app_metadata?.plan || userPlan;
                         setUserId(uId);
                         setTenantId(uId);
                         setPlanState(activePlan);
-                        console.log('👤 [LIAContext] Sincronizado via AuthContext:', uId, 'Plano:', activePlan);
+                        setUserRole(role);
+                        console.log('👤 [LIAContext] Sincronizado via AuthContext:', uId, 'Plano:', activePlan, 'Role:', role);
 
                         // Sincronizar com o socket para voz/realtime (usando import estático)
                         if (currentIdRef.current) {
@@ -334,7 +346,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         // Listener para o evento disparado pelo LiaOS quando o handshake completa
         window.addEventListener('lia-auth-updated', syncUser);
         return () => window.removeEventListener('lia-auth-updated', syncUser);
-    }, []);
+    }, [authProfile]);
 
     // Manter refs sincronizadas
     useEffect(() => {
@@ -401,7 +413,13 @@ export function LIAProvider({ children }: LIAProviderProps) {
         setMessagesByScope(prev => {
             const scopeMessages = prev[scopeKey] || [];
 
-            // v9.0: DEDUPLICAÇÃO - Evitar mensagens idênticas em curto intervalo
+            // v6.0: PRIMARY - Check by ID (idempotency key)
+            if (message.id && scopeMessages.some(m => m.id === message.id)) {
+                console.log(`ℹ️ [Dedup] Mensagem ${message.id} já existe no escopo: ${scopeKey}`);
+                return prev;
+            }
+
+            // v9.0: FALLBACK - Evitar mensagens idênticas em curto intervalo (para msgs legadas sem ID)
             const lastMsg = scopeMessages[scopeMessages.length - 1];
             const isDuplicate = lastMsg &&
                 lastMsg.content === message.content &&
@@ -418,6 +436,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
             return updated;
         });
     }, []);
+
 
     // v4.4: CRITICAL FIX - Atribuir addMessageToScope à ref para os handlers de socket usarem
     useEffect(() => {
@@ -478,15 +497,27 @@ export function LIAProvider({ children }: LIAProviderProps) {
         }
     }, [saveToStorage]);
 
+    const hydratedFromBackendRef = useRef<Record<string, boolean>>({});
+
     const setActiveScope = useCallback((scopeKey: string | null) => {
         setActiveScopeState(scopeKey);
         activeScopeRef.current = scopeKey;
         if (scopeKey) {
+            // Se já temos mensagens em memória OU já hidratamos do backend,
+            // evitamos re-hidratar do localStorage para não duplicar histórico.
+            const hasInMemory = (messagesByScopeRef.current[scopeKey] || []).length > 0;
+            const hydratedFromBackend = hydratedFromBackendRef.current[scopeKey];
+
+            if (hasInMemory || hydratedFromBackend) {
+                return;
+            }
+
             try {
                 const stored = localStorage.getItem(`lia_scope_${scopeKey}`);
                 if (stored) {
                     const msgs = JSON.parse(stored);
                     setMessagesByScope(prev => ({ ...prev, [scopeKey]: msgs }));
+                    messagesByScopeRef.current = { ...messagesByScopeRef.current, [scopeKey]: msgs };
                 }
             } catch (e) { }
         }
@@ -571,20 +602,30 @@ export function LIAProvider({ children }: LIAProviderProps) {
                     try {
                         const msgs = await backendService.getMessages(convId);
                         if (msgs?.length > 0) {
-                            const formatted: Message[] = msgs.map(m => ({
-                                id: m.id,
-                                type: (m.role === 'assistant' ? 'lia' : 'user') as 'lia' | 'user',
-                                content: m.content,
-                                timestamp: new Date(m.created_at).getTime(),
-                                attachments: m.attachments || undefined
-                            }));
+                            // v6.0: Deduplicação por ID ao carregar do banco
+                            const seenIds = new Set<string>();
+                            const formatted: Message[] = [];
+                            msgs.forEach(m => {
+                                if (m.id && !seenIds.has(m.id) && !m.role?.startsWith('system')) {
+                                    seenIds.add(m.id);
+                                    formatted.push({
+                                        id: m.id,
+                                        type: (m.role === 'assistant' ? 'lia' : 'user') as 'lia' | 'user',
+                                        content: m.content,
+                                        timestamp: new Date(m.created_at).getTime(),
+                                        attachments: m.attachments || undefined
+                                    });
+                                }
+                            });
                             setMessagesByScope(prev => ({ ...prev, [scopeKey]: formatted }));
                             messagesByScopeRef.current = { ...messagesByScopeRef.current, [scopeKey]: formatted };
-                            console.log(`📥 [RefreshConv] Carregadas ${formatted.length} mensagens para ${mode}:${convId}`);
+                            hydratedFromBackendRef.current[scopeKey] = true;
+                            console.log(`📥 [RefreshConv] Carregadas ${formatted.length} mensagens únicas para ${mode}:${convId}`);
                         }
                     } catch (e) {
                         console.warn(`⚠️ [RefreshConv] Falha ao carregar msgs de ${convId}:`, e);
                     }
+
                 });
                 await Promise.all(loadPromises);
                 return serverConvs.length;
@@ -724,10 +765,31 @@ export function LIAProvider({ children }: LIAProviderProps) {
             return;
         }
 
+        // v6.0: UUID-based idempotency - same ID for HTTP and Socket
+        const messageId = crypto.randomUUID();
+
         const scopeKey = getScopeKey(targetMode, targetConvId);
-        const userMsg: Message = { id: `user_${Date.now()}`, type: 'user', content: text, timestamp: Date.now() };
+        const userMsg: Message = { id: messageId, type: 'user', content: text, timestamp: Date.now() };
         addMessageToScope(scopeKey, userMsg);
-        backendService.saveMessage(targetConvId, 'user', text, source).catch(() => { });
+
+        // v9.0: Intent Classification (SSOT Protocol)
+        const intentOutput = classifyIntent({
+            userText: text,
+            hasAttachment: false,
+            attachmentType: null,
+            contextScope: 'General' // TODO: Detect from route
+        });
+        lastIntentRef.current[scopeKey] = intentOutput;
+        rerouteCountRef.current[scopeKey] = 0; // Reset counter
+
+        let messageToSocket = text;
+        if (intentOutput.mode === 'A' || intentOutput.mode === 'C') {
+            const instruction = intentOutput.mode === 'A'
+                ? getIncidentTemplateInstruction()
+                : getHybridTemplateInstruction();
+            messageToSocket = `${text}\n\n[SISTEMA: PROTOCOLO DE LEITURA DE ARQUIVO ATIVADO]\n${instruction}`;
+            console.log(`🛡️ [IntentRouter] Mode ${intentOutput.mode} ativado para ${scopeKey}`);
+        }
 
         const cleanedText = text.replace(/^(lia|hey|olá|oi|ei|e|então|mas)\s+/i, '').trim();
         window.dispatchEvent(new CustomEvent('lia-request-snapshot'));
@@ -735,7 +797,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         const localRes = tryLocalAnswer(cleanedText, { snapshot: freshSnapshot });
 
         if (localRes.answered && localRes.response) {
-            addMessageToScope(scopeKey, { id: `lia_${Date.now()}`, type: 'lia', content: localRes.response, timestamp: Date.now() });
+            addMessageToScope(scopeKey, { id: crypto.randomUUID(), type: 'lia', content: localRes.response, timestamp: Date.now() });
             if (source === 'text') return;
         }
 
@@ -751,10 +813,13 @@ export function LIAProvider({ children }: LIAProviderProps) {
         if (source === 'text') {
             if (lastMessageSentRef.current?.text === text && Date.now() - lastMessageSentRef.current.timestamp < 2000) return;
             lastMessageSentRef.current = { text, timestamp: Date.now() };
-            // @ts-ignore - TS sometimes confuses the number of arguments even when they match the service
-            socketService.sendTextMessage(text, targetConvId);
+
+            // v6.0: Pass messageId to both channels for idempotency
+            // Note: backendService.saveMessage is NOT called here anymore - the socket handler saves the message
+            socketService.sendTextMessage(messageToSocket, targetConvId, messageId);
         }
     }, [getScopeKey, addMessageToScope, ensureConversationExists]);
+
 
     /**
      * Envia uma mensagem de texto (Legacy Wrapper)
@@ -1031,6 +1096,34 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 }
             } catch (e) { }
 
+            // v1.3.0: Buscar conexões do backend para plan awareness
+            let connections: { gmail?: boolean; workspace?: boolean; calendar?: boolean } = {};
+            try {
+                const integrationsResponse = await fetch('/api/integrations', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (integrationsResponse.ok) {
+                    const integrationsData = await integrationsResponse.json();
+                    const hasGoogle = integrationsData.integrations?.some((i: any) => i.provider === 'google' && i.status === 'active');
+                    connections = { gmail: hasGoogle, workspace: hasGoogle, calendar: hasGoogle };
+                    console.log('🔗 [LIAContext] Conexões carregadas:', connections);
+                }
+            } catch (e) {
+                console.warn('⚠️ [LIAContext] Erro ao carregar conexões:', e);
+            }
+
+            // v1.3.0: Definir plano do usuário
+            const userPlan = authPlan?.name || user?.app_metadata?.plan || 'free';
+
+            // Configurar parâmetros de autenticação COM plano e conexões
+            socketService.setAuthParams({
+                token,
+                userId: finalUserId,
+                tenantId: finalUserId,
+                plan: userPlan,
+                connections
+            });
+
             const socket = await socketService.connectSocket({
                 token,
                 userId: finalUserId,
@@ -1174,6 +1267,44 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
             if (!text && !audio) return;
 
+            // v9.0: Response Gate Validation (SSOT Protocol)
+            // DISABLED v9.1: This was causing infinite loops because the LIA response
+            // doesn't contain corrections when asked for file upload but no file was received.
+            // The validation layer needs redesign to ONLY validate when file context is present.
+            const RESPONSE_GATE_ENABLED = false; // Feature flag - RE-ENABLE after fixing file context
+            const lastIntent = lastIntentRef.current[scopeKey || ''];
+            if (RESPONSE_GATE_ENABLED && lastIntent && (lastIntent.mode === 'A' || lastIntent.mode === 'C') && text) {
+                const validation = validateResponse({
+                    mode: lastIntent.mode,
+                    liaResponse: text,
+                    originalUserText: lastMessageSentRef.current?.text || ''
+                });
+
+                recordTelemetry({
+                    mode: lastIntent.mode,
+                    isValid: validation.isValid,
+                    missingElements: validation.missingElements,
+                    rerouteCount: rerouteCountRef.current[scopeKey || ''] || 0
+                });
+
+                if (!validation.isValid && validation.rerouteInstruction) {
+                    const count = (rerouteCountRef.current[scopeKey || ''] || 0) + 1;
+                    if (count <= 2) { // Max 2 attempts
+                        console.warn(`🛡️ [ResponseGate] Resposta MODO ${lastIntent.mode} INVÁLIDA (Tentativa ${count}). Re-roteando...`);
+                        rerouteCountRef.current[scopeKey || ''] = count;
+
+                        // Enviar instrução de re-roteamento de volta para a LIA
+                        if (mode === 'live' || socketService.getSocket()?.connected) {
+                            socketService.sendTextMessage(validation.rerouteInstruction, convId);
+                            setIsThinking(true);
+                            return; // Interrompe o processamento desta resposta errada
+                        }
+                    } else {
+                        console.error('🛡️ [ResponseGate] Máximo de tentativas de re-roteamento atingido. Liberando resposta imperfeita.');
+                    }
+                }
+            }
+
             console.log(`💬 [LIAContext] Resposta processada (${mode || 'socket'}):`, text.substring(0, 30) + '...');
 
             // 1. Parsing estruturado (Gráficos/Tabelas)
@@ -1223,7 +1354,11 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 content: finalContent,
                 timestamp: Date.now(),
                 attachments,
-                metadata: isPlaceholder ? { pending_snapshot: true } : undefined
+                metadata: {
+                    ...(isPlaceholder ? { pending_snapshot: true } : {}),
+                    // Injetar quick actions sugeridas se for MODO A
+                    quickActions: lastIntent?.mode === 'A' ? suggestQuickActions(lastIntent.mode, lastMessageSentRef.current?.text || '', [], userRoleRef.current || 'client') : undefined
+                }
             };
             const currentScopeMessages = messagesByScopeRef.current[scopeKey || ''] || [];
             const lastMsg = currentScopeMessages[currentScopeMessages.length - 1];
@@ -1333,7 +1468,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
             socket.off('audio-ack');
             window.removeEventListener('lia-dashboard-snapshot-ready', handleSnapshotReady);
         };
-    }, [authInitialized, isConnected]); // Restaurado isConnected para re-registrar listeners após conexão
+    }, [authInitialized, isConnected]); // v7.0.1: trigger registration when socket becomes ready
 
     // ======================================================================
     // EVENTOS GEMINI LIVE (PARIDADE REAL)
@@ -1375,12 +1510,56 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 case 'generating-start':
                     setIsThinking(true);
                     setIsProcessingUpload(true);
-                    setLiaStatus('LIA está processando...');
+                    // v7.0: Tool-specific status messages
+                    const toolName = typeof event.data === 'string' ? event.data : '';
+                    const toolStatusMap: Record<string, string> = {
+                        // === GOOGLE WORKSPACE ===
+                        'listCalendarEvents': '📅 Consultando Google Calendar...',
+                        'searchCalendarEvents': '🔍 Pesquisando na sua agenda...',
+                        'getCalendarEvent': '📅 Verificando detalhes do evento...',
+                        'createCalendarEvent': '📅 Criando evento no Calendar...',
+                        'updateCalendarEvent': '📅 Atualizando evento na agenda...',
+                        'deleteCalendarEvent': '🗑️ Removendo evento da agenda...',
+                        'listGmailMessages': '📧 Verificando seus e-mails...',
+                        'searchGmail': '🔍 Pesquisando nos seus e-mails...',
+                        'getGmailMessage': '📧 Lendo conteúdo do e-mail...',
+                        'sendGmail': '📧 Enviando seu e-mail...',
+                        'createGoogleSheet': '📊 Criando planilha no Sheets...',
+                        'createGoogleDoc': '📄 Criando documento no Docs...',
+
+                        // === SISTEMA E BUSCA ===
+                        'searchWeb': '🌍 Pesquisando na internet...',
+                        'getWeather': '🌦️ Verificando o clima...',
+                        'getLocation': '📍 Buscando lugares próximos...',
+                        'getDirections': '🚗 Calculando rota e tempo...',
+                        'saveMemory': '🧠 Salvando na sua memória...',
+                        'getCurrentTime': '🕒 Verificando hora atual...',
+                        'processing': 'LIA está pensando...', // v7.0: Status genérico para turnos de texto
+                    };
+                    setLiaStatus(toolStatusMap[toolName] || (toolName !== 'processing' ? `⚙️ Executando ${toolName}...` : 'LIA está pensando...'));
                     break;
                 case 'generating-end':
                     setIsThinking(false);
                     setIsProcessingUpload(false);
-                    setLiaStatus(null);
+                    // Mantém status por 1.5s para o usuário ver que terminou
+                    setTimeout(() => setLiaStatus(null), 1500);
+                    break;
+                // v7.0: Tool execution feedback
+                case 'tool-active':
+                    if (event.data === true) {
+                        setIsThinking(true);
+                    }
+                    break;
+                case 'tool-result':
+                    // Exibir resultado brevemente se for sucesso
+                    const result = event.data as any;
+                    if (result?.success) {
+                        setLiaStatus('✅ Concluído!');
+                    } else if (result?.error) {
+                        setLiaStatus('❌ Erro ao executar');
+                    }
+                    // Limpar após 2s
+                    setTimeout(() => setLiaStatus(null), 2000);
                     break;
                 case 'user-transcript':
                     if (typeof event.data === 'string') {
@@ -1650,47 +1829,74 @@ export function LIAProvider({ children }: LIAProviderProps) {
         const convId = await ensureConversationExists(targetMode);
         const scopeKey = getScopeKey(targetMode, convId!);
 
-        const file = files[0]; // Por enquanto, processar primeiro arquivo
-        const isImage = file.file.type.startsWith('image/');
-        const prompt = text.trim() || 'Analise este arquivo em detalhes.';
+        const file = files[0];
+        const prompt = text.trim() || 'Analise estes arquivos em detalhes.';
 
-        // 1. Adicionar mensagem do usuário COM attachment ao chat (ESCOPO CORRETO)
         const userMessage: Message = {
             id: `user_${Date.now()}`,
             type: 'user',
             content: prompt,
             timestamp: Date.now(),
-            attachments: [{
-                name: file.file.name,
-                type: isImage ? 'image' : 'document',
-                url: file.preview
-            }]
+            attachments: files.map(f => ({
+                name: f.file.name,
+                type: f.file.type.startsWith('image/') ? 'image' : 'document',
+                url: f.preview
+            }))
         };
         addMessageToScope(scopeKey, userMessage);
-        console.log('📎 Mensagem com attachment adicionada ao escopo:', scopeKey);
+        console.log(`📎 Mensagem com ${files.length} attachment(s) adicionada ao escopo:`, scopeKey);
 
         // 2. Ativar loading para fase de UPLOAD (animação Luminnus)
         setIsProcessingUpload(true);
         setIsThinking(true); // v6.2: Ativar feedback de "pensando"
 
         try {
-            // 3. Converter arquivo para base64
-            const arrayBuffer = await file.file.arrayBuffer();
-            const base64 = btoa(
-                new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-            );
-            const dataUrl = `data:${file.file.type};base64,${base64}`;
+            console.log(`📤 Enviando ${files.length} arquivo(s) para análise`);
 
-            console.log('📤 Enviando arquivo para análise:', file.file.name);
-
-            // 4. Enviar para API de análise
             const convId = scopeKey.split(':')[1] || '';
             const formData = new FormData();
-            formData.append('file', file.file);
-            formData.append('prompt', prompt);
-            formData.append('conversationId', convId);
-            // userId e tenantId são opcionais - o backend usa defaults se não enviados
+            
+            files.forEach(f => {
+                formData.append('files', f.file);
+            });
 
+            const intentOutput = classifyIntent({
+                userText: prompt,
+                hasAttachment: true,
+                attachmentType: files[0].file.type.startsWith('image/') ? 'image' : 'document',
+                attachmentName: files[0].file.name,
+                contextScope: 'General'
+            });
+            lastIntentRef.current[scopeKey] = intentOutput;
+            rerouteCountRef.current[scopeKey] = 0;
+
+            let finalPrompt = prompt;
+            if (intentOutput.mode === 'A' || intentOutput.mode === 'C') {
+                const instruction = intentOutput.mode === 'A'
+                    ? getIncidentTemplateInstruction()
+                    : getHybridTemplateInstruction();
+                finalPrompt = `${prompt}\n\n[SISTEMA: PROTOCOLO DE LEITURA DE ARQUIVO ATIVADO]\n${instruction}`;
+                console.log(`🛡️ [IntentRouter] Mode ${intentOutput.mode} (Vision) ativado para ${scopeKey}`);
+            }
+
+            formData.append('prompt', finalPrompt);
+            formData.append('conversationId', convId);
+            formData.append('messageId', userMessage.id);
+
+            // v2.6: MENTE ÚNICA - Incluir credenciais explicitamente
+            formData.append('userId', userIdRef.current || '');
+            formData.append('tenantId', tenantIdRef.current || '');
+
+            // Buscar token de autenticação
+            const storedAuth = localStorage.getItem('sb-dashboard-auth') || localStorage.getItem('supabase.auth.token');
+            let authHeaders: any = {};
+            if (storedAuth) {
+                try {
+                    const authObj = JSON.parse(storedAuth);
+                    const token = authObj.access_token || authObj.token;
+                    if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+                } catch (e) { }
+            }
 
             // Desativar loading de upload, ativar typing bubbles (aguardando resposta da AI)
             setIsProcessingUpload(false);
@@ -1698,6 +1904,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
             const response = await fetch('/api/vision/analyze', {
                 method: 'POST',
+                headers: authHeaders,
                 body: formData,
             });
 
@@ -1728,28 +1935,49 @@ export function LIAProvider({ children }: LIAProviderProps) {
             addMessageToScope(scopeKey, liaMessage);
             console.log('💬 Resposta da LIA adicionada ao escopo:', scopeKey);
 
-            // v2.1: Atualizar a mensagem do usuário com a URL persistente
-            if (result.storageUrl) {
+            // v2.1: Atualizar a mensagem do usuário com as URLs persistentes
+            const returnedAttachments = result.analysis?.detailPayload?.attachments;
+            if (returnedAttachments && Array.isArray(returnedAttachments)) {
                 setMessagesByScope(prev => {
                     const scopeMessages = [...(prev[scopeKey] || [])];
-                    // Encontrar a mensagem do usuário recém-adicionada
+                    const userMsgIndex = scopeMessages.findIndex(m => m.id === userMessage.id);
+                    if (userMsgIndex >= 0) {
+                        scopeMessages[userMsgIndex] = {
+                            ...scopeMessages[userMsgIndex],
+                            attachments: returnedAttachments.map(att => ({
+                                name: att.name,
+                                type: att.type,
+                                url: att.url,
+                                id: att.id
+                            }))
+                        };
+                    }
+                    try {
+                        localStorage.setItem(`lia_scope_${scopeKey}`, JSON.stringify(scopeMessages));
+                    } catch (e) { }
+                    return { ...prev, [scopeKey]: scopeMessages };
+                });
+                console.log('🔄 URLs dos attachments atualizadas para storageUrls persistentes');
+            } else if (result.storageUrl) {
+                // Fallback para arquivo único (v2.0)
+                setMessagesByScope(prev => {
+                    const scopeMessages = [...(prev[scopeKey] || [])];
                     const userMsgIndex = scopeMessages.findIndex(m => m.id === userMessage.id);
                     if (userMsgIndex >= 0 && scopeMessages[userMsgIndex].attachments) {
                         scopeMessages[userMsgIndex] = {
                             ...scopeMessages[userMsgIndex],
                             attachments: scopeMessages[userMsgIndex].attachments?.map(att => ({
                                 ...att,
-                                url: result.storageUrl
+                                url: result.storageUrl,
+                                id: result.fileId
                             }))
                         };
                     }
-                    // Salvar no localStorage
                     try {
                         localStorage.setItem(`lia_scope_${scopeKey}`, JSON.stringify(scopeMessages));
-                    } catch (e) { /* ignore */ }
+                    } catch (e) { }
                     return { ...prev, [scopeKey]: scopeMessages };
                 });
-                console.log('🔄 URL do attachment atualizada para storageUrl persistente');
             }
 
 
@@ -2151,6 +2379,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         userId,
         tenantId,
         plan,
+        userRole,
         clearMessages,
         isTyping,
     }), [
@@ -2169,7 +2398,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         transcribeAndFillInput, analyzeFile, setVoicePersonality,
         startListening, stopListening, startLiveMode, stopLiveMode,
         loadMemories, saveMemory, deleteMemory, userId, tenantId,
-        plan, clearMessages, isTyping
+        plan, userRole, clearMessages, isTyping
     ]);
 
     return <LIAContext.Provider value={value}>{children}</LIAContext.Provider>;

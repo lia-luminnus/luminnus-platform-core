@@ -62,6 +62,7 @@ export class OutputGovernance {
         options?: {
             files?: { type: string }[];
             mode?: 'chat' | 'multimodal' | 'live';
+            userPlan?: string;
         }
     ): Promise<GovernanceResult> {
 
@@ -142,9 +143,10 @@ export class OutputGovernance {
         rawResponse: string,
         prompt: string,
         retryFunction: (prompt: string) => Promise<string>,
-        files?: { type: string }[]
+        files?: { type: string }[],
+        userPlan?: string
     ): Promise<GovernanceResult> {
-        return this.apply(rawResponse, prompt, retryFunction, { mode: 'multimodal', files });
+        return this.apply(rawResponse, prompt, retryFunction, { mode: 'multimodal', files, userPlan });
     }
 
     /**
@@ -154,14 +156,15 @@ export class OutputGovernance {
     static async forLive(
         rawResponse: string,
         prompt: string,
-        retryFunction: (prompt: string) => Promise<string>
+        retryFunction: (prompt: string) => Promise<string>,
+        userPlan?: string
     ): Promise<{
         voiceScript: string;
         chatPayload: string;
         jsonData: any | null;
         audit: GovernanceAudit;
     }> {
-        const result = await this.apply(rawResponse, prompt, retryFunction, { mode: 'live' });
+        const result = await this.apply(rawResponse, prompt, retryFunction, { mode: 'live', userPlan });
 
         return {
             voiceScript: result.voiceScript,
@@ -174,7 +177,7 @@ export class OutputGovernance {
     /**
      * Gera prompt enriquecido com instruções de contrato
      */
-    static enrichPrompt(prompt: string, files?: { type: string }[]): string {
+    static enrichPrompt(prompt: string, files?: { type: string }[], userPlan?: string): string {
         const contractType = OutputContracts.detectIntent(
             prompt,
             !!files?.length,
@@ -183,7 +186,7 @@ export class OutputGovernance {
 
         const jsonOnly = OutputContracts.isJsonRequested(prompt);
         const isIncident = OutputContracts.isIncident(prompt);
-        const contractPrompt = OutputContracts.buildContractPrompt(contractType, jsonOnly, isIncident);
+        const contractPrompt = OutputContracts.buildContractPrompt(contractType, { jsonOnly, isIncident, userPlan });
 
         return `${contractPrompt}\n\n=== PEDIDO DO USUÁRIO ===\n${prompt}`;
     }

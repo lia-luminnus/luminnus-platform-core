@@ -12,8 +12,9 @@
 import React, { useState, useRef, useEffect, useContext } from "react";
 import { Send, Mic, MicOff, Paperclip, X, FileText, ImageIcon, Video, File, Loader2 } from "lucide-react";
 import { useLIA } from "./LIAContext";
-import { MarkdownRenderer } from "./MarkdownRenderer";
+import { LIAMessageRenderer } from "./LIAMessageRenderer";
 import { LanguageContext } from "../../contexts/LanguageContext";
+
 
 const LIA_AVATAR_URL = "/images/lia-bust.png";
 
@@ -53,6 +54,7 @@ export function ChatMode() {
         typingByScope,
         isSpeaking,
         isLiveActive,
+        userRole,
     } = useLIA();
     const { t } = useContext(LanguageContext);
 
@@ -165,14 +167,19 @@ export function ChatMode() {
             .filter(pf => pf.file && typeof pf.file === 'object' && 'name' in pf.file)
             .map(pf => ({ file: pf.file as File }));
 
-        if (filesWithData.length > 0 && sendMessageWithFiles) {
-            await sendMessageWithFiles(content, filesWithData, 'chat');
-        } else {
-            sendTextMessage(content);
-        }
-
+        // Limpar UI imediatamente para feedback instantâneo ao usuário
         setInputValue("");
         setPendingFiles([]);
+
+        try {
+            if (filesWithData.length > 0 && sendMessageWithFiles) {
+                await sendMessageWithFiles(content, filesWithData, 'chat');
+            } else {
+                await sendTextMessage(content);
+            }
+        } catch (error) {
+            console.error('Erro ao enviar mensagem:', error);
+        }
     };
 
     // Handle file select
@@ -273,7 +280,33 @@ export function ChatMode() {
                                             }`}
                                     >
                                         {message.type === 'lia' ? (
-                                            <MarkdownRenderer content={message.content} />
+                                            <LIAMessageRenderer
+                                                content={message.content}
+                                                metadata={message.metadata}
+                                                showQuickActions={true}
+                                                userRole={userRole || 'client'}
+                                                onToolInvoke={(toolName, params) => {
+                                                    // Convert tool action to text message for LLM to process
+                                                    const actionMap: Record<string, string> = {
+                                                        'email.send': 'Enviar e-mail',
+                                                        'email.preview': 'Ver prévia do e-mail',
+                                                        'email.resend': 'Reenviar e-mail',
+                                                        'email.status': 'Ver status do envio',
+                                                        'docs.generate_corrected': 'Gerar versão corrigida',
+                                                        'docs.export_report': 'Exportar relatório',
+                                                        'ui.download_file': 'Baixar arquivo',
+                                                        'calendar.create': 'Agendar reunião',
+                                                        'calendar.send_invite': 'Enviar convite',
+                                                        'integrations.reconnect': 'Reconectar integração',
+                                                        'integrations.status': 'Ver status da integração',
+                                                        'support.open_ticket': 'Falar com suporte',
+                                                        'dashboard.navigate': params?.section || 'Navegar'
+                                                    };
+                                                    const actionText = actionMap[toolName] || toolName;
+                                                    console.log(`[ChatMode] Executando ação: ${actionText} (tool: ${toolName})`);
+                                                    sendTextMessage(actionText);
+                                                }}
+                                            />
                                         ) : (
                                             <p className="whitespace-pre-wrap text-sm">{message.content}</p>
                                         )}

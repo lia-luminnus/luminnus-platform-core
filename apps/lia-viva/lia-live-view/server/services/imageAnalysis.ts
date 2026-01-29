@@ -34,7 +34,7 @@ async function analisarImagem({ imageData, userMessage, analysisType = 'auto' })
     const prompt = gerarPromptPorTipo(detectedType, userMessage);
 
     // 3. Processar com Gemini Vision
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     const result = await model.generateContent([
       { text: prompt },
@@ -56,7 +56,7 @@ async function analisarImagem({ imageData, userMessage, analysisType = 'auto' })
       suggestions: extrairSugestoes(analysis, detectedType),
       metadata: {
         timestamp: Date.now(),
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-2.0-flash',
       },
     };
 
@@ -269,7 +269,7 @@ git commit -m "[tipo]: [descrição curta]"
 
 Seja EXTREMAMENTE técnico e preciso.`;
 
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
   const result = await model.generateContent([
     { text: prompt },

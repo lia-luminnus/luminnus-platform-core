@@ -3,6 +3,7 @@ import multer from 'multer';
 import OpenAI from 'openai';
 import { ToolService } from '../services/toolService.js';
 import { analisarImagem } from '../services/imageAnalysis.js';
+import { FileService } from '../services/fileService.js';
 
 const router = express.Router();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -56,6 +57,49 @@ router.post('/multimodal/analyze', upload.single('file'), async (req, res) => {
     const finalTenantId = tenantId || '00000000-0000-0000-0000-000000000001';
 
     console.log(`📤 Analyzing uploaded file: ${file.originalname} (${file.mimetype})`);
+
+    // 1. Upload to Storage and Register in DB (v2.0)
+    let storageUrl: string | null = null;
+    let storagePath: string | null = null;
+
+    try {
+      const uploadResult = await FileService.uploadToStorage(
+        finalTenantId,
+        finalUserId,
+        file.buffer,
+        file.originalname,
+        file.mimetype
+      );
+
+      if (uploadResult) {
+        storageUrl = uploadResult.url;
+        storagePath = uploadResult.path;
+
+        // Determinar pasta por tipo
+        let folderName = 'Documentos';
+        if (file.mimetype.startsWith('image/')) folderName = 'Imagens';
+        else if (file.mimetype.includes('spreadsheet') || file.mimetype.includes('excel')) folderName = 'Planilhas';
+
+        const folderId = await FileService.getOrCreateFolder(finalTenantId, finalUserId, folderName, 'lia_shared');
+
+        await FileService.saveMetadata({
+          tenant_id: finalTenantId,
+          user_id: finalUserId,
+          file_name: file.originalname,
+          file_type: file.mimetype,
+          file_size: file.size,
+          storage_path: storagePath,
+          storage_url: storageUrl,
+          folder_id: folderId,
+          parse_method: 'multimodal-analyze',
+          status: 'uploaded',
+          scope: 'lia_shared',
+          source: 'lia_attachment'
+        });
+      }
+    } catch (upErr) {
+      console.error('⚠️ Error uploading file in multimodal route:', upErr);
+    }
 
     // Check if it's an image for the direct analysis service
     if (file.mimetype.startsWith('image/')) {

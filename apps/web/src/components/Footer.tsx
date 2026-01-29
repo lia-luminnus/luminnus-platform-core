@@ -1,4 +1,4 @@
-import { Linkedin, Instagram, Youtube } from "lucide-react";
+import { Linkedin, Youtube } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
@@ -66,9 +66,6 @@ const Footer = () => {
             <div className="flex space-x-4">
               <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center hover:bg-primary/20 hover:shadow-[0_0_20px_rgba(106,0,255,0.4)] transition-all">
                 <Linkedin className="w-6 h-6 text-primary" />
-              </a>
-              <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="w-12 h-12 bg-magenta/10 rounded-lg flex items-center justify-center hover:bg-magenta/20 hover:shadow-[0_0_20px_rgba(255,46,158,0.4)] transition-all">
-                <Instagram className="w-6 h-6 text-magenta" />
               </a>
               <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" className="w-12 h-12 bg-secondary/10 rounded-lg flex items-center justify-center hover:bg-secondary/20 hover:shadow-[0_0_20px_rgba(0,194,255,0.4)] transition-all">
                 <Youtube className="w-6 h-6 text-secondary" />

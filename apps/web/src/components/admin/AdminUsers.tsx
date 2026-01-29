@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Trash2, Edit, Ban, CheckCircle } from "lucide-react";
+import { Search, Trash2, Edit, Ban, CheckCircle, RotateCcw } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
@@ -48,6 +48,7 @@ export const AdminUsers = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlan, setSelectedPlan] = useState<string>("all");
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
+  const [userToReset, setUserToReset] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -55,55 +56,64 @@ export const AdminUsers = () => {
   const { data: users, isLoading } = useQuery({
     queryKey: ["admin-users", searchTerm, selectedPlan],
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase as any)
         .from("profiles")
-        .select("id, full_name, plan_type, created_at")
+        .select("id, full_name, email, plan_type, created_at")
         .order("created_at", { ascending: false });
 
       if (selectedPlan !== "all") {
         query = query.eq("plan_type", selectedPlan);
       }
 
-      const { data: profiles, error } = await query;
+      const { data: profiles, error } = await (query as any);
       if (error) throw error;
 
-      // Buscar emails do auth.users (precisaria de uma função RPC ou admin API)
-      // Por enquanto, vamos simular com email vazio
-      const usersWithEmail: UserWithEmail[] = await Promise.all(
-        (profiles || []).map(async (profile) => {
-          // Aqui você pode implementar uma Edge Function para buscar o email
-          // ou usar o Supabase Admin API
-          return {
-            ...profile,
-            email: `user-${profile.id.slice(0, 8)}@example.com`, // Placeholder
-          };
-        })
-      );
+      return profiles as UserWithEmail[];
 
       // Filtrar por termo de busca
       if (searchTerm) {
-        return usersWithEmail.filter(
-          (user) =>
+        return profiles.filter(
+          (user: any) =>
             user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            user.email.toLowerCase().includes(searchTerm.toLowerCase())
+            user.email?.toLowerCase().includes(searchTerm.toLowerCase())
         );
       }
 
-      return usersWithEmail;
+      return profiles;
     },
   });
 
-  // Mutation: Deletar usuário
+  // Mutation: Deletar usuário (via Edge Function para deletar de auth.users)
   const deleteMutation = useMutation({
     mutationFn: async (userId: string) => {
-      const { error } = await supabase.from("profiles").delete().eq("id", userId);
-      if (error) throw error;
+      const { data: session } = await (supabase as any).auth.getSession();
+      if (!session?.session?.access_token) {
+        throw new Error("Não autenticado");
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-user-management`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ userId, action: "delete" }),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || "Erro ao deletar usuário");
+      }
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       toast({
         title: "Usuário excluído",
-        description: "O usuário foi removido com sucesso.",
+        description: "O usuário foi removido completamente do sistema.",
       });
       setUserToDelete(null);
     },
@@ -119,9 +129,9 @@ export const AdminUsers = () => {
   // Mutation: Alterar plano do usuário
   const changePlanMutation = useMutation({
     mutationFn: async ({ userId, newPlan }: { userId: string; newPlan: string }) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("profiles")
-        .update({ plan_type: newPlan })
+        .update({ plan_type: newPlan } as any)
         .eq("id", userId);
       if (error) throw error;
     },
@@ -130,6 +140,49 @@ export const AdminUsers = () => {
       toast({
         title: "Plano alterado",
         description: "O plano do usuário foi atualizado com sucesso.",
+      });
+    },
+  });
+
+  // Mutation: Resetar conta do usuário (via Edge Function)
+  const resetAccountMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const { data: session } = await (supabase as any).auth.getSession();
+      if (!session?.session?.access_token) {
+        throw new Error("Não autenticado");
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-user-management`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ userId, action: "reset" }),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || "Erro ao resetar usuário");
+      }
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      toast({
+        title: "✅ Conta resetada",
+        description: "O cliente poderá configurar o dashboard novamente sem precisar pagar de novo.",
+      });
+      setUserToReset(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao resetar",
+        description: error.message,
+        variant: "destructive",
       });
     },
   });
@@ -256,6 +309,16 @@ export const AdminUsers = () => {
                             variant="outline"
                             size="icon"
                             className="h-8 w-8"
+                            title="Resetar configuração (mantém assinatura)"
+                            onClick={() => setUserToReset(user.id)}
+                          >
+                            <RotateCcw className="h-4 w-4 text-blue-500" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Excluir usuário"
                             onClick={() => setUserToDelete(user.id)}
                           >
                             <Trash2 className="h-4 w-4 text-red-500" />
@@ -288,6 +351,36 @@ export const AdminUsers = () => {
               className="bg-red-500 hover:bg-red-600"
             >
               Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reset Account Confirmation Dialog */}
+      <AlertDialog open={!!userToReset} onOpenChange={() => setUserToReset(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>🔄 Resetar Configuração do Cliente</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                Esta ação vai resetar a configuração do dashboard do cliente, permitindo que ele
+                configure novamente a profissão e os módulos.
+              </p>
+              <p className="font-medium text-green-600">
+                ✅ A assinatura e o plano serão mantidos - o cliente NÃO precisará pagar novamente.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                O cliente precisará limpar o cache do navegador (localStorage) para ver as mudanças.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => userToReset && resetAccountMutation.mutate(userToReset)}
+              className="bg-blue-500 hover:bg-blue-600"
+            >
+              Resetar Configuração
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -16,18 +16,14 @@ const Sidebar: React.FC = () => {
   const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
   const handleLogout = async () => {
-    const userEmail = user?.email;
     try {
+      // O signOut do contexto já cuida do redirecionamento correto (Admin vs User)
       await signOut();
     } catch (err) {
       console.error('Erro ao fazer logout:', err);
-    }
-
-    // Redirecionamento seguro para o Painel Admin
-    if (isDev) {
-      window.location.href = 'http://localhost:8080/admin-dashboard';
-    } else {
-      window.location.href = 'https://admin.luminnus.com/admin-dashboard';
+      // Fallback de emergência caso o signOut falhe
+      const landingPage = import.meta.env.VITE_LANDING_PAGE_URL || 'http://localhost:8080';
+      window.location.href = landingPage;
     }
   };
 
@@ -47,10 +43,12 @@ const Sidebar: React.FC = () => {
       </button>
 
       <div className={`h-20 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-start px-6'}`}>
-        <div className="w-10 h-10 bg-gradient-to-br from-pink-500 via-purple-600 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20 flex-shrink-0 transform transition-transform hover:rotate-6">
-          <svg viewBox="0 0 24 24" className="w-6 h-6 text-white fill-current">
-            <path d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z" />
-          </svg>
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transform transition-transform hover:rotate-6 overflow-hidden">
+          <img
+            src="/images/luminnus-logo.png"
+            alt="Luminnus"
+            className="w-full h-full object-contain"
+          />
         </div>
         {!isSidebarCollapsed && (
           <span className="ml-3 font-black text-xl tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-500 hidden lg:block">Luminnus</span>

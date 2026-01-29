@@ -14,6 +14,19 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       host: '0.0.0.0',
       proxy: {
+        // Admin routes are hosted on LIA Live View server (port 3000)
+        '/api/admin': {
+          target: 'http://localhost:3000',
+          changeOrigin: true,
+          secure: false,
+        },
+        // Integrations routes (also on LIA Live View)
+        '/api/integrations': {
+          target: 'http://localhost:3000',
+          changeOrigin: true,
+          secure: false,
+        },
+        // Default API routes (port 5000)
         '/api': {
           target: 'http://localhost:5000',
           changeOrigin: true,

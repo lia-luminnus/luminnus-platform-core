@@ -77,6 +77,15 @@ export default function FilesPage() {
 
     useEffect(() => {
         fetchFiles();
+
+        // v2.6: Ouvir evento de upload em tempo real do LIAContext
+        const handleNewFile = () => {
+            console.log('🔄 [FilesPage] Novo arquivo detectado, atualizando lista...');
+            fetchFiles();
+        };
+
+        window.addEventListener('lia-file-uploaded', handleNewFile);
+        return () => window.removeEventListener('lia-file-uploaded', handleNewFile);
     }, [fetchFiles]);
 
     const handleDownload = (file: FileData) => {

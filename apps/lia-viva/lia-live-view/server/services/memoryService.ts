@@ -288,8 +288,8 @@ EXEMPLOS DE PERGUNTAS QUE EXIGEM getDirections:
     // - Máximo 10.000 caracteres total no bloco de histórico
     // - Sanitização contra prompt injection
     // ============================================================
-    const HISTORY_MAX_MESSAGES = 20;
-    const HISTORY_MAX_CHARS = 10000;
+    const HISTORY_MAX_MESSAGES = 25;
+    const HISTORY_MAX_CHARS = 15000;
 
     let historyString = "";
     let hasImageAnalysis = false;
@@ -301,17 +301,41 @@ EXEMPLOS DE PERGUNTAS QUE EXIGEM getDirections:
       let rawHistoryContent = "";
       recentHistory.forEach((m: any) => {
         const role = m.role === 'user' ? 'Usuário' : 'Lia';
-        const content = (m.content || "").substring(0, 500); // Max 500 chars por mensagem
+        const content = (m.content || "").substring(0, 4000); // v2.1: Aumentado para 4k para preservar drafts completos
         const attachments = (m.attachments && m.attachments.length > 0)
-          ? ` [Anexos: ${m.attachments.map((a: any) => a.name || 'arquivo').join(', ')}]`
+          ? ` [ANEXO ENVIADO: ${m.attachments.map((a: any) => {
+            let info = `${a.name} (${a.type})`;
+            if (a.id) info += ` | fileId: ${a.id}`;
+            if (a.snapshot) {
+              // v7.2: Injetar snippet do conteúdo para manter contexto sem precisar de tool call
+              const snippet = a.snapshot.substring(0, 1500);
+              info += ` | CONTEÚDO: "${snippet}${a.snapshot.length > 1500 ? '...' : ''}"`;
+            }
+            return info;
+          }).join(' | ')}]`
           : "";
 
-        // Detectar se houve análise de imagem
-        if (m.role === 'assistant' && (content.includes('imagem') || content.includes('print') || content.includes('screenshot') || attachments)) {
+        // v2.0: Detecção robusta de análise visual para ativar instruções de memória
+        const hasAttachment = m.attachments && m.attachments.length > 0;
+        const isVisionAnalysis = m.role === 'assistant' && (
+          content.includes('ACHADO') ||
+          content.includes('EVIDÊNCIA') ||
+          content.includes('ANÁLISE VISUAL') ||
+          content.includes('Achado:') ||
+          content.includes('Ação:')
+        );
+
+        if (content.toLowerCase().includes('imagem') ||
+          content.toLowerCase().includes('print') ||
+          content.toLowerCase().includes('screenshot') ||
+          hasAttachment ||
+          isVisionAnalysis) {
           hasImageAnalysis = true;
         }
 
-        rawHistoryContent += `${role}: ${content}${attachments}\n`;
+        const prefix = isVisionAnalysis ? '[ANÁLISE VISUAL] ' : '';
+
+        rawHistoryContent += `${role}: ${prefix}${content}${attachments}\n`;
       });
 
       // Hard cap de caracteres
@@ -332,10 +356,37 @@ ${rawHistoryContent}
 =========================================================\n`;
     }
 
+    // ======================================================================
+    // 10. EFEITO 'ESPIAR' (v5.5) - Busca Transversal de Anexos
+    // Se não há imagens nesta conversa, espiamos as outras recentes do usuário
+    // ======================================================================
+    let transverseVisionContext = "";
+    if (!hasImageAnalysis && userId) {
+      try {
+        const { findRecentAttachments } = await import('../config/supabase.js');
+        const recentAttachments = await findRecentAttachments(userId, 3);
+
+        if (recentAttachments && recentAttachments.length > 0) {
+          console.log(`👁️ [Espiar] Encontrados ${recentAttachments.length} anexos recentes em outras conversas.`);
+          transverseVisionContext = `\n[MEMÓRIA VISUAL TRANSVERSAL - SISTEMA ESPIAR]
+Você não encontrou o print no histórico acima, mas consultou o histórico recente do usuário em OUTRAS ABAS e encontrou estes arquivos enviados recentemente:
+${recentAttachments.map((m: any) => {
+            const fileNames = m.attachments?.map((a: any) => a.name).join(', ') || 'arquivo';
+            return `- Em outra conversa, o usuário enviou: ${fileNames}. Descrição/Mensagem: "${m.content}"`;
+          }).join('\n')}
+USE ESTA INFORMAÇÃO para responder se o usuário disser "já enviei" ou "leia o print". Diga que você encontrou o print em outra conversa aberta pelo usuário.`;
+
+          hasImageAnalysis = true; // Ativar para usar o prompt de memória positiva
+        }
+      } catch (e) {
+        console.warn('⚠️ [Espiar] Falha ao buscar anexos transversais:', e);
+      }
+    }
+
     // v3.2: Instrução de imagem CONDICIONAL (evita hallucination)
     const imageMemoryInstruction = hasImageAnalysis
-      ? `\n\nINSTRUÇÃO (MEMÓRIA VISUAL): O histórico acima CONTÉM análises de imagens/arquivos que você fez anteriormente. Se o usuário perguntar sobre algo que você viu, CONSULTE o histórico. Você NÃO vê imagens em tempo real na voz, mas LEMBRA das análises do chat.`
-      : `\n\nINSTRUÇÃO (MEMÓRIA VISUAL): Se o usuário perguntar sobre imagens e não houver análise no histórico acima, diga que o contexto atual não contém essa informação e peça para ele reenviar o arquivo.`;
+      ? `\n\nINSTRUÇÃO (MEMÓRIA VISUAL): O histórico acima ou sua análise transversal (Sistema Espiar) CONTÉM informações de imagens/arquivos. Se o usuário perguntar sobre algo que você viu, CONSULTE estas informações. Você NÃO vê imagens em tempo real na voz, mas LEMBRA das análises.`
+      : `\n\nINSTRUÇÃO (MEMÓRIA VISUAL): Se o usuário perguntar sobre imagens e não houver análise no histórico ou memória transversal, diga que o contexto atual não contém essa informação e peça para ele reenviar o arquivo.`;
 
     // v5.0: Injetar Awarenes Snapshot (SSOT)
     const { SnapshotService } = await import('./snapshotService.js');
@@ -359,6 +410,7 @@ Regras de Plano: O plano atual (${(snapshot as any)?.plan || 'desconhecido'}) pe
       awarenessSnapshot + // SSOT v5.0
       LIA_FULL_PERSONALITY + "\n\n" +
       DASHBOARD_CONTROL_PROMPT + "\n\n" +
+      transverseVisionContext + // v5.5: Efeito 'Espiar'
       (summaryString || "") +
       (memoriesString ? `\n\n${memoriesString} ` : "") +
       (historyString || "") +

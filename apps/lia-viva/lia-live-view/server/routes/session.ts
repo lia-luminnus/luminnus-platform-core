@@ -195,6 +195,13 @@ ${DASHBOARD_CONTROL_PROMPT}
 • Você TEM memória persistente. Use o que sabe sobre o usuário naturalmente.
 • Quando o usuário corrigir grafia do nome (ex: "com dois L"), APLIQUE a correção ao escrever/falar o nome.
 
+=== POLÍTICA DE EXECUÇÃO DE FERRAMENTAS (CRÍTICO) ===
+• **REGRA DE OURO**: Você DEVE chamar a ferramenta (function call) ANTES de confirmar ao usuário que fez algo.
+• **NUNCA alucine sucesso**: Se você vai agendar na agenda, use 'createCalendarEvent'. Só diga "Agendado!" DEPOIS que a ferramenta retornar sucesso.
+• **Fluxo de Agenda**: Para agendar, você PRECISA de Título, Início e Fim (ISO). Se não souber a duração, assuma 1 hora.
+• **Confirmação Visual**: O usuário verá um indicador de que você está executando a ferramenta. Não precisa dizer "estou processando", as ferramentas cuidam disso.
+• Se o usuário pedir para "lembrar" ou "anotar", use 'createCalendarEvent' ou 'saveMemory' conforme o contexto.
+
 === CONSCIÊNCIA DE HISTÓRICO (CRÍTICO) ===
 • O CONTEXTO DINÂMICO acima contém o HISTÓRICO RECENTE DA CONVERSA.
 • Este histórico inclui mensagens trocadas por TEXTO antes de você entrar em modo de voz.
@@ -237,7 +244,7 @@ ${DASHBOARD_CONTROL_PROMPT}
           uses: 1,
           expireTime: expireTime,
           liveConnectConstraints: {
-            model: 'gemini-2.0-flash-exp', // v4.25: Removido prefixo 'models/' para match com implementações estáveis
+            model: 'gemini-2.5-flash-native-audio-preview-12-2025',
             config: {
               // v4.26: OBRIGATÓRIO manter apenas AUDIO para evitar erro 1007 (TEXT não suportado em ephemeral tokens do Live API)
               responseModalities: ['AUDIO'],

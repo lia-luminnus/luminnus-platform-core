@@ -11,30 +11,39 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
  * Mantém paridade com runGpt4Mini para fácil substituição.
  */
 export async function runGemini(userText, options = {}) {
-    // Converter ferramentas (OpenAI format -> Gemini format)
+    // Converter ferramentas (OpenAI format -> Gemini format) de forma recursiva (v4.0)
+    const convertSchema = (schema) => {
+        if (!schema) return undefined;
+        const type = (schema.type || 'object').toUpperCase();
+        const result = { type };
+        if (schema.description) result.description = schema.description;
+        if (schema.enum) result.format = 'enum', result.enum = schema.enum;
+
+        if (type === 'OBJECT') {
+            result.properties = Object.entries(schema.properties || {}).reduce((acc, [k, v]) => {
+                acc[k] = convertSchema(v);
+                return acc;
+            }, {});
+            if (schema.required) result.required = schema.required;
+        } else if (type === 'ARRAY') {
+            result.items = convertSchema(schema.items);
+        }
+        return result;
+    };
+
     let tools = undefined;
     if (options.functions && options.functions.length > 0) {
         tools = [{
             functionDeclarations: options.functions.map(f => ({
                 name: f.name,
                 description: f.description,
-                parameters: {
-                    type: "OBJECT",
-                    properties: Object.entries(f.parameters.properties || {}).reduce((acc, [k, v]) => {
-                        acc[k] = {
-                            type: v.type.toUpperCase(),
-                            description: v.description
-                        };
-                        return acc;
-                    }, {}),
-                    required: f.parameters.required || []
-                }
+                parameters: convertSchema(f.parameters)
             }))
         }];
     }
 
     const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-2.0-flash", // Corrigido de gemini-2.0-flash para versão estável
         systemInstruction: LIA_FULL_PERSONALITY,
         tools
     });
@@ -52,16 +61,43 @@ export async function runGemini(userText, options = {}) {
         };
     });
 
+    // v7.1: Suporte a arquivos (Imagens e Documentos) nativamente no Gemini 2.0
+    const parts = [{ text: userText }];
+
+    if (options.images && options.images.length > 0) {
+        options.images.forEach(img => {
+            parts.push({
+                inlineData: {
+                    mimeType: img.mimeType || 'image/jpeg',
+                    data: img.base64
+                }
+            });
+        });
+    }
+
+    if (options.documents && options.documents.length > 0) {
+        options.documents.forEach(doc => {
+            parts.push({
+                inlineData: {
+                    mimeType: doc.mimeType || 'application/pdf',
+                    data: doc.base64
+                }
+            });
+        });
+    }
+
     // Se não houver histórico nas mensagens, adicionar a atual para garantir que o contents reflita tudo
     let finalUserText = userText;
     if (contents.length === 0 || contents[contents.length - 1].role === 'model') {
         contents.push({
             role: 'user',
-            parts: [{ text: userText }]
+            parts: parts // v7.1: Usa as partes enriquecidas com anexos
         });
     } else {
-        // Se a última mensagem já é do usuário, vamos usá-la como o prompt atual
-        finalUserText = contents[contents.length - 1].parts[0].text;
+        // Se a última mensagem já é do usuário, vamos anexar as partes a ela
+        const lastMsg = contents[contents.length - 1];
+        lastMsg.parts = [...lastMsg.parts, ...parts.slice(1)]; // Adiciona apenas os anexos se o texto já estiver lá
+        finalUserText = lastMsg.parts[0].text;
     }
 
     try {

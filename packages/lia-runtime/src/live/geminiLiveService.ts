@@ -311,7 +311,7 @@ export class GeminiLiveService {
             }
 
             // 7. Conectar - SEM passar config explícita
-            console.log('[GeminiLiveService] Tentando conectar ao gemini-2.0-flash-exp...');
+            console.log('[GeminiLiveService] Tentando conectar ao gemini-2.5-flash-native-audio-preview-12-2025...');
             const ai = this.genAI as any;
             const liveClient = ai.live || (ai.models && ai.models.live);
 
@@ -321,7 +321,7 @@ export class GeminiLiveService {
             }
 
             this.liveSession = await liveClient.connect({
-                model: 'gemini-2.0-flash-exp',
+                model: 'gemini-2.5-flash-native-audio-preview-12-2025',
                 // v4.16: config REMOVIDIO - usar apenas o do token efêmero
                 callbacks: {
                     onopen: () => {
@@ -517,6 +517,10 @@ export class GeminiLiveService {
                 this.responseSent = false;
                 this.accumulatedUserText = '';
                 this.accumulatedLiaText = '';
+
+                // v7.0: Emitir generating-start para feedback visual imediato ("Penseira")
+                this.emitEvent({ type: 'generating-start', data: 'processing' });
+
                 this.startWatchdog();
             }
         }
@@ -697,6 +701,10 @@ export class GeminiLiveService {
                 this.currentSession.isSpeaking = false;
                 this.currentSession.isListening = true;
             }
+
+            // v7.0: Finalizar indicador de geração
+            this.emitEvent({ type: 'generating-end', data: 'turn_complete' });
+
             this.emitEvent({ type: 'listening' });
         }
     }

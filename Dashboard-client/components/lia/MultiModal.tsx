@@ -13,7 +13,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Send, Mic, MicOff, X, FileText, ImageIcon, Video, File, Loader2, Paperclip, Download } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLIA } from "./LIAContext";
-import { MarkdownRenderer } from "./MarkdownRenderer";
+import { LIAMessageRenderer } from "./LIAMessageRenderer";
 import { DynamicContentRenderer } from "./DynamicContentRenderer";
 import { StartVoiceButton } from "./StartVoiceButton";
 import { LuminnusLoading } from "./LuminnusLoading";
@@ -53,6 +53,7 @@ export function MultiModal() {
         typingByScope,
         isSpeaking,
         isLiveActive,
+        userRole,
         setDynamicContent,
         addDynamicContainer,
         isProcessingDynamic,
@@ -120,31 +121,52 @@ export function MultiModal() {
     useEffect(() => {
         const textarea = textareaRef.current;
         if (textarea) {
-            // Se estiver vazio, resetar para altura padrão
             if (!inputValue) {
-                textarea.style.height = "42px"; // Altura base para rows=1
+                textarea.style.height = "42px";
                 return;
             }
             textarea.style.height = "auto";
             const scrollHeight = textarea.scrollHeight;
-            textarea.style.height = `${Math.min(scrollHeight, 128)}px`; // Limitado a max-h-32 (128px)
+            textarea.style.height = `${Math.min(scrollHeight, 128)}px`;
         }
     }, [inputValue]);
 
-    // Handle send
+    useEffect(() => {
+        return () => {
+            attachedFiles.forEach(item => {
+                if (item.preview) {
+                    URL.revokeObjectURL(item.preview);
+                }
+            });
+        };
+    }, []);
+
     const handleSend = async () => {
         if (!inputValue.trim() && attachedFiles.length === 0) return;
 
         const content = inputValue || (attachedFiles.length > 0 ? "Analise estes arquivos" : "");
-
-        if (attachedFiles.length > 0 && sendMessageWithFiles) {
-            await sendMessageWithFiles(content, attachedFiles);
-        } else {
-            sendTextMessage(content);
-        }
-
+        const filesToSend = [...attachedFiles];
+        
+        // Limpar UI imediatamente para feedback instantâneo ao usuário
         setInputValue("");
         setAttachedFiles([]);
+
+        try {
+            if (filesToSend.length > 0 && sendMessageWithFiles) {
+                await sendMessageWithFiles(content, filesToSend);
+            } else {
+                await sendTextMessage(content);
+            }
+        } catch (error) {
+            console.error('Erro ao enviar mensagem:', error);
+        } finally {
+            // Revogar URLs após o envio (sucesso ou falha)
+            filesToSend.forEach(item => {
+                if (item.preview) {
+                    URL.revokeObjectURL(item.preview);
+                }
+            });
+        }
     };
 
     // handleFileSelect
@@ -240,15 +262,19 @@ export function MultiModal() {
                                 }`}
                         />
 
-                        {/* ORIGINAL Activity Overlay (Status Pill) - Restaurado conforme pedido do usuário */}
-                        {/* ORIGINAL Activity Overlay (Status Pill) - Restaurado conforme pedido do usuário */}
+                        {/* v7.0: Activity Overlay (Status Pill) - Shows tool-specific status */}
                         {(liaStatus || isThinking || isSpeaking) && (
                             <div className="absolute top-4 right-4 animate-in fade-in zoom-in duration-300 z-30">
-                                <div className={`backdrop-blur-md border rounded-full px-3 py-1 flex items-center gap-2 ${isThinking ? 'bg-purple-500/20 border-purple-500/50' : 'bg-cyan-500/20 border-cyan-500/50'
+                                <div className={`backdrop-blur-md border rounded-full px-3 py-1.5 flex items-center gap-2 ${isThinking ? 'bg-purple-500/20 border-purple-500/50' : 'bg-cyan-500/20 border-cyan-500/50'
                                     }`}>
-                                    <Loader2 className={`w-3 h-3 animate-spin ${isThinking ? 'text-purple-400' : 'text-cyan-400'}`} />
-                                    <span className={`text-[10px] font-bold uppercase tracking-widest leading-none ${isThinking ? 'text-purple-400' : 'text-cyan-400'}`}>
-                                        {isThinking ? 'LIA está pensando...' : (liaStatus ? liaStatus.replace('LIA: ', '') : 'LIA está falando')}
+                                    <Loader2 className={`w-3.5 h-3.5 animate-spin ${isThinking ? 'text-purple-400' : 'text-cyan-400'}`} />
+                                    <span className={`text-[11px] font-bold uppercase tracking-wide leading-none ${isThinking ? 'text-purple-400' : 'text-cyan-400'}`}>
+                                        {/* Prioridade: liaStatus específico > genérico */}
+                                        {liaStatus && !liaStatus.startsWith('LIA:')
+                                            ? liaStatus
+                                            : isThinking
+                                                ? 'LIA está pensando...'
+                                                : (liaStatus ? liaStatus.replace('LIA: ', '') : 'LIA está falando')}
                                     </span>
                                 </div>
                             </div>
@@ -311,7 +337,33 @@ export function MultiModal() {
                                             }`}>
                                             <div className="text-sm">
                                                 {msg.type === 'lia' ? (
-                                                    <MarkdownRenderer content={msg.content} />
+                                                    <LIAMessageRenderer
+                                                        content={msg.content}
+                                                        metadata={msg.metadata}
+                                                        showQuickActions={true}
+                                                        userRole={userRole || 'client'}
+                                                        onToolInvoke={(toolName, params) => {
+                                                            // Convert tool action to text message for LLM to process
+                                                            const actionMap: Record<string, string> = {
+                                                                'email.send': 'Enviar e-mail',
+                                                                'email.preview': 'Ver prévia do e-mail',
+                                                                'email.resend': 'Reenviar e-mail',
+                                                                'email.status': 'Ver status do envio',
+                                                                'docs.generate_corrected': 'Gerar versão corrigida',
+                                                                'docs.export_report': 'Exportar relatório',
+                                                                'ui.download_file': 'Baixar arquivo',
+                                                                'calendar.create': 'Agendar reunião',
+                                                                'calendar.send_invite': 'Enviar convite',
+                                                                'integrations.reconnect': 'Reconectar integração',
+                                                                'integrations.status': 'Ver status da integração',
+                                                                'support.open_ticket': 'Falar com suporte',
+                                                                'dashboard.navigate': (params as any)?.section || 'Navegar'
+                                                            };
+                                                            const actionText = actionMap[toolName] || toolName;
+                                                            console.log(`[MultiModal] Executando ação: ${actionText} (tool: ${toolName})`);
+                                                            sendTextMessage(actionText);
+                                                        }}
+                                                    />
                                                 ) : (
                                                     <p className="whitespace-pre-wrap">{msg.content}</p>
                                                 )}
@@ -370,7 +422,13 @@ export function MultiModal() {
                                             <div className="w-full h-full flex items-center justify-center bg-gray-800 text-xs">DOC</div>
                                         )}
                                         <button
-                                            onClick={() => setAttachedFiles(prev => prev.filter((_, idx) => idx !== i))}
+                                            onClick={() => {
+                                                const fileToRemove = attachedFiles[i];
+                                                if (fileToRemove.preview) {
+                                                    URL.revokeObjectURL(fileToRemove.preview);
+                                                }
+                                                setAttachedFiles(prev => prev.filter((_, idx) => idx !== i));
+                                            }}
                                             className="absolute inset-0 bg-red-500/80 items-center justify-center hidden group-hover:flex"
                                         >
                                             <X className="w-5 h-5 text-white" />

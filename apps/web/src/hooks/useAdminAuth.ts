@@ -2,10 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-
-const ADMIN_EMAILS = [
-  "luminnus.lia.ai@gmail.com", // email autorizado como admin
-];
+import { isAdminEmail, AUTH_URLS } from "@/config/auth";
 
 export function useAdminAuth() {
   const { user, loading, role } = useAuth();
@@ -14,7 +11,7 @@ export function useAdminAuth() {
   const [hasActivePlan, setHasActivePlan] = useState<boolean | null>(null);
 
   // Verificação baseada na role do AuthContext OU email hardcoded
-  const isAdmin = role === 'admin' || (user?.email && ADMIN_EMAILS.includes(user.email));
+  const isAdmin = role === 'admin' || isAdminEmail(user?.email);
 
   // Verifica se o usuário tem plano ativo
   useEffect(() => {

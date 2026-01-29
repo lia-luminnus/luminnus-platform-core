@@ -36,6 +36,17 @@ export const CAPABILITY_REGISTRY: Capability[] = [
         allowedPlans: ['plus', 'pro']
     },
     {
+        id: 'gmail.send_email',
+        provider: 'gmail',
+        action: 'send_email',
+        displayName: 'Enviar E-mail',
+        requiresAuth: true,
+        requiresConnection: true,
+        scopes: ['gmail.send'],
+        toolHandler: 'gmail_send',
+        allowedPlans: ['start', 'plus', 'pro']
+    },
+    {
         id: 'gmail.move_to_trash',
         provider: 'gmail',
         action: 'move_to_trash',
@@ -207,6 +218,18 @@ export function extractActionRequest(userText: string): ActionRequest | null {
             targets: [],
             params: {},
             capabilityId: 'calendar.create_event'
+        };
+    }
+
+    // Gmail: enviar email
+    if ((text.includes('envi') || text.includes('mand') || text.includes('escrev')) &&
+        (text.includes('email') || text.includes('e-mail') || text.includes('mensagem') || text.includes('correio'))) {
+        return {
+            provider: 'gmail',
+            action: 'send_email',
+            targets: [],
+            params: {},
+            capabilityId: 'gmail.send_email'
         };
     }
 

@@ -121,19 +121,34 @@ const Integrations: React.FC = () => {
     // v2.5: Aceitar session OU profile como fallback se user estiver temporariamente null
     if (initialized && !user && !session && !profile && !authLoading) {
         return (
-            <div className="flex flex-col h-full items-center justify-center gap-4 p-8 text-center">
-                <Lock className="h-16 w-16 text-yellow-500/50" />
-                <h2 className="text-xl font-bold text-white">Login Necessário</h2>
-                <p className="text-gray-400 max-w-md">
-                    Para acessar as integrações, você precisa estar autenticado.
-                    Por favor, faça login pelo aplicativo principal ou recarregue a página.
-                </p>
-                <button
-                    onClick={() => window.location.reload()}
-                    className="px-6 py-3 bg-brand-primary text-white font-bold rounded-xl hover:opacity-90 transition-opacity"
-                >
-                    Recarregar Página
-                </button>
+            <div className="flex flex-col h-full items-center justify-center gap-6 p-8 text-center bg-[#0A0F1A]/50 backdrop-blur-md rounded-3xl border border-white/5">
+                <div className="w-20 h-20 rounded-full bg-yellow-500/10 flex items-center justify-center animate-pulse">
+                    <Lock className="h-10 w-10 text-yellow-500" />
+                </div>
+                <div className="space-y-2">
+                    <h2 className="text-2xl font-black text-white tracking-tight">Login Necessário</h2>
+                    <p className="text-gray-400 max-w-md text-sm leading-relaxed">
+                        Para acessar as integrações inteligentes da LIA, sua sessão precisa ser validada com segurança pelo painel principal.
+                    </p>
+                </div>
+                <div className="flex gap-3">
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="px-6 py-3 bg-white/5 text-gray-400 font-bold rounded-xl hover:bg-white/10 transition-all border border-white/10"
+                    >
+                        Tentar Novamente
+                    </button>
+                    <button
+                        onClick={() => {
+                            const landingPage = import.meta.env.VITE_LANDING_PAGE_URL || 'http://localhost:8080';
+                            window.location.href = `${landingPage}/dashboard?redirect_to=integrations`;
+                        }}
+                        className="px-6 py-3 bg-brand-primary text-white font-black rounded-xl hover:scale-105 active:scale-95 transition-all shadow-xl shadow-brand-primary/20 flex items-center gap-2"
+                    >
+                        <span className="material-symbols-outlined text-sm">sync</span>
+                        Sincronizar Acesso
+                    </button>
+                </div>
             </div>
         );
     }
@@ -349,9 +364,10 @@ const Integrations: React.FC = () => {
         try {
             // v2.3: Redirecionamento unificado (porta 3000 via proxy) sem prefixo /lia
             const callbackUrl = window.location.origin + '/#/integrations';
+            const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || userId;
 
             // Passamos redirect_to no state para o unificado (3000) saber para onde voltar
-            const apiUrl = `/api/auth/google?services=${selectedGoogleServices.join(',')}&user_id=${userId}&redirect_to=${encodeURIComponent(callbackUrl)}&redirect_uri=${encodeURIComponent('http://localhost:3000/api/auth/google/callback')}`;
+            const apiUrl = `/api/auth/google?services=${selectedGoogleServices.join(',')}&user_id=${userId}&tenant_id=${tenantId}&redirect_to=${encodeURIComponent(callbackUrl)}&redirect_uri=${encodeURIComponent('http://localhost:3000/api/auth/google/callback')}`;
             console.log('[Integrations] Iniciando OAuth:', apiUrl);
 
             const response = await fetch(apiUrl);

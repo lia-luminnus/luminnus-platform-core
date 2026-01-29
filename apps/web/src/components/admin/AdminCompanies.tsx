@@ -96,18 +96,36 @@ const AdminCompanies = () => {
   const loadCompanies = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('companies')
+      // 1. Fetch Tenants
+      const { data: tenantsData, error: tenantsError } = await (supabase
+        .from('tenants' as any) as any)
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) {
-        // Se a tabela não existir, usar dados de demonstração
-        console.log('Tabela companies não existe, usando dados demo');
-        setCompanies([]);
-      } else {
-        setCompanies((data || []) as Company[]);
-      }
+      if (tenantsError) throw tenantsError;
+
+      // 2. Fetch Active Subscriptions for these tenants
+      const { data: subsData } = await (supabase
+        .from('subscriptions' as any) as any)
+        .select('tenant_id, plan_name, status');
+
+      // 3. Map to Company interface
+      const mappedCompanies: Company[] = (tenantsData || []).map((t: any) => {
+        const sub = subsData?.find((s: any) => s.tenant_id === t.id);
+        return {
+          id: t.id,
+          name: t.name,
+          cnpj: t.cnpj || '',
+          email: t.email || '',
+          phone: t.phone || '',
+          plan: sub?.plan_name || 'Nenhum',
+          status: (sub?.status === 'active' ? 'active' : 'pending') as any,
+          users_count: 0, // Placeholder
+          created_at: t.created_at,
+        };
+      });
+
+      setCompanies(mappedCompanies);
     } catch (error) {
       console.error('Erro ao carregar empresas:', error);
       setCompanies([]);
@@ -182,14 +200,12 @@ const AdminCompanies = () => {
 
     setIsSaving(true);
     try {
-      const { error } = await supabase.from('companies').insert({
+      const { error } = await (supabase.from('tenants' as any) as any).insert({
         name: formData.name,
         cnpj: formData.cnpj,
         email: formData.email,
         phone: formData.phone,
-        plan: formData.plan,
-        status: formData.status,
-        users_count: 0,
+        industry: 'Geral', // Default value
       });
 
       if (error) throw error;
@@ -205,7 +221,7 @@ const AdminCompanies = () => {
       console.error('Erro ao criar empresa:', error);
       toast({
         title: "Erro ao criar",
-        description: "Não foi possível criar a empresa. Verifique se a tabela existe.",
+        description: "Não foi possível criar a empresa.",
         variant: "destructive",
       });
     } finally {
@@ -218,15 +234,13 @@ const AdminCompanies = () => {
 
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from('companies')
+      const { error } = await (supabase
+        .from('tenants' as any) as any)
         .update({
           name: formData.name,
           cnpj: formData.cnpj,
           email: formData.email,
           phone: formData.phone,
-          plan: formData.plan,
-          status: formData.status,
         })
         .eq('id', selectedCompany.id);
 
@@ -256,8 +270,8 @@ const AdminCompanies = () => {
 
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from('companies')
+      const { error } = await (supabase
+        .from('tenants' as any) as any)
         .delete()
         .eq('id', selectedCompany.id);
 

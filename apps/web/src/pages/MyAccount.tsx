@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { User, Mail, CreditCard, ArrowLeft, Loader2, Save, Edit2, Bot, Check, CheckCircle2, Zap, Clock, ShieldCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { isAdminEmail } from '@/config/auth';
 
 /**
  * PÁGINA: MINHA CONTA
@@ -127,20 +128,51 @@ const MyAccount = () => {
   const planName = userPlan?.plano_nome || 'Nenhum';
   const planStatus = userPlan?.status || 'inativo';
 
+  const isAdmin = isAdminEmail(user.email);
+
   // Tradução do status para exibição
-  const statusDisplay = {
+  const statusDisplayMap: Record<string, string> = {
     'ativo': 'Ativo',
     'inativo': 'Inativo',
-    'cancelado': 'Cancelado'
-  }[planStatus] || 'Inativo';
+    'cancelado': 'Cancelado',
+    'active': 'Ativo',
+    'past_due': 'Atrasado',
+    'incomplete': 'Incompleto'
+  };
+
+  const statusDisplay = isAdmin ? 'Administrador' : (statusDisplayMap[planStatus] || 'Inativo');
 
   // Cor do badge de status
-  const statusColor = {
+  const statusColorMap: Record<string, string> = {
     'ativo': 'text-green-400 bg-green-500/10 border-green-500/20',
+    'active': 'text-green-400 bg-green-500/10 border-green-500/20',
     'inativo': 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
+    'past_due': 'text-orange-400 bg-orange-500/10 border-orange-500/20',
+    'incomplete': 'text-blue-400 bg-blue-500/10 border-blue-500/20',
     'cancelado': 'text-red-400 bg-red-500/10 border-red-500/20'
-  }[planStatus] || 'text-gray-400 bg-gray-500/10 border-gray-500/20';
+  };
 
+  const statusColor = isAdmin
+    ? 'text-purple-400 bg-purple-500/10 border-purple-500/20'
+    : (statusColorMap[planStatus] || 'text-gray-400 bg-gray-500/10 border-gray-500/20');
+
+  const isWithCommitment = userPlan?.payment_type === 'annual_12x';
+  const commitmentEndDate = userPlan?.commitment_end_date ? new Date(userPlan.commitment_end_date) : null;
+  const isInCommitmentPeriod = commitmentEndDate ? commitmentEndDate > new Date() : false;
+
+  const handleCancelClick = () => {
+    if (isInCommitmentPeriod) {
+      toast({
+        title: "Cancelamento Bloqueado",
+        description: `Seu plano possui fidelidade de 12 meses até ${commitmentEndDate?.toLocaleDateString('pt-BR')}. Entre em contato com o suporte para mais informações.`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Logic for normal cancellation (e.g. redirect to customer portal or open support)
+    window.open("mailto:suporte@luminnus.com.br?subject=Cancelamento de Assinatura", "_blank");
+  };
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0B0B0F] via-[#1a1a2e] to-[#0B0B0F] pt-32 pb-12 px-4">
       <div className="container mx-auto max-w-4xl">
@@ -302,32 +334,65 @@ const MyAccount = () => {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="bg-white/5 rounded-xl p-4 border border-white/5 mb-6">
+                <CardContent className="space-y-6">
+                  {/* DETALHES DA ASSINATURA */}
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm py-2 border-b border-white/5">
+                      <span className="text-white/60">Tipo de Pagamento</span>
+                      <span className="text-white font-medium">
+                        {userPlan.payment_type === 'annual_full' ? 'Anual à Vista' :
+                          userPlan.payment_type === 'annual_12x' ? '12x Mensal (Fidelidade)' : 'Mensal'}
+                      </span>
+                    </div>
+                    {isWithCommitment && (
+                      <div className="flex justify-between text-sm py-2 border-b border-white/5">
+                        <span className="text-white/60">Fim da Fidelidade</span>
+                        <span className="text-[#00C2FF] font-bold">
+                          {commitmentEndDate?.toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm py-2 border-b border-white/5">
+                      <span className="text-white/60">Próxima Renovação</span>
+                      <span className="text-white font-medium">
+                        {userPlan.data_fim ? new Date(userPlan.data_fim).toLocaleDateString('pt-BR') : 'Automática'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/5 rounded-xl p-4 border border-white/5">
                     <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mb-4">O que seu plano inclui:</h4>
                     <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                       {[
                         'Atendimento Ilimitado',
                         'Integração com WhatsApp',
                         'Inteligência Cognitiva LIA',
-                        'Dashboards em Tempo Real',
-                        'Suporte Prioritário',
-                        'Voz Viva LIA'
+                        'Dashboards em Tempo Real'
                       ].map((feature, i) => (
                         <li key={i} className="flex items-center gap-2 text-white/80">
-                          <CheckCircle2 className="w-4 h-4 text-green-400" />
+                          <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
                           {feature}
                         </li>
                       ))}
                     </ul>
                   </div>
-                  <Button
-                    onClick={() => navigate('/planos')}
-                    variant="outline"
-                    className="w-full border-white/10 text-white hover:bg-white/5 hover:border-[#6A00FF]/50"
-                  >
-                    Gerenciar ou Alterar Plano
-                  </Button>
+
+                  <div className="flex flex-col gap-3">
+                    <Button
+                      onClick={() => navigate('/planos')}
+                      variant="outline"
+                      className="w-full border-white/10 text-white hover:bg-white/5 hover:border-[#6A00FF]/50"
+                    >
+                      Alterar ou Fazer Upgrade
+                    </Button>
+
+                    <button
+                      onClick={handleCancelClick}
+                      className="text-xs text-red-400/60 hover:text-red-400 transition-colors text-center w-full mt-2"
+                    >
+                      {isInCommitmentPeriod ? 'Fidelidade Ativa - Ver detalhes' : 'Desejo cancelar minha assinatura'}
+                    </button>
+                  </div>
                 </CardContent>
               </Card>
             ) : (

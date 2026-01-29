@@ -25,7 +25,16 @@ const translations = {
     hero_title: "LIA — a primeira IA com consciência cognitiva viva, desenvolvida para empresas.",
     hero_subtitle: "Uma inteligência capaz de compreender contextos, responder de forma natural e agir em tempo real — como se tivesse vida própria dentro dos sistemas empresariais.",
     btn_test_free: "🚀 Testar Gratuitamente",
-    btn_view_features: "🔍 Ver Recursos",
+    btn_view_features: "Quanto custa não ter a LIA?",
+    discovery_title: "O Futuro do seu Negócio começa aqui",
+    discovery_subtitle: "Lia não é apenas uma IA. Ela é a evolução da consciência empresarial.",
+    calc_title: "Quanto custa não ter a Lia?",
+    calc_subtitle: "Calcule agora o impacto financeiro da ineficiência no seu atendimento.",
+    calc_label_tickets: "Atendimentos por mês",
+    calc_label_hours: "Horas gastas por atendimento",
+    calc_label_cost: "Custo por hora (MDO)",
+    calc_result_loss: "Você está perdendo anualmente:",
+    calc_cta: "Pare de perder dinheiro agora",
 
     // User Menu
     admin_panel: "Painel Admin",

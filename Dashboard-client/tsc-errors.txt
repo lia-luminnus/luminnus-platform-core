@@ -1,0 +1,8 @@
+components/lia/services/LiaActionHandler.ts(291,98): error TS2339: Property 'planRequired' does not exist on type 'WidgetMeta'.
+components/lia/services/LiaActionHandler.ts(294,87): error TS2339: Property 'planRequired' does not exist on type 'WidgetMeta'.
+components/lia/services/LiaActionHandler.ts(295,72): error TS2339: Property 'planRequired' does not exist on type 'WidgetMeta'.
+components/Onboarding.tsx(107,36): error TS2554: Expected 0-1 arguments, but got 2.
+components/Onboarding.tsx(280,52): error TS2554: Expected 0-1 arguments, but got 2.
+components/Settings.tsx(135,40): error TS2554: Expected 0-1 arguments, but got 2.
+components/Settings.tsx(162,40): error TS2554: Expected 0-1 arguments, but got 2.
+components/Settings.tsx(316,96): error TS2554: Expected 0-1 arguments, but got 2.

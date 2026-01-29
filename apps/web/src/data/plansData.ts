@@ -1,4 +1,5 @@
 export interface Plan {
+  id: string;
   name: string;
   price: string;
   annualPrice: string;
@@ -57,7 +58,7 @@ export const plans: Plan[] = [
       "WhatsApp Business (vários números)",
       "Chat integrado (com histórico)",
       "E-mail profissional",
-      "Messenger (Facebook), Telegram, Instagram Direct",
+      "Messenger (Facebook), Telegram",
       "Integração com CRM (HubSpot, RD Station, Pipedrive)",
       "Agenda integrada (Google, Outlook)",
       "Google Sheets / Excel online",

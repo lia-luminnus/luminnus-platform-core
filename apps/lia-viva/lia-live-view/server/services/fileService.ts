@@ -15,9 +15,12 @@ interface FileMetadata {
     file_size: number;
     storage_path?: string;
     storage_url?: string;
+    folder_id?: string | null;
     file_hash?: string;
     parse_method: string;
     status: 'uploaded' | 'processing' | 'parsed' | 'error';
+    scope?: 'personal' | 'tenant_shared' | 'lia_shared';
+    source?: 'user_upload' | 'lia_attachment' | 'lia_generated' | 'system';
     error_message?: string;
     processing_time_ms?: number;
     tokens_used?: number;
@@ -29,7 +32,7 @@ interface FileMetadata {
  * Serviço para gestão de arquivos (v2.0 - Storage + Metadata)
  */
 export class FileService {
-    private static readonly BUCKET_NAME = 'user-files';
+    private static readonly BUCKET_NAME = 'tenant-files';
 
     /**
      * Faz upload do arquivo para Supabase Storage
@@ -98,21 +101,106 @@ export class FileService {
     }
 
     /**
+     * Busca ou cria uma pasta por nome e escopo
+     */
+    static async getOrCreateFolder(tenantId: string, userId: string, name: string, scope: string): Promise<string | null> {
+        try {
+            // 1. Tentar buscar pasta existente
+            const { data: existing, error: fetchError } = await supabaseClient
+                .from('file_folders')
+                .select('id')
+                .eq('tenant_id', tenantId)
+                .eq('name', name)
+                .eq('scope', scope)
+                .maybeSingle();
+
+            if (existing) return existing.id;
+
+            // 2. Criar se não existir
+            const { data: created, error: createError } = await supabaseClient
+                .from('file_folders')
+                .insert({
+                    tenant_id: tenantId,
+                    owner_user_id: userId,
+                    name: name,
+                    scope: scope,
+                    path: `/${name}`
+                })
+                .select('id')
+                .single();
+
+            if (createError) {
+                console.error('[FileService] Erro ao criar pasta:', createError);
+                return null;
+            }
+
+            return created.id;
+        } catch (error) {
+            console.error('[FileService] Exceção em getOrCreateFolder:', error);
+            return null;
+        }
+    }
+
+    /**
      * Registra ou atualiza metadados de um arquivo no Supabase
      */
     static async saveMetadata(meta: FileMetadata) {
         try {
+            let existingScope: string | undefined;
+            let existingId: string | undefined;
+            let existingFolderId: string | null | undefined;
+            
+            if (meta.id) {
+                const { data: existing } = await supabaseClient
+                    .from('files')
+                    .select('id, scope, folder_id')
+                    .eq('id', meta.id)
+                    .single();
+                
+                if (existing) {
+                    existingScope = existing.scope;
+                    existingId = existing.id;
+                    existingFolderId = existing.folder_id;
+                }
+            }
+            
+            if (!existingId && meta.storage_path) {
+                const { data: existingByPath } = await supabaseClient
+                    .from('files')
+                    .select('id, scope, folder_id')
+                    .eq('storage_path', meta.storage_path)
+                    .eq('tenant_id', meta.tenant_id)
+                    .single();
+                
+                if (existingByPath) {
+                    existingScope = existingByPath.scope;
+                    existingId = existingByPath.id;
+                    existingFolderId = existingByPath.folder_id;
+                    console.log(`🔄 [FileService] Arquivo existente encontrado por storage_path: ${existingId}`);
+                }
+            }
+
             const payload: any = {
+                id: existingId || meta.id || crypto.randomUUID(),
                 tenant_id: meta.tenant_id,
-                user_id: meta.user_id,
-                file_name: meta.file_name,
-                file_type: meta.file_type,
-                file_size: meta.file_size,
+                user_id: meta.user_id,             // REDUNDANT (Bridge)
+                owner_user_id: meta.user_id,
+                name: meta.file_name,
+                file_name: meta.file_name,         // REDUNDANT (Bridge)
+                original_name: meta.file_name,
+                mime_type: meta.file_type,
+                file_type: meta.file_type,         // REDUNDANT (Bridge)
+                folder_id: meta.folder_id !== undefined ? meta.folder_id : (existingFolderId !== undefined ? existingFolderId : null),
+                size_bytes: meta.file_size,
+                file_size: meta.file_size,         // REDUNDANT (Bridge)
                 storage_path: meta.storage_path,
                 storage_url: meta.storage_url,
+                storage_bucket: this.BUCKET_NAME,
                 file_hash: meta.file_hash || this.calculateHash(meta.file_name),
                 parse_method: meta.parse_method,
-                status: meta.status,
+                status: meta.status === 'uploaded' ? 'active' : meta.status,
+                scope: meta.scope || existingScope || 'personal',
+                source: meta.source || 'user_upload',
                 error_message: meta.error_message,
                 processing_time_ms: meta.processing_time_ms,
                 tokens_used: meta.tokens_used,
@@ -255,6 +343,7 @@ export class FileService {
                 success: true,
                 file_name: file.file_name,
                 analysis: file.extracted_metadata?.analysis || 'Análise automática indisponível no momento.',
+                content_sample: file.extracted_metadata?.content_snapshot ? file.extracted_metadata.content_snapshot.substring(0, 5000) : null,
                 metadata: file.extracted_metadata || {}
             };
         } catch (error: any) {

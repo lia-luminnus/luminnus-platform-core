@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { isAdminEmail, AUTH_URLS } from '@/config/auth';
 
 /**
  * AuthCallback - Página de callback após login OAuth (Google)
@@ -29,51 +30,45 @@ const AuthCallback: React.FC = () => {
             // Se não tem usuário logado, volta para login
             if (!user) {
                 console.log('[AuthCallback] Sem usuário, redirecionando para login');
-                navigate('/login');
+                navigate(AUTH_URLS.LOGIN);
                 return;
             }
 
-            setMessage('Verificando seu plano...');
+            setMessage('Verificando seu acesso...');
 
             try {
-                // Verifica se é admin
-                const { data: roleData } = await supabase
-                    .from('user_roles')
-                    .select('role')
-                    .eq('user_id', user.id)
-                    .maybeSingle();
-
-                if (roleData?.role === 'admin') {
-                    console.log('[AuthCallback] Admin detectado, redirecionando para admin-dashboard');
-                    navigate('/admin-dashboard');
+                // Determine redirect path consistent with AuthContext
+                if (isAdminEmail(user.email)) {
+                    console.log('[AuthCallback] Admin detectado');
+                    navigate(AUTH_URLS.ADMIN_DASHBOARD);
                     return;
                 }
 
-                // Verifica se tem plano ativo
+                // Check for active plan
                 const { data: planData } = await supabase
                     .from('planos')
-                    .select('*')
+                    .select('id, status')
                     .eq('user_id', user.id)
                     .eq('status', 'ativo')
-                    .order('created_at', { ascending: false })
-                    .limit(1)
                     .maybeSingle();
 
                 if (planData) {
-                    console.log('[AuthCallback] Plano ativo encontrado, redirecionando para dashboard');
-                    setMessage('Plano ativo encontrado! Redirecionando...');
-                    navigate('/dashboard');
-                } else {
-                    console.log('[AuthCallback] Sem plano ativo, redirecionando para página de planos');
-                    setMessage('Você ainda não tem um plano. Redirecionando...');
-                    // Redireciona para a seção de planos na landing page
+                    console.log('[AuthCallback] Plano ativo encontrado');
+                    const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL || 'http://localhost:3001';
+                    setMessage('Redirecionando para o seu Dashboard...');
                     setTimeout(() => {
-                        navigate('/#planos');
-                    }, 1500);
+                        window.location.href = DASHBOARD_URL;
+                    }, 800);
+                } else {
+                    console.log('[AuthCallback] Sem plano ativo, redirecionando para o site principal');
+                    setMessage('Você não possui um plano ativo.');
+                    setTimeout(() => {
+                        navigate('/');
+                    }, 800);
                 }
+
             } catch (error) {
-                console.error('[AuthCallback] Erro ao verificar plano:', error);
-                // Em caso de erro, vai para a home
+                console.error('[AuthCallback] Erro no fluxo:', error);
                 navigate('/');
             }
         };

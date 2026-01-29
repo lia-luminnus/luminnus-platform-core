@@ -16,7 +16,7 @@ interface GoogleActionResponse {
 /**
  * Cria uma planilha no Google Sheets
  */
-export async function createGoogleSheet(userId: string, tenantId: string, title: string, headers: string[], rows: any[][]): Promise<GoogleActionResponse> {
+export async function createGoogleSheet(userId: string, tenantId: string, title: string, headers: string[], rows: any[][], aiPrompt?: string): Promise<GoogleActionResponse> {
     try {
         await AuditService.log(userId, tenantId, 'google', 'execution_requested', 'success', `Solicitada criação de planilha: ${title}`);
         const sheets = await GoogleService.getSheetsClient(userId, tenantId);
@@ -33,12 +33,16 @@ export async function createGoogleSheet(userId: string, tenantId: string, title:
         if (!spreadsheetId) throw new Error('Falha ao criar ID da planilha');
 
         // 2. Adicionar dados (Headers + Rows)
+        const finalRows = aiPrompt
+            ? [['PROMPT PARA GEMINI (GOOGLE AI):', aiPrompt], ['', ''], headers, ...rows]
+            : [headers, ...rows];
+
         await sheets.spreadsheets.values.update({
             spreadsheetId,
             range: 'A1',
             valueInputOption: 'USER_ENTERED',
             requestBody: {
-                values: [headers, ...rows]
+                values: finalRows
             }
         });
 
@@ -472,8 +476,18 @@ export async function updateGoogleSheet(
 /**
  * Cria um documento no Google Docs
  */
-export async function createGoogleDoc(userId: string, tenantId: string, title: string, content: string): Promise<GoogleActionResponse> {
+export async function createGoogleDoc(userId: string, tenantId: string, title: string, content: string, aiPrompt?: string): Promise<GoogleActionResponse> {
     try {
+        if (!content || content.trim().length === 0) {
+            console.error('[GoogleWorkspace] EMPTY_CONTENT: Tentativa de criar documento sem conteúdo.');
+            await AuditService.log(userId, tenantId, 'google', 'execution_failed', 'error', 'Tentativa de criar documento vazio.');
+            return { 
+                success: false, 
+                message: 'Não é possível criar um documento vazio. Por favor, forneça o conteúdo baseado na análise anterior ou especifique o que deve ser incluído.', 
+                error: 'EMPTY_CONTENT' 
+            };
+        }
+
         await AuditService.log(userId, tenantId, 'google', 'execution_requested', 'success', `Solicitada criação de documento: ${title}`);
         const docs = await GoogleService.getDocsClient(userId, tenantId);
         const drive = await GoogleService.getDriveClient(userId, tenantId);
@@ -490,6 +504,10 @@ export async function createGoogleDoc(userId: string, tenantId: string, title: s
         if (!documentId) throw new Error('Falha ao criar ID do documento');
 
         // 2. Inserir conteúdo
+        const finalContent = aiPrompt
+            ? `--- PROMPT PARA GEMINI (AI GOOGLE) ---\n${aiPrompt}\n---------------------------------------\n\n${content}`
+            : content;
+
         await docs.documents.batchUpdate({
             documentId,
             requestBody: {
@@ -497,7 +515,7 @@ export async function createGoogleDoc(userId: string, tenantId: string, title: s
                     {
                         insertText: {
                             location: { index: 1 },
-                            text: content
+                            text: finalContent
                         }
                     }
                 ]
@@ -542,14 +560,44 @@ function sanitizeEmail(email: string): string {
 }
 
 /**
- * Envia um e-mail via Gmail
+ * Envia um e-mail via Gmail com formatação HTML e Assinatura
  */
 export async function sendGmail(userId: string, tenantId: string, to: string, subject: string, body: string): Promise<GoogleActionResponse> {
     try {
-        // Sanitizar destinatário (vital para voz)
+        // 1. Sanitizar destinatário
         const sanitizedTo = sanitizeEmail(to);
 
-        await AuditService.log(userId, tenantId, 'google', 'execution_requested', 'success', `Solicitado envio de e-mail para: ${sanitizedTo} (original: ${to})`);
+        // 2. Converter Markdown para HTML básico (LIA Standard)
+        let htmlBody = body
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/\n/g, '<br>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            // Links Markdown [texto](url) -> <a href="url">texto</a>
+            .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" style="color: #0066cc; text-decoration: none;">$1</a>');
+
+        if (!htmlBody.startsWith('<p>')) htmlBody = `<p>${htmlBody}</p>`;
+
+        // 3. Injetar Assinatura se não presente
+        const signature = `
+            <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 15px; font-family: sans-serif; color: #666;">
+                <p style="margin: 0; font-weight: bold; color: #333;">LIA | Luminnus</p>
+                <p style="margin: 0; font-size: 12px;">Inteligência Artificial Enterprise</p>
+            </div>
+        `;
+
+        if (!body.includes('LIA | Luminnus')) {
+            htmlBody += signature;
+        }
+
+        // 4. Wrap em container profissional
+        const finalHtml = `
+            <div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #333; max-width: 600px;">
+                ${htmlBody}
+            </div>
+        `;
+
+        await AuditService.log(userId, tenantId, 'google', 'execution_requested', 'success', `Solicitado envio de e-mail para: ${sanitizedTo}`);
         const gmail = await GoogleService.getGmailClient(userId, tenantId);
 
         // Construir mensagem RFC 2822
@@ -560,7 +608,7 @@ export async function sendGmail(userId: string, tenantId: string, to: string, su
             'MIME-Version: 1.0',
             `Subject: ${utf8Subject}`,
             '',
-            body
+            finalHtml
         ];
         const message = messageParts.join('\n');
 
@@ -601,7 +649,7 @@ export async function createCalendarEvent(
     end: string,
     description?: string,
     forceCreate: boolean = false
-): Promise<GoogleActionResponse & { conflictDetected?: boolean; existingEvents?: any[] }> {
+): Promise<GoogleActionResponse & { conflictDetected?: boolean; existingEvents?: any[]; meetLink?: string }> {
     try {
         await AuditService.log(userId, tenantId, 'google', 'execution_requested', 'success', `Solicitado agendamento de evento: ${title}`);
         const calendar = await GoogleService.getCalendarClient(userId, tenantId);
@@ -642,19 +690,31 @@ export async function createCalendarEvent(
 
         const event = await calendar.events.insert({
             calendarId: 'primary',
+            conferenceDataVersion: 1, // Ativar geração de Meet
             requestBody: {
                 summary: title,
-                description,
+                description: description || 'Agendado via LIA | Luminnus',
                 start: { dateTime: startDate.toISOString() },
-                end: { dateTime: endDate.toISOString() }
+                end: { dateTime: endDate.toISOString() },
+                conferenceData: {
+                    createRequest: {
+                        requestId: `lia-${Date.now()}`,
+                        conferenceSolutionKey: { type: 'hangoutsMeet' }
+                    }
+                }
             }
         });
 
-        await AuditService.log(userId, tenantId, 'google', 'execution_success', 'success', `Evento "${title}" agendado.`);
+        // Extrair link do Meet se gerado
+        const meetLink = event.data.conferenceData?.entryPoints?.find(ep => ep.entryPointType === 'video')?.uri;
+        console.log(`🎥 [GoogleWorkspace] Meet Link gerado: ${meetLink || 'NADA'}`);
+
+        await AuditService.log(userId, tenantId, 'google', 'execution_success', 'success', `Evento "${title}" agendado. Meet: ${meetLink || 'Não gerado'}`);
         return {
             success: true,
-            message: `Evento "${title}" agendado com sucesso.`,
-            link: event.data.htmlLink || undefined
+            message: `Evento "${title}" agendado com sucesso.${meetLink ? ` Link do Meet: ${meetLink}` : ''}`,
+            link: event.data.htmlLink || undefined,
+            meetLink: meetLink || undefined
         };
     } catch (error: any) {
         console.error('[GoogleWorkspace] Erro ao agendar evento:', error);

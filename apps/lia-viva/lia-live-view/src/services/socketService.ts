@@ -132,15 +132,47 @@ class SocketService {
   }
 
   /**
-   * Envia mensagem de texto
+   * Envia mensagem de texto (NOVO PROTOCOLO com ACK)
    */
-  sendTextMessage(text: string, convId?: string, userId?: string, tenantId?: string) {
+  sendChatMessage(
+    text: string,
+    messageId: string,
+    convId?: string,
+    userId?: string,
+    tenantId?: string,
+    onAck?: (data: { messageId: string; status: string }) => void,
+    onReply?: (data: { messageId: string; conversationId: string; text: string; latency: number }) => void
+  ) {
+    const socket = this.getSocket();
+
+    // Registrar listeners temporários
+    if (onAck) {
+      socket.once('chat:ack', onAck);
+    }
+    if (onReply) {
+      socket.once('chat:reply', onReply);
+    }
+
+    socket.emit('chat:send', {
+      text,
+      messageId,
+      conversationId: convId || this.conversationId,
+      userId,
+      tenantId
+    });
+  }
+
+  /**
+   * Envia mensagem de texto (LEGADO - mantido para backward compatibility)
+   */
+  sendTextMessage(text: string, convId?: string, userId?: string, tenantId?: string, messageId?: string) {
     const socket = this.getSocket();
     socket.emit('text-message', {
       text,
       conversationId: convId || this.conversationId,
       userId,
-      tenantId
+      tenantId,
+      messageId // v6.0: Idempotência
     });
   }
 
@@ -158,12 +190,42 @@ class SocketService {
   }
 
   /**
-   * Sinaliza fim de áudio
+   * Sinaliza fim de áudio (NOVO PROTOCOLO com ACK)
    */
-  sendAudioEnd(convId?: string) {
+  sendVoiceMessage(
+    messageId: string,
+    convId?: string,
+    onAck?: (data: { messageId: string; status: string; transcript?: string }) => void,
+    onReply?: (data: { messageId: string; conversationId: string; text: string; audio: number[] | null; latency: number }) => void
+  ) {
+    const socket = this.getSocket();
+
+    // Registrar listeners temporários
+    if (onAck) {
+      socket.on('voice:ack', onAck);
+    }
+    if (onReply) {
+      socket.once('voice:reply', (data) => {
+        // Limpar listener de ACK quando reply chegar
+        socket.off('voice:ack');
+        onReply(data);
+      });
+    }
+
+    socket.emit('voice:send', {
+      conversationId: convId || this.conversationId,
+      messageId
+    });
+  }
+
+  /**
+   * Sinaliza fim de áudio (LEGADO - mantido para backward compatibility)
+   */
+  sendAudioEnd(convId?: string, messageId?: string) {
     const socket = this.getSocket();
     socket.emit('audio-end', {
       conversationId: convId || this.conversationId,
+      messageId // v6.0: Idempotência
     });
   }
 

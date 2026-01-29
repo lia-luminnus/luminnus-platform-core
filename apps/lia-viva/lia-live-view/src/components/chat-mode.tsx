@@ -348,7 +348,10 @@ export function ChatMode() {
                         }`}
                     >
                       {message.type === 'lia' ? (
-                        <MarkdownRenderer content={message.content} />
+                        <MarkdownRenderer
+                          content={message.content}
+                          onAction={(action) => sendTextMessage(action)}
+                        />
                       ) : (
                         <p className="whitespace-pre-wrap">{message.content}</p>
                       )}

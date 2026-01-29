@@ -21,6 +21,7 @@ class SocketService {
         tenantId: string;
         userId: string;
         plan?: string;
+        connections?: { gmail?: boolean; workspace?: boolean; calendar?: boolean };
     } | null = null;
 
     /**
@@ -42,10 +43,11 @@ class SocketService {
 
     /**
      * Define parâmetros de autenticação
+     * v1.3.0: Adicionado suporte a connections
      */
-    setAuthParams(params: { token: string; tenantId: string; userId: string; plan?: string }) {
+    setAuthParams(params: { token: string; tenantId: string; userId: string; plan?: string; connections?: { gmail?: boolean; workspace?: boolean; calendar?: boolean } }) {
         this.authParams = params;
-        console.log('🔐 [Socket] Parâmetros de autenticação configurados.');
+        console.log('🔐 [Socket] Parâmetros de autenticação configurados. Plan:', params.plan || 'não definido');
     }
 
     /**
@@ -188,8 +190,10 @@ class SocketService {
 
     /**
      * Envia mensagem de texto
+     * v1.3.0: Incluir userPlan e connections para plan awareness
+     * v6.0: Incluir clientMessageId para idempotência
      */
-    sendTextMessage(text: string, convId?: string) {
+    sendTextMessage(text: string, convId?: string, clientMessageId?: string) {
         if (!this.socket?.connected) {
             console.warn('⚠️ [Socket] Tentativa de envio sem conexão');
             return;
@@ -199,9 +203,13 @@ class SocketService {
             text,
             conversationId: convId || this.conversationId,
             userId: this.authParams?.userId,
-            tenantId: this.authParams?.tenantId
+            tenantId: this.authParams?.tenantId,
+            userPlan: this.authParams?.plan,
+            connections: this.authParams?.connections,
+            clientMessageId // v6.0: Pass stable ID for idempotent saves
         });
     }
+
 
     /**
      * Envia chunk de áudio para Live Mode

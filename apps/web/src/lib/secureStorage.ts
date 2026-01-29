@@ -1,10 +1,14 @@
 /**
  * Utility para armazenamento seguro de configurações sensíveis
- * ATENÇÃO: Este é um armazenamento básico. Para produção, considere usar variáveis de ambiente do servidor.
+ * 
+ * ⚠️ ATENÇÃO DE SEGURANÇA:
+ * Este armazenamento utiliza sessionStorage (limpo ao fechar a aba) com ofuscação básica.
+ * NÃO é criptografia real - é apenas para dificultar acesso casual.
+ * Para produção empresarial, mova segredos para variáveis de ambiente do servidor ou Edge Functions.
  */
 
 // Chave de criptografia simples (apenas ofuscação básica)
-const STORAGE_KEY = 'lia_admin_config_v1';
+const STORAGE_KEY = 'lia_admin_config_v2'; // v2 = sessionStorage
 const ENCODE_OFFSET = 7;
 
 // Função simples de encode/decode (ofuscação básica)
@@ -39,7 +43,7 @@ export interface AdminConfig {
 }
 
 export const secureStorage = {
-  // Salvar configurações
+  // Salvar configurações (agora em sessionStorage)
   save: (config: AdminConfig): void => {
     try {
       const data = JSON.stringify({
@@ -47,17 +51,17 @@ export const secureStorage = {
         lastUpdated: new Date().toISOString(),
       });
       const encoded = encodeData(data);
-      localStorage.setItem(STORAGE_KEY, encoded);
+      sessionStorage.setItem(STORAGE_KEY, encoded);
     } catch (error) {
       console.error('Erro ao salvar configurações:', error);
       throw new Error('Falha ao salvar configurações');
     }
   },
 
-  // Carregar configurações
+  // Carregar configurações (de sessionStorage)
   load: (): AdminConfig | null => {
     try {
-      const encoded = localStorage.getItem(STORAGE_KEY);
+      const encoded = sessionStorage.getItem(STORAGE_KEY);
       if (!encoded) return null;
 
       const decoded = decodeData(encoded);
@@ -70,23 +74,22 @@ export const secureStorage = {
 
   // Limpar configurações
   clear: (): void => {
-    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
   },
 
   // Verificar se existe configuração
   exists: (): boolean => {
-    return localStorage.getItem(STORAGE_KEY) !== null;
+    return sessionStorage.getItem(STORAGE_KEY) !== null;
+  },
+
+  // Aviso de segurança para exibir na UI
+  getSecurityWarning: (): string => {
+    return '⚠️ As chaves são armazenadas apenas nesta sessão do navegador. Elas serão perdidas ao fechar a aba.';
   },
 };
 
-// Senha master para acesso ao painel admin
-// IMPORTANTE: Troque esta senha antes de usar em produção!
-export const ADMIN_MASTER_PASSWORD = 'senha-da-lia-2025';
-
-// Verificar senha de admin
-export const verifyAdminPassword = (password: string): boolean => {
-  return password === ADMIN_MASTER_PASSWORD;
-};
+// REMOVIDO: ADMIN_MASTER_PASSWORD - Senhas hardcoded são inseguras.
+// Use autenticação via Supabase Auth com roles.
 
 // Session storage para controlar se admin está logado
 const ADMIN_SESSION_KEY = 'lia_admin_session';

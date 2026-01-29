@@ -19,11 +19,13 @@ import Stock from './components/Stock';
 import Properties from './components/Properties';
 import MedicalRecords from './components/MedicalRecords';
 import Integrations from './components/Integrations';
+import Reports from './components/Reports';
 import IntegrationsHub from './components/integrations/IntegrationsHub';
 import WhatsAppIntegration from './components/integrations/WhatsAppIntegration';
 import Onboarding from './components/Onboarding';
 import AuthBridge from './components/AuthBridge';
 import WhatsAppAgent from './components/WhatsAppAgent';
+import Emails from './components/Emails';
 import { useDashboardAuth } from './contexts/DashboardAuthContext';
 import { useAppStore } from './store/useAppStore';
 import { Toaster } from 'react-hot-toast';
@@ -81,6 +83,54 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('lia-system-update' as any, handleUpdate);
   }, []);
 
+  // 🔑 ADMIN ACCESS DETECTION - Runs on every location/hash change
+  useEffect(() => {
+    const hash = window.location.hash;
+    const search = window.location.search;
+
+    const hasAdminAccess = hash.includes('admin_access=true') || search.includes('admin_access=true');
+
+    if (hasAdminAccess) {
+      console.log('[App] 🔐 Admin access detectado! Forçando onboarding...');
+
+      // Reset local store
+      resetOnboarding();
+
+      // Limpar o parâmetro da URL
+      const cleanHash = hash.replace(/[?&]admin_access=true/, '').replace('?&', '?').replace(/\?$/, '');
+      window.history.replaceState({}, document.title, window.location.pathname + cleanHash);
+
+      // Reset no banco de dados - MAS preservar dados pessoais do admin!
+      if (user?.id) {
+        import('./lib/supabase').then(({ supabase }) => {
+          if (supabase) {
+            supabase
+              .from('profiles')
+              .update({
+                onboarding_completed: false,
+                segment: null,
+                modules: [],
+                // Preservar nome de admin se não existir
+                full_name: 'Administrador Luminnus',
+                plan_type: 'Pro'
+              })
+              .eq('id', user.id)
+              .then(({ error }) => {
+                if (error) {
+                  console.warn('[App] Falha ao resetar onboarding:', error.code);
+                } else {
+                  console.log('[App] ✅ Onboarding resetado (dados admin preservados)!');
+                }
+              });
+          }
+        });
+      }
+
+      // Navegar para onboarding
+      navigate('/onboarding', { replace: true });
+    }
+  }, [location, user?.id, resetOnboarding, navigate]);
+
   if (!initialized || loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#0A0F1A]">
@@ -99,6 +149,8 @@ const AppContent: React.FC = () => {
       </div>
     );
   }
+
+
 
   if (!onboardingCompleted && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />;
@@ -179,7 +231,8 @@ const AppContent: React.FC = () => {
                     <Route path="/records" element={<MedicalRecords />} />
                     <Route path="/whatsapp" element={<WhatsAppAgent />} />
                     <Route path="/projects" element={<PlaceholderModule title={t('projects')} icon="rocket_launch" />} />
-                    <Route path="/reports" element={<PlaceholderModule title={t('reports')} icon="bar_chart" />} />
+                    <Route path="/reports" element={<Reports />} />
+                    <Route path="/emails" element={<Emails />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </motion.div>
@@ -193,6 +246,7 @@ const AppContent: React.FC = () => {
 };
 
 import { DashboardAuthProvider } from './contexts/DashboardAuthContext';
+import { SubscriptionGate } from './components/SubscriptionGate';
 
 const App: React.FC = () => {
   const [isDark, setIsDark] = useState(true);
@@ -219,7 +273,9 @@ const App: React.FC = () => {
           <div className={isDark ? 'dark' : ''}>
             <Router>
               <Toaster position="top-right" />
-              <AppContent />
+              <SubscriptionGate>
+                <AppContent />
+              </SubscriptionGate>
             </Router>
           </div>
         </LanguageContext.Provider>

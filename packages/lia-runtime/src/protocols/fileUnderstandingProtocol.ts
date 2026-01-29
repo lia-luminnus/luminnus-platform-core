@@ -163,20 +163,16 @@ export function getResponseConstraints(mode: IntentMode, userWantsDetail: boolea
 }
 
 /**
- * Template obrigatório para MODO A (Incidente)
+ * Template sugerido para MODO A (Incidente)
+ * v7.5: Tornado OPCIONAL e mais humano.
  */
 export function templateIncident(): string {
     return `
-1) **ACHADO PRINCIPAL** (1 linha direta)
-2) **EVIDÊNCIA** (1 linha do arquivo ou sinal detectado)
-3) **CAUSA RAIZ PROVÁVEL** (Explicação técnica curta)
-4) **CORREÇÃO MÍNIMA RECOMENDADA**
-• [Ação 1]
-• [Ação 2]
-5) **VALIDAÇÃO**
-• [Verificação 1]
-• [Verificação 2]
-• [Verificação 3]
+Analise o problema de forma natural seguindo estes pontos:
+- O que está acontecendo (Achado Principal)
+- Evidência ou erro detectado
+- Causa provável
+- Sugestão de correção e como validar
 `.trim();
 }
 
@@ -206,42 +202,12 @@ export function templateAction(executed: boolean, capability?: string): string {
 /**
  * Validador de QA para a resposta gerada
  */
-export function validateResponse(mode: IntentMode, responseText: string): { ok: boolean; errors: string[] } {
+export function validateResponse(lowerText: string): { ok: boolean; errors: string[] } {
     const errors: string[] = [];
-    const lowerText = responseText.toLowerCase();
-
-    // ACTION: PROIBIDO usar template de incidente
-    if (mode === IntentMode.ACTION) {
-        const forbiddenInAction = ['achado principal', 'evidência', 'causa raiz provável'];
-        for (const forbidden of forbiddenInAction) {
-            if (lowerText.includes(forbidden)) {
-                errors.push(`Resposta ACTION contém "${forbidden}" (proibido)`);
-            }
-        }
-
-        const lines = responseText.split('\n').filter(l => l.trim().length > 0);
-        if (lines.length > 12) {
-            errors.push(`Resposta ACTION muito longa (${lines.length} linhas, máximo 10)`);
-        }
-    }
-
-    // INCIDENT/HYBRID: Requer fix e validação
-    if (mode === IntentMode.INCIDENT || mode === IntentMode.HYBRID) {
-        if (!lowerText.includes('correção mínima') && !lowerText.includes('correção recomendada')) {
-            errors.push('Falta seção de "Correção mínima"');
-        }
-        if (!lowerText.includes('validação')) {
-            errors.push('Falta seção de "Validação"');
-        }
-
-        const lines = responseText.split('\n').filter(l => l.trim().length > 0);
-        if (lines.length > 20 && !lowerText.includes('passo a passo')) {
-            errors.push(`Resposta de incidente muito longa (${lines.length} linhas)`);
-        }
-    }
-
+    
+    // v7.5: Flexibilidade Total - Validamos apenas se a resposta não é genérica demais
     // Anti-descrição vazia
-    if (lowerText.includes('na imagem há') && !lowerText.includes('causa raiz')) {
+    if (lowerText.includes('na imagem há') && !lowerText.includes('causa') && !lowerText.includes('porque') && lowerText.length < 100) {
         errors.push('Detectada descrição genérica sem diagnóstico/resolução');
     }
 

@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
+import { AUTH_URLS } from "@/config/auth";
 
 interface PrivateRouteProps {
   children: ReactNode;
@@ -16,9 +17,8 @@ interface PrivateRouteProps {
  * @param role - Optional role requirement ("cliente" or "admin")
  * @param redirectTo - Optional custom redirect path (default: /imobiliaria/login)
  */
-const PrivateRoute = ({ children, role, redirectTo = "/imobiliaria/login" }: PrivateRouteProps) => {
+const PrivateRoute = ({ children, role, redirectTo = AUTH_URLS.LOGIN }: PrivateRouteProps) => {
   const { user, loading, role: userRole } = useAuth();
-  const location = useLocation();
 
   // Show loading state while checking authentication
   if (loading) {
@@ -41,7 +41,7 @@ const PrivateRoute = ({ children, role, redirectTo = "/imobiliaria/login" }: Pri
   if (role) {
     // Admin routes: only admins can access
     if (role === "admin" && userRole !== "admin") {
-      return <Navigate to="/cliente" replace />;
+      return <Navigate to="/" replace />;
     }
     // Cliente routes: both clientes and admins can access
     // (admins can view cliente area for support purposes)

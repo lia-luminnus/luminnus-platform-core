@@ -135,7 +135,7 @@ Extraia apenas o conteúdo útil para um agente de IA atender via WhatsApp.`;
                 mimetype: file.mimetype,
                 data: base64Data,
                 name: file.originalname
-            }, prompt, 'gemini-2.0-flash-exp');
+            }, prompt, 'gemini-2.0-flash');
 
             // 2. Salvar no Storage para referência futura (opcional, persistência)
             const storageResult = await FileService.uploadToStorage(
@@ -186,7 +186,7 @@ Responda de forma direta, clara e profissional, pronta para ser colada no editor
                 mimetype: 'text/plain',
                 data: Buffer.from(`Playbook: ${playbookName}`).toString('base64'),
                 name: 'request.txt'
-            }, prompt, 'gemini-2.0-flash-exp');
+            }, prompt, 'gemini-2.0-flash');
 
             res.json({
                 ok: true,

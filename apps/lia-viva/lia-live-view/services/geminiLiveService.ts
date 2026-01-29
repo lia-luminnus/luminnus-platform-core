@@ -210,7 +210,7 @@ export class GeminiLiveService {
       await this.initializeAudioContexts();
 
       const liveConfig: any = {
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-2.0-flash",
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {

@@ -131,7 +131,8 @@ export class ToolService {
                     properties: {
                         title: { type: 'string' },
                         headers: { type: 'array', items: { type: 'string' } },
-                        rows: { type: 'array', items: { type: 'array', items: { type: 'string' } } }
+                        rows: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
+                        aiPrompt: { type: 'string', description: 'Instrução mestre para o Gemini dentro do Google Sheets.' }
                     },
                     required: ['title', 'headers', 'rows']
                 }
@@ -161,23 +162,33 @@ export class ToolService {
             },
             {
                 name: 'createGoogleDoc',
-                description: 'Cria um documento real no Google Docs.',
+                description: `Cria um documento real no Google Docs com conteúdo estruturado.
+⚠️ REGRAS CRÍTICAS:
+- O campo 'content' DEVE ser preenchido com o máximo de detalhes possível a partir do contexto da conversa.
+- Se o usuário pedir um documento sobre algo que foi discutido anteriormente, REUTILIZE essas informações sem pedir confirmação.
+- É PROIBIDO enviar conteúdo vazio ou apenas placeholders.
+- Estruture o conteúdo de forma clara: use títulos, subtítulos, bullets e parágrafos quando apropriado.`,
                 parameters: {
                     type: 'object',
                     properties: {
-                        title: { type: 'string' },
-                        content: { type: 'string' }
+                        title: { type: 'string', description: 'Título do documento' },
+                        content: { type: 'string', description: 'Conteúdo completo do documento. DEVE ser detalhado e baseado no contexto da conversa.' },
+                        aiPrompt: { type: 'string', description: 'Instrução mestre para o Gemini dentro do Google Docs (opcional).' }
                     },
                     required: ['title', 'content']
                 }
             },
             {
                 name: 'sendGmail',
-                description: 'Envia um e-mail real.',
+                description: `Envia um e-mail real seguindo o padrão LIA Enterprise.
+⚠️ REGRAS CRÍTICAS:
+- É TERMINANTEMENTE PROIBIDO usar placeholders ou links genéricos.
+- Se o link do Meet for necessário mas não fornecido, você DEVE usar 'searchGmail' ou 'listCalendarEvents' para encontrar o link REAL antes de enviar.
+- Sempre use o preview/draft gerado pelo OutputContracts.`,
                 parameters: {
                     type: 'object',
                     properties: {
-                        to: { type: 'string' },
+                        to: { type: 'string', description: 'E-mail real do destinatário' },
                         subject: { type: 'string' },
                         body: { type: 'string' }
                     },
@@ -532,9 +543,31 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
         ];
     }
 
-    static async execute(name: string, args: any, context: { userId: string; tenantId: string; userLocation?: any }) {
-        const { userId, tenantId } = context;
-        console.log(`🔧 [ToolService] Executando: ${name}`);
+    static async execute(name: string, args: any, context: { userId: string; tenantId: string; userRole?: string; userLocation?: any }) {
+        const { userId, tenantId, userRole = 'client' } = context;
+        console.log(`🔧 [ToolService] Executando: ${name} (Role: ${userRole})`);
+
+        // ============================================
+        // ACTION POLICY ENFORCEMENT (v1.5)
+        // ============================================
+        const adminOnlyTools = [
+            'getSystemHealth', 'getSystemLogs', 'readProjectFile', 'getProjectMap',
+            'getProjectFiles', 'test_endpoint', 'validateDomain', 'dns_check', 'dkim_check'
+        ];
+
+        const prohibitedPatterns = [/debug\./i, /logs?\./i, /test_endpoint/i, /validateDomain/i, /dns/i, /dkim/i, /view_logs/i, /system_health/i];
+
+        if (userRole !== 'admin') {
+            const isProhibited = adminOnlyTools.includes(name) || prohibitedPatterns.some(pattern => pattern.test(name));
+            if (isProhibited) {
+                console.warn(`🛑 [ToolService] Ação bloqueada para role ${userRole}: ${name}`);
+                return {
+                    success: false,
+                    error: "ACTION_NOT_ALLOWED_SCOPE",
+                    message: "Você não tem permissão para acessar ferramentas administrativas ou de diagnóstico. Essa funcionalidade é restrita à equipe técnica Luminnus."
+                };
+            }
+        }
 
         diagnosticService.broadcastStep(userId, 'TOOL_EXECUTION', {
             tool: name,
@@ -605,7 +638,16 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                     };
                 }
                 case 'createGoogleSheet': {
-                    return await GoogleWorkspaceTools.createGoogleSheet(userId, tenantId, args.title, args.headers, args.rows);
+                    // v7.0: Tool Contract Enforcement
+                    if (!args.rows || !Array.isArray(args.rows) || args.rows.length === 0) {
+                        console.error('❌ [ToolService] createGoogleSheet: rows vazio ou inválido');
+                        return {
+                            success: false,
+                            error: 'EMPTY_ROWS',
+                            message: 'Não foi possível criar a planilha pois não há dados para inserir. Por favor, forneça o conteúdo ou analise um arquivo primeiro.'
+                        };
+                    }
+                    return await GoogleWorkspaceTools.createGoogleSheet(userId, tenantId, args.title, args.headers, args.rows, args.aiPrompt);
                 }
                 case 'updateGoogleSheet': {
                     return await GoogleWorkspaceTools.updateGoogleSheet(userId, tenantId, args.spreadsheetId, args.operations);
@@ -614,7 +656,7 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                     return await GoogleWorkspaceTools.createProFinancialSheet(userId, tenantId, args.title);
                 }
                 case 'createGoogleDoc': {
-                    return await GoogleWorkspaceTools.createGoogleDoc(userId, tenantId, args.title, args.content);
+                    return await GoogleWorkspaceTools.createGoogleDoc(userId, tenantId, args.title, args.content, args.aiPrompt);
                 }
                 case 'sendGmail': {
                     return await GoogleWorkspaceTools.sendGmail(userId, tenantId, args.to, args.subject, args.body);

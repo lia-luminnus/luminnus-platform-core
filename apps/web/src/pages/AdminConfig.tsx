@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Key, Database, Settings, Eye, EyeOff, Save, Trash2, LogOut, Shield } from 'lucide-react';
+import { Lock, Key, Database, Settings, Eye, EyeOff, Save, Trash2, LogOut, Shield, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,15 +11,15 @@ import { toast } from 'sonner';
 import {
   secureStorage,
   adminSession,
-  verifyAdminPassword,
   type AdminConfig,
 } from '@/lib/secureStorage';
+import { useAuth } from '@/contexts/AuthContext';
+import { isAdminEmail } from '@/config/auth';
 
 export default function AdminConfig() {
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Configurações
@@ -42,14 +42,27 @@ export default function AdminConfig() {
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyValue, setNewKeyValue] = useState('');
 
-  // Verificar se já está autenticado ao carregar
+  // Verificar autenticação via Supabase Auth (admin role)
   useEffect(() => {
-    if (adminSession.isValid()) {
-      setIsAuthenticated(true);
-      loadConfig();
+    if (authLoading) return;
+
+    if (!user) {
+      navigate('/auth');
+      return;
     }
+
+    if (!isAdminEmail(user.email)) {
+      toast.error('Acesso negado', { description: 'Apenas administradores podem acessar esta página.' });
+      navigate('/');
+      return;
+    }
+
+    // Admin autenticado via Supabase
+    adminSession.create(); // Mantém compatibilidade com adminSession
+    setIsAuthenticated(true);
+    loadConfig();
     setLoading(false);
-  }, []);
+  }, [user, authLoading, navigate]);
 
   const loadConfig = () => {
     const savedConfig = secureStorage.load();
@@ -58,28 +71,10 @@ export default function AdminConfig() {
     }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (verifyAdminPassword(password)) {
-      adminSession.create();
-      setIsAuthenticated(true);
-      loadConfig();
-      toast.success('Acesso autorizado!', {
-        description: 'Bem-vindo ao painel de administração.',
-      });
-      setPassword('');
-    } else {
-      toast.error('Senha incorreta', {
-        description: 'A senha de administrador está incorreta.',
-      });
-    }
-  };
-
   const handleLogout = () => {
     adminSession.destroy();
     setIsAuthenticated(false);
-    setPassword('');
+    navigate('/');
     toast.info('Sessão encerrada', {
       description: 'Você saiu do painel admin.',
     });
@@ -166,7 +161,7 @@ export default function AdminConfig() {
     );
   }
 
-  // Tela de Login
+  // Tela de Redirecionamento (caso ainda falhe auth check)
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-4">
@@ -179,58 +174,11 @@ export default function AdminConfig() {
               Painel Admin LIA
             </CardTitle>
             <CardDescription className="text-gray-400">
-              Acesso restrito - apenas administradores
+              Você será redirecionado para autenticação...
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-gray-300">
-                  Senha Master
-                </Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Digite a senha de administrador"
-                    className="pl-10 pr-10 bg-black/20 border-purple-500/30 text-white placeholder:text-gray-500"
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <Alert className="bg-yellow-500/10 border-yellow-500/30">
-                <AlertDescription className="text-yellow-200 text-sm">
-                  ⚠️ Esta é uma área restrita. Acesso não autorizado é proibido.
-                </AlertDescription>
-              </Alert>
-
-              <Button
-                type="submit"
-                className="w-full bg-purple-600 hover:bg-purple-700"
-              >
-                Acessar Painel
-              </Button>
-
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full text-gray-400 hover:text-white"
-                onClick={() => navigate('/')}
-              >
-                Voltar ao Site
-              </Button>
-            </form>
+          <CardContent className="flex justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
           </CardContent>
         </Card>
       </div>

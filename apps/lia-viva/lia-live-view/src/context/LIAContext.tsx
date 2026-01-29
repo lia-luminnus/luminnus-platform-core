@@ -22,6 +22,7 @@ export interface Message {
   content: string;
   timestamp: number;
   attachments?: {
+    id?: string;
     name: string;
     type: 'image' | 'document' | 'video' | 'audio' | 'other';
     url?: string;
@@ -175,6 +176,8 @@ export interface LIAState {
   userId: string | null;
   tenantId: string | null;
   plan: string | null;
+  role: string | null;
+  user: { id: string | null; role: string | null; plan: string | null } | null;
 
   // Outros
   clearMessages: () => void;
@@ -227,6 +230,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
   const [userId, setUserId] = useState<string | null>(null);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
   const userIdRef = useRef<string | null>(null);
   const tenantIdRef = useRef<string | null>(null);
   const lastLocationSentAtRef = useRef<number>(0);
@@ -313,18 +317,39 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
   // v2.6: MENTE ÚNICA - Sincronizar Usuário e Autenticação do multi-tenant
   useEffect(() => {
-    const syncUser = () => {
+    const syncUser = async () => {
       const storedAuth = localStorage.getItem('supabase.auth.token');
       if (storedAuth) {
         try {
           const authData = JSON.parse(storedAuth);
           const uId = authData.user?.id || null;
-          const userPlan = authData.user?.app_metadata?.plan || null;
+          let userPlan = authData.user?.app_metadata?.plan || null;
           if (uId) {
             setUserId(uId);
             setTenantId(uId); // Em dev usamos o mesmo ID para tenant
+
+            let userRole = authData.user?.app_metadata?.role || 'client';
+
+            // v1.3.1: Se não tiver plano no app_metadata, buscar do backend
+            if (!userPlan || !authData.user?.app_metadata?.role) {
+              try {
+                const profile = await backendService.getUserProfile() as any;
+                if (profile?.plan) {
+                  userPlan = profile.plan;
+                  console.log('📋 [LIAContext] Plano carregado do backend:', userPlan);
+                }
+                if (profile?.role) {
+                  userRole = profile.role;
+                  console.log('📋 [LIAContext] Role carregado do backend:', userRole);
+                }
+              } catch (e) {
+                console.warn('[LIAContext] Falha ao buscar perfil completo do backend');
+              }
+            }
+
             setPlan(userPlan);
-            console.log('👤 [LIAContext] Usuário sincronizado:', uId, 'Plano:', userPlan);
+            setRole(userRole);
+            console.log('👤 [LIAContext] Usuário sincronizado:', uId, 'Role:', userRole, 'Plano:', userPlan);
 
             // Sincronizar com o socket para voz/realtime
             import('@/services/socketService').then(({ socketService }) => {
@@ -391,18 +416,30 @@ export function LIAProvider({ children }: LIAProviderProps) {
   const addMessageToScope = useCallback((scopeKey: string, message: Message) => {
     setMessagesByScope(prev => {
       const scopeMessages = prev[scopeKey] || [];
-      const updated = { ...prev, [scopeKey]: [...scopeMessages, message] };
 
-      // Salvar no localStorage por escopo
-      try {
-        localStorage.setItem(`lia_scope_${scopeKey}`, JSON.stringify(updated[scopeKey]));
-      } catch (e) {
-        console.error('Erro ao salvar mensagens do escopo:', e);
+      // v6.0: De-duplicação Rigorosa (SSOT Supabase)
+      // 1. Verificar por ID único (Prioridade Total)
+      if (scopeMessages.some(m => m.id === message.id)) {
+        console.log(`ℹ️ [Deduplication] Mensagem ${message.id} já existe no escopo: ${scopeKey}`);
+        return prev;
       }
 
+      // 2. Verificar por conteúdo e proximidade temporal (fallback para mensagens sem ID estável)
+      const isDuplicateContent = scopeMessages.some(m =>
+        m.content === message.content &&
+        m.type === message.type &&
+        Math.abs(m.timestamp - message.timestamp) < 2000
+      );
+
+      if (isDuplicateContent) {
+        console.log(`🚫 [Deduplication] Conteúdo duplicado ignorado no escopo: ${scopeKey}`);
+        return prev;
+      }
+
+      const updated = { ...prev, [scopeKey]: [...scopeMessages, message] };
       return updated;
     });
-    console.log(`💬 [Scope] Mensagem adicionada ao escopo: ${scopeKey}`);
+    console.log(`💬 [Scope] Mensagem ${message.id} adicionada ao escopo: ${scopeKey}`);
   }, []);
 
   // v3.5: Sync addToScopeRef for Gemini Live events
@@ -428,35 +465,41 @@ export function LIAProvider({ children }: LIAProviderProps) {
     setMessagesByScope(prev => {
       const updated = { ...prev };
       delete updated[scopeKey];
-
-      // Limpar localStorage
-      try {
-        localStorage.removeItem(`lia_scope_${scopeKey}`);
-      } catch (e) {
-        console.error('Erro ao limpar escopo:', e);
-      }
-
       return updated;
     });
     console.log(`🗑️ [Scope] Mensagens limpas do escopo: ${scopeKey}`);
   }, []);
 
   // Definir escopo ativo (modo:conversa atual)
-  const setActiveScope = useCallback((scopeKey: string | null) => {
+  const setActiveScope = useCallback(async (scopeKey: string | null) => {
     setActiveScopeState(scopeKey);
     activeScopeRef.current = scopeKey;
 
-    // Carregar mensagens deste escopo se existirem em localStorage
-    if (scopeKey) {
+    // v6.0: Carregar histórico do Supabase se o escopo mudar e não tivermos mensagens
+    if (scopeKey && (!messagesByScopeRef.current[scopeKey] || messagesByScopeRef.current[scopeKey].length === 0)) {
+      console.log(`🔄 [SSOT] Carregando histórico do Supabase para escopo: ${scopeKey}`);
       try {
-        const stored = localStorage.getItem(`lia_scope_${scopeKey}`);
-        if (stored) {
-          const msgs = JSON.parse(stored);
-          setMessagesByScope(prev => ({ ...prev, [scopeKey]: msgs }));
-          console.log(`📂 [Scope] ${msgs.length} mensagens carregadas do escopo: ${scopeKey}`);
+        const history = await backendService.loadMessagesFromDB(scopeKey);
+        if (history.length > 0) {
+          // v6.0: Salvaguarda contra duplicatas no DB (mensagens sem ID único ou bug de persistência)
+          const uniqueHistory: Message[] = [];
+          const seenIds = new Set<string>();
+
+          history.forEach(msg => {
+            if (msg.id && !seenIds.has(msg.id)) {
+              uniqueHistory.push(msg);
+              seenIds.add(msg.id);
+            } else if (!msg.id) {
+              // Se não tem ID, manter (mensagens legadas)
+              uniqueHistory.push(msg);
+            }
+          });
+
+          setMessagesByScope(prev => ({ ...prev, [scopeKey]: uniqueHistory }));
+          console.log(`✅ [SSOT] ${uniqueHistory.length} mensagens únicas carregadas para o escopo: ${scopeKey}`);
         }
-      } catch (e) {
-        console.error('Erro ao carregar escopo:', e);
+      } catch (err) {
+        console.warn(`⚠️ [SSOT] Falha ao carregar histórico para ${scopeKey}:`, err);
       }
     }
   }, []);
@@ -532,16 +575,16 @@ export function LIAProvider({ children }: LIAProviderProps) {
         activeIdsByModeRef.current = localActiveIds;
         currentIdRef.current = localCurrentId;
 
-        // Carregar mensagens de cada conversa para os escopos
+        // Carregar mensagens de cada conversa para os escopos (v6: Apenas do Supabase se carregadas)
+        // Por enquanto, as bolhas aparecem conforme o histórico é injetado ou carregado via getHistory
         const initialScopes: Record<string, Message[]> = {};
-        Object.values(localConvs).forEach(conv => {
-          if (conv.messages && conv.messages.length > 0) {
-            const scopeKey = conv.id;
-            initialScopes[scopeKey] = conv.messages;
-          }
-        });
         setMessagesByScope(initialScopes);
         messagesByScopeRef.current = initialScopes;
+
+        // v6.0: Acionar carga inicial para a conversa ativa
+        if (localCurrentId) {
+          setActiveScope(localCurrentId);
+        }
 
       } catch (error) {
         console.error('Erro ao carregar conversas:', error);
@@ -565,15 +608,22 @@ export function LIAProvider({ children }: LIAProviderProps) {
     loadConversations();
   }, []);
 
-  // Função para salvar no localStorage
+  // Função para salvar no localStorage (Apenas Metadados v6.0)
   const saveToStorage = useCallback((
     convs: { [id: string]: Conversation },
     currentId: string | null,
     activeIds: Record<'chat' | 'multimodal' | 'live', string | null>
   ) => {
     try {
+      // Limpar mensagens dos objetos de conversa para não poluir o localStorage
+      const metadataOnlyConvs: any = {};
+      Object.keys(convs).forEach(id => {
+        const { messages, ...metadata } = convs[id];
+        metadataOnlyConvs[id] = metadata;
+      });
+
       localStorage.setItem('lia_conversations_v4', JSON.stringify({
-        conversations: convs,
+        conversations: metadataOnlyConvs,
         currentId: currentId,
         activeIdsByMode: activeIds
       }));
@@ -604,7 +654,9 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
         updatedConvs[convId] = {
           ...currentConvs[convId],
-          messages: scopeMsgs,
+          // v6.0: SSOT - Não persistimos mensagens no objeto de conversa do localStorage
+          // As mensagens vivem apenas no Supabase e no messagesByScope (memória)
+          messages: [],
           updatedAt: Date.now()
         };
         hasChanges = true;
@@ -1178,12 +1230,12 @@ export function LIAProvider({ children }: LIAProviderProps) {
       setIsTyping(false);
       setIsSpeaking(false);
 
-      const text = typeof payload === 'string' ? payload : (payload.text || payload.reply || '');
+      const text = typeof payload === 'string' ? payload : (payload.text || payload.reply || payload.content || '');
       const convId = payload.conversationId || payload.convId || null;
       const mode = payload.mode || null;
       const audio = payload.audio || null;
 
-      if (!text && !audio) return;
+      if (!text && !audio && !payload.attachments) return;
 
       // 0. Tocar áudio se presente (MESMO sem texto)
       if (audio && audio.length > 0 && playAudioRef.current) {
@@ -1201,7 +1253,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
       // 1. Tentar detectar JSON estruturado (Lousa)
       const parsedContent = tryParseStructuredContent(text);
-      let attachments: Message['attachments'] = undefined;
+      let attachments: Message['attachments'] = payload.attachments || undefined;
       let finalContent = text;
 
       if (parsedContent) {
@@ -1230,9 +1282,12 @@ export function LIAProvider({ children }: LIAProviderProps) {
       }
 
       // 2. Adicionar ao chat se não for duplicado
+      // v2.6: Usar payload.type ou payload.role para determinar se é usuário ou LIA
+      const messageType = (payload.type === 'user' || payload.role === 'user') ? 'user' : 'lia';
+
       const newMessage: Message = {
-        id: `lia_${Date.now()}`,
-        type: 'lia',
+        id: payload.id || `lia_${Date.now()}`, // v6.0: Usar ID do backend para idempotência
+        type: messageType,
         content: finalContent,
         timestamp: Date.now(),
         attachments
@@ -1242,9 +1297,9 @@ export function LIAProvider({ children }: LIAProviderProps) {
       const currentScopeMessages = messagesByScopeRef.current[scopeKey || ''] || [];
       const lastMsg = currentScopeMessages[currentScopeMessages.length - 1];
 
-      if (!lastMsg || lastMsg.content !== finalContent || attachments) {
+      if (!lastMsg || lastMsg.id !== newMessage.id || (lastMsg.content !== finalContent || attachments)) {
         if (addToScopeRef.current) {
-          addToScopeRef.current(newMessage, mode, convId);
+          addToScopeRef.current(newMessage, mode, convId || scopeKey || undefined);
         }
       }
     };
@@ -1286,6 +1341,12 @@ export function LIAProvider({ children }: LIAProviderProps) {
       }
     };
 
+    const handleFileUploaded = (fileData: any) => {
+      console.log('📂 [LIAContext] Novo arquivo recebido via real-time:', fileData.name);
+      // Disparar evento customizado para que componentes (como a aba Arquivos) possam atualizar
+      window.dispatchEvent(new CustomEvent('lia-file-uploaded', { detail: fileData }));
+    };
+
     // Registrar eventos
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
@@ -1295,6 +1356,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
     socket.on('audio-response', handleAudioResponse);
     socket.on('user-transcript', handleUserTranscript);
     socket.on('audio-ack', handleAudioAck);
+    socket.on('file-uploaded', handleFileUploaded);
 
     // Cleanup
     return () => {
@@ -1306,6 +1368,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
       socket.off('audio-response', handleAudioResponse);
       socket.off('user-transcript', handleUserTranscript);
       socket.off('audio-ack', handleAudioAck);
+      socket.off('file-uploaded', handleFileUploaded);
     };
   }, []); // CRITICAL: Empty deps - handlers use refs internally
 
@@ -1455,7 +1518,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
     // Adicionar mensagem do usuário AO ESCOPO correto
     const userMessage: Message = {
-      id: `user_${Date.now()}`,
+      id: crypto.randomUUID(), // v6.0: ID persistente para idempotência (SSOT)
       type: 'user',
       content: text,
       timestamp: Date.now(),
@@ -1482,7 +1545,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
     try {
       // v5.4: Usar scopeKey como conversationId (escopo unificado)
       socketService.registerConversation(scopeKey, userIdRef.current || undefined, tenantIdRef.current || undefined);
-      socketService.sendTextMessage(fullText, scopeKey, userIdRef.current || undefined, tenantIdRef.current || undefined);
+      // v6.0: Enviar messageId para garantir idempotência no backend
+      socketService.sendTextMessage(fullText, scopeKey, userIdRef.current || undefined, tenantIdRef.current || undefined, userMessage.id);
     } catch (error) {
       console.error('❌ Erro ao enviar mensagem:', error);
     }
@@ -1529,7 +1593,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
     // 1. Adicionar mensagem do usuário COM attachment ao chat (ESCOPO CORRETO)
     const userMessage: Message = {
-      id: `user_${Date.now()}`,
+      id: crypto.randomUUID(), // v6.0: Idempotência garantida
       type: 'user',
       content: prompt,
       timestamp: Date.now(),
@@ -1567,6 +1631,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
       if (userId) formData.append('userId', userId);
       if (tenantId) formData.append('tenantId', tenantId);
       if (plan) formData.append('userPlan', plan);
+      formData.append('messageId', userMessage.id); // v6.0: Idempotência
 
 
       // Desativar loading de upload, ativar typing bubbles (aguardando resposta da AI)
@@ -1595,7 +1660,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         'Análise concluída!';
 
       const liaMessage: Message = {
-        id: `lia_${Date.now()}`,
+        id: `resp_${userMessage.id}`, // v6.0: ID determinístico para coincidir com o Supabase
         type: 'lia',
         content: analysisText,
         timestamp: Date.now(),
@@ -1617,7 +1682,10 @@ export function LIAProvider({ children }: LIAProviderProps) {
               ...scopeMessages[userMsgIndex],
               attachments: scopeMessages[userMsgIndex].attachments?.map(att => ({
                 ...att,
-                url: result.storageUrl
+                // v2.4: Preservar data-url local se já existir para evitar cintilação/erro de carregamento
+                url: (att.url && att.url.startsWith('data:')) ? att.url : (result.storageUrl || att.url),
+                // Adicionar id do armazenamento para persistência futura
+                id: result.fileId || result.id || att.id
               }))
             };
           }
@@ -2025,7 +2093,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
           // Se silêncio persistir por SILENCE_DURATION, processar o que temos
           if (hasChunks && Date.now() - lastVoiceTime > SILENCE_DURATION) {
             console.log('🤫 Silêncio detectado - processando áudio automaticamente...');
-            socketService.sendAudioEnd();
+            const msgId = crypto.randomUUID(); // v6.0: Idempotência
+            socketService.sendAudioEnd(activeId, msgId);
             hasChunks = false; // Resetar para o próximo bloco de fala
             lastVoiceTime = Date.now();
           }
@@ -2076,7 +2145,9 @@ export function LIAProvider({ children }: LIAProviderProps) {
     setIsSpeaking(false);
 
     // Sinalizar fim de áudio para o backend processar
-    socketService.sendAudioEnd();
+    const activeId = activeIdsByModeRef.current.multimodal || activeIdsByModeRef.current.chat || undefined;
+    const msgId = crypto.randomUUID(); // v6.0: Idempotência
+    socketService.sendAudioEnd(activeId, msgId);
   }, [stopTalking]);
 
   /**
@@ -2245,9 +2316,14 @@ export function LIAProvider({ children }: LIAProviderProps) {
         Se contiver tabelas, transcreva-as.
         Forneça insights úteis.`);
 
+      // v6.0: Gerar ID para a mensagem do usuário (Idempotência)
+      const userMessageId = crypto.randomUUID();
+      formData.append('messageId', userMessageId);
+
       // v2.6: MENTE ÚNICA - Incluir credenciais
       formData.append('userId', userIdRef.current || '');
       formData.append('tenantId', tenantIdRef.current || '');
+      formData.append('conversationId', activeIdsByModeRef.current.multimodal || '');
 
       const storedAuth = localStorage.getItem('supabase.auth.token');
       let authHeaders: any = {};
@@ -2399,6 +2475,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
     userId,
     tenantId,
     plan,
+    role,
+    user: { id: userId, role, plan },
     clearMessages,
   };
 

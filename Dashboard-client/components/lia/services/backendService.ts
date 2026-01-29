@@ -8,7 +8,7 @@ import { Message } from '../LIAContext';
 
 // URL do backend via ENV (produção-ready)
 // Em dev: http://localhost:3000 | Em prod: URL do Render
-const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000';
 
 export interface Memory {
     id: string;

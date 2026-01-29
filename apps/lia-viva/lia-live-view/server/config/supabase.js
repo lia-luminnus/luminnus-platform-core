@@ -105,26 +105,47 @@ export async function getUserProfile(userId) {
     }
 }
 
-export async function saveMessage(conversationId, role, content, origin = "text", attachments = []) {
+/**
+ * v6.0: Salva mensagem com idempotência enterprise-grade
+ * @param {string} messageId - UUID gerado pelo cliente (obrigatório para idempotência)
+ * @param {string} conversationId 
+ * @param {string} role 
+ * @param {string} content 
+ * @param {string} origin 
+ * @param {Array} attachments 
+ */
+export async function saveMessage(conversationId, role, content, origin = "text", attachments = [], messageId = null) {
     if (!supabase) {
         console.warn("⚠️ [saveMessage] Supabase não configurado — mensagem não foi persistida.");
         return;
     }
 
     try {
-        const { error } = await supabase.from("messages").insert({
+        // v6.0: Gerar UUID se não fornecido (fallback para compatibilidade)
+        const finalMessageId = messageId || crypto.randomUUID();
+
+        const { error } = await supabase.from("messages").upsert({
+            id: finalMessageId,
             conversation_id: conversationId,
             role,
             content,
             origin,
             attachments: Array.isArray(attachments) ? attachments : [],
+        }, {
+            onConflict: 'id'
         });
 
 
         if (error) {
+            // Ignorar erro de conflito (já existe) - isso é esperado com idempotência
+            if (error.code === '23505') {
+                console.log(`ℹ️ [saveMessage] Mensagem ${finalMessageId} já existe (idempotente).`);
+                return;
+            }
             console.error("❌ [saveMessage] Erro ao salvar mensagem:", error);
             throw new Error(`Error saving message: ${error.message}`);
         }
+        console.log(`💾 [saveMessage] Mensagem ${finalMessageId} salva com sucesso.`);
     } catch (err) {
         console.error("❌ [saveMessage] Exceção ao salvar mensagem:", err);
         throw err;
@@ -168,6 +189,7 @@ export async function loadConversation(conversationId, limit = 10) {
             .from("messages")
             .select("*")
             .eq("conversation_id", conversationId)
+            .not('role', 'in', '("system","system_summary")')
             .order("created_at", { ascending: false })
             .limit(limit);
 
@@ -950,5 +972,55 @@ export async function getActiveDashboard(tenantId) {
     } catch (err) {
         console.error("❌ [getActiveDashboard] Exceção:", err);
         return null;
+    }
+}
+
+/**
+ * v5.5: findRecentAttachments (Efeito 'Espiar')
+ * Busca mensagens com anexos em qualquer conversa do usuário para manter consciência global.
+ * v5.6: Reescrito para evitar erro PGRST200 (FK ausente entre messages e conversations)
+ */
+export async function findRecentAttachments(userId, limit = 5) {
+    if (!supabase) return [];
+    try {
+        // Step 1: Get all conversation IDs for this user
+        const { data: userConversations, error: convError } = await supabase
+            .from('conversations')
+            .select('id')
+            .eq('user_id', userId);
+
+        if (convError || !userConversations?.length) {
+            console.log(`📭 [findRecentAttachments] Nenhuma conversa encontrada para user: ${userId}`);
+            return [];
+        }
+
+        const conversationIds = userConversations.map(c => c.id);
+
+        // Step 2: Query messages with attachments in those conversations
+        const { data, error } = await supabase
+            .from('messages')
+            .select(`
+                content,
+                role,
+                attachments,
+                created_at,
+                conversation_id
+            `)
+            .in('conversation_id', conversationIds)
+            .not('attachments', 'is', null)
+            .not('attachments', 'eq', '[]')
+            .order('created_at', { ascending: false })
+            .limit(limit);
+
+        if (error) {
+            console.error("❌ [findRecentAttachments] Erro:", error);
+            return [];
+        }
+
+        console.log(`👁️ [findRecentAttachments] Encontrados ${data?.length || 0} anexos recentes`);
+        return data || [];
+    } catch (err) {
+        console.error("❌ [findRecentAttachments] Exceção:", err);
+        return [];
     }
 }

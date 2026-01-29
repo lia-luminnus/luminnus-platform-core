@@ -67,10 +67,9 @@ const Hero = () => {
                 {t('btn_test_free')}
               </Button>
               <Button
-                onClick={() => scrollToSection('#solucoes')}
+                onClick={() => window.location.href = '/descubra'}
                 size="lg"
-                variant="outline"
-                className="border-primary/30 text-foreground hover:bg-primary/10 text-lg px-8 py-6"
+                className="bg-gradient-to-r from-[#00C2FF] to-[#7C3AED] hover:opacity-90 text-lg px-8 py-6 text-white font-semibold"
               >
                 {t('btn_view_features')}
               </Button>

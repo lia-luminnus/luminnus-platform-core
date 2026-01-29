@@ -103,7 +103,8 @@ const Onboarding: React.FC = () => {
           console.error('[Onboarding] Error instantiating dashboard:', e);
         }
 
-        await refreshProfile(user);
+        console.log('[Onboarding] Finalizando no banco e forçando refresh...');
+        await refreshProfile(user, true);
       }
 
       // Sempre atualiza estado local (funciona mesmo sem autenticação)
@@ -275,8 +276,8 @@ const Onboarding: React.FC = () => {
                           console.error('[Onboarding] Error instantiating dashboard:', e);
                         }
 
-                        console.log('[Onboarding] Atualizando perfil local...');
-                        await refreshProfile(user);
+                        console.log('[Onboarding] Atualizando perfil local (forçado)...');
+                        await refreshProfile(user, true);
                       }
                       setBusinessInfo(selectedCategory || 'other', selectedDescription || 'Personalizado');
                       setModules(tempModules.length > 0 ? tempModules : ['dashboard', 'lia', 'settings']);

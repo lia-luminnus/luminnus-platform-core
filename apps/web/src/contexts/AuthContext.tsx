@@ -2,11 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import type { Company, Plan } from '@/types/shared';
-
-const ADMIN_EMAILS = ["luminnus.lia.ai@gmail.com"];
-
-// Emails de administradores da imobiliaria
-const IMOB_ADMIN_EMAILS = ["admin@imobiliaria.com", "luminnus.lia.ai@gmail.com"];
+import { ADMIN_EMAILS, isAdminEmail, AUTH_URLS } from '@/config/auth';
 
 export type UserRole = "cliente" | "admin" | null;
 
@@ -103,8 +99,9 @@ const getUserRole = async (user: User | null): Promise<UserRole> => {
       .eq('user_id', user.id)
       .maybeSingle();
 
-    if (data?.role === 'admin') return 'admin';
-    if (data?.role === 'cliente') return 'cliente';
+    const roleData = data as { role: string } | null;
+    if (roleData?.role === 'admin') return 'admin';
+    if (roleData?.role === 'cliente') return 'cliente';
 
     // Fallback: verifica se o email está na lista de admins
     if (user.email && ADMIN_EMAILS.includes(user.email)) {
@@ -138,13 +135,14 @@ const syncClienteRecord = async (user: User): Promise<string | null> => {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (existingCliente) {
-      return existingCliente.id;
+    const existing = existingCliente as { id: string } | null;
+    if (existing) {
+      return existing.id;
     }
 
     // Se nao existe, cria novo registro (upsert por segurança)
-    const { data: newCliente, error } = await supabase
-      .from("clientes")
+    const { data: newCliente, error } = await (supabase
+      .from("clientes") as any)
       .upsert({
         user_id: user.id,
         nome: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Cliente',
@@ -161,7 +159,7 @@ const syncClienteRecord = async (user: User): Promise<string | null> => {
       return null;
     }
 
-    return newCliente?.id || null;
+    return (newCliente as { id: string })?.id || null;
   } catch (err) {
     console.error('Erro ao sincronizar cliente:', err);
     return null;
@@ -275,37 +273,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       return { data: null, error: { message: getErrorMessage(error) } };
     }
 
-    // Verifica se o usuário é admin e redireciona
+    // Verify Role & Plan for consistent redirection
     if (data?.user) {
       const userRole = await getUserRole(data.user);
+      setRole(userRole);
+
       if (userRole === 'admin') {
         window.location.href = '/admin-dashboard';
         return { data, error: null };
       }
-    }
 
-    // Para usuários comuns, verifica se tem plano ativo
-    if (data?.user) {
-      try {
-        const { data: planData } = await supabase
-          .from('planos')
-          .select('*')
-          .eq('user_id', data.user.id)
-          .eq('status', 'ativo')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      // Check Plan for regular users
+      const { data: planData } = await (supabase
+        .from('planos' as any) as any)
+        .select('*')
+        .eq('user_id', data.user.id)
+        .eq('status', 'ativo')
+        .maybeSingle();
 
-        // Se tiver plano ativo, redireciona para o dashboard
-        if (planData) {
-          window.location.href = '/dashboard';
-        } else {
-          // Se não tiver plano, redireciona para a página principal
-          window.location.href = '/';
-        }
-      } catch (err) {
-        console.error('Erro ao verificar plano do usuário:', err);
-        // Em caso de erro, redireciona para a página principal
+      if (planData) {
+        window.location.href = '/dashboard';
+      } else {
         window.location.href = '/';
       }
     }
@@ -417,30 +405,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
    * - cliente -> /cliente
    */
   const login = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (error) {
-      return { data: null, error: { message: getErrorMessage(error) } };
-    }
-
-    // Update role immediately after login
-    if (data?.user) {
-      const userRole = await getUserRole(data.user);
-      setRole(userRole);
-
-      // Sincroniza registro do cliente
-      const id = await syncClienteRecord(data.user);
-      setClienteId(id);
-
-      // Redireciona baseado no role
-      if (userRole === 'admin') {
-        window.location.href = '/admin-imob';
-      } else {
-        window.location.href = '/cliente';
-      }
-    }
-
-    return { data, error: null };
+    return signIn(email, password);
   };
 
   /**

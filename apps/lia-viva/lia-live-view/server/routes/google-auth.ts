@@ -48,10 +48,11 @@ const GOOGLE_SCOPES: Record<string, string[]> = {
 // ===========================================================
 router.get('/google', async (req: Request, res: Response) => {
     try {
-        const { services, redirect_uri, user_id, redirect_to } = req.query as {
+        const { services, redirect_uri, user_id, tenant_id, redirect_to } = req.query as {
             services?: string;
             redirect_uri?: string;
             user_id?: string;
+            tenant_id?: string;
             redirect_to?: string;
         };
 
@@ -77,6 +78,7 @@ router.get('/google', async (req: Request, res: Response) => {
         // State para segurança (inclui user_id e serviços)
         const state = Buffer.from(JSON.stringify({
             user_id: user_id || 'anonymous',
+            tenant_id: tenant_id || user_id || null,
             services: selectedServices,
             redirect_to: redirect_to || 'http://localhost:3001/#/integrations',
             timestamp: Date.now()
@@ -179,24 +181,26 @@ router.post('/google/callback', async (req: Request, res: Response) => {
 
         // Salvar tokens no Supabase (se tiver user_id)
         if (stateData.user_id && stateData.user_id !== 'anonymous' && supabase) {
+            const tenantId = stateData.tenant_id || stateData.user_id;
             const { error: userIntError } = await supabase
-                .from('user_integrations')
+                .from('integrations_connections')
                 .upsert({
+                    tenant_id: tenantId,
                     user_id: stateData.user_id,
                     provider: 'google_workspace',
-                    services: stateData.services || [],
-                    status: 'active',
-                    google_email: googleUser?.email,
+                    scopes: stateData.services || [],
+                    status: 'connected',
+                    provider_email: googleUser?.email,
                     access_token: tokens.access_token,
                     refresh_token: tokens.refresh_token,
                     expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-                    connected_at: new Date().toISOString()
-                }, { onConflict: 'user_id,provider' });
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'tenant_id,user_id,provider' });
 
             if (userIntError) {
-                console.error('[OAuth Google] Erro ao salvar em user_integrations:', userIntError);
+                console.error('[OAuth Google] Erro ao salvar em integrations_connections:', userIntError);
             } else {
-                console.log(`[OAuth Google] Tokens salvos com sucesso para user: ${stateData.user_id}`);
+                console.log(`[OAuth Google] Tokens salvos com sucesso para user: ${stateData.user_id} (tenant: ${tenantId})`);
             }
         }
 
@@ -216,28 +220,33 @@ router.post('/google/callback', async (req: Request, res: Response) => {
 // ===========================================================
 router.get('/google/status', async (req: Request, res: Response) => {
     try {
-        const { user_id } = req.query;
+        const { user_id, tenant_id } = req.query;
 
         if (!user_id || !supabase) {
             return res.json({ connected: false });
         }
 
-        const { data, error } = await supabase
-            .from('user_integrations')
+        const query = supabase
+            .from('integrations_connections')
             .select('*')
             .eq('user_id', user_id)
-            .eq('provider', 'google_workspace')
-            .single();
+            .eq('provider', 'google_workspace');
+
+        if (tenant_id) {
+            query.eq('tenant_id', tenant_id);
+        }
+
+        const { data, error } = await query.single();
 
         if (error || !data) {
             return res.json({ connected: false });
         }
 
         res.json({
-            connected: data.status === 'active',
-            email: data.google_email,
-            services: data.services,
-            connectedAt: data.connected_at
+            connected: data.status === 'connected',
+            email: data.provider_email,
+            services: data.scopes,
+            connectedAt: data.created_at
         });
     } catch (error: any) {
         console.error('[OAuth Google] Erro ao verificar status:', error);
@@ -250,17 +259,23 @@ router.get('/google/status', async (req: Request, res: Response) => {
 // ===========================================================
 router.delete('/google', async (req: Request, res: Response) => {
     try {
-        const { user_id } = req.query;
+        const { user_id, tenant_id } = req.query;
 
         if (!user_id || !supabase) {
             return res.status(400).json({ error: 'user_id obrigatório' });
         }
 
-        const { error } = await supabase
-            .from('user_integrations')
+        const query = supabase
+            .from('integrations_connections')
             .delete()
             .eq('user_id', user_id)
             .eq('provider', 'google_workspace');
+
+        if (tenant_id) {
+            query.eq('tenant_id', tenant_id);
+        }
+
+        const { error } = await query;
 
         if (error) {
             console.error('[OAuth Google] Erro ao desconectar:', error);

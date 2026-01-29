@@ -1,5 +1,5 @@
 import './config/envLoader.js';// [RELOAD_TRIGGER] v4.0.1 - Applying personality updates
-const RELOAD_STAMP = "2026-01-16T18:35:00";
+const RELOAD_STAMP = "2026-01-29T16:00:00";
 // ===========================================================
 // LIA UNIFIED SERVER - Port 3000
 // Frontend (Vite) + Backend (Express + Socket.io + WebRTC)
@@ -27,7 +27,7 @@ function cleanPort(port: number | string) {
         const pid = line.trim().split(/\s+/).pop();
         if (pid && parseInt(pid) !== process.pid) {
           console.log(`⚠️ [PortCleaner] Liberando porta ${port} (PID: ${pid})...`);
-          try { execSync(`taskkill /F /PID ${pid}`); } catch (e) { }
+          try { execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' }); } catch (e) { }
         }
       });
     }
@@ -125,6 +125,32 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 app.get('/api/health', (_req, res) => {
   res.status(200).json({ ok: true, timestamp: Date.now() });
+});
+
+// v1.3.1: Profile Route - Returns user plan info
+app.get('/api/profile', async (req, res) => {
+  try {
+    const userId = req.query.userId as string;
+    if (!userId) {
+      return res.status(400).json({ error: 'userId required' });
+    }
+
+    const { getUserProfile } = await import('./config/supabase.js');
+    const profile = await getUserProfile(userId);
+
+    if (profile) {
+      res.json({
+        plan: profile.plan || profile.plan_level || 'free',
+        plan_level: profile.plan_level,
+        email: profile.email
+      });
+    } else {
+      res.json({ plan: 'free' });
+    }
+  } catch (error) {
+    console.error('❌ [API Profile] Error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // ===========================================================
@@ -284,8 +310,8 @@ async function startServer() {
 
 
   // Admin Diagnostic Routes (Admin-Only, protected by adminGate)
-  app.use('/api/admin', adminRoutes);
   app.use('/api/admin/whatsapp', whatsappAdminRoutes);
+  app.use('/api/admin', adminRoutes);
 
   console.log('✅ Core LIA Functions loaded');
 
@@ -325,7 +351,7 @@ async function startServer() {
   // REALTIME SETUP (Socket.io + WebRTC)
   // ===========================================================
 
-  setupRealtime(io);
+  setupRealtime(io, ensureSession);
   setupRealtimeVoiceAPI(app, openai);
 
   // v4.1: Inicializar serviço de diagnóstico para transmissão de pensamentos

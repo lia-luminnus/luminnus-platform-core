@@ -19,8 +19,8 @@ export const SnapshotService = {
             // 1. Buscar perfil e plano do tenant
             const { data: profile, error: profileError } = await supabase
                 .from('profiles')
-                .select('*, tenant_id')
-                .eq('id', tenantId) // Assumindo userId = tenantId para simplificar no momento
+                .select('*')
+                .eq('id', tenantId)
                 .single();
 
             if (profileError) throw profileError;
@@ -29,13 +29,13 @@ export const SnapshotService = {
             const { data: integrations, error: intError } = await supabase
                 .from('integrations')
                 .select('*')
-                .eq('tenant_id', profile.tenant_id);
+                .eq('tenant_id', profile.id);
 
             // 3. Buscar estado do WhatsApp (se houver)
             const { data: whatsapp, error: waError } = await supabase
                 .from('whatsapp_settings')
                 .select('*')
-                .eq('tenant_id', profile.tenant_id)
+                .eq('tenant_id', profile.id)
                 .single();
 
             // 4. Montar o snapshot baseado no Product Catalog Manifest
@@ -44,7 +44,7 @@ export const SnapshotService = {
 
             const snapshot = {
                 timestamp: new Date().toISOString(),
-                tenant_id: profile.tenant_id,
+                tenant_id: profile.id,
                 plan: planId,
                 limits: planLimits,
                 modulesEnabled: planLimits.features,

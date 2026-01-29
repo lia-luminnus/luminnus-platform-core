@@ -4,9 +4,12 @@ import Header from './Header';
 import { ThemeContext } from '../App';
 import { LanguageContext, Language } from '../contexts/LanguageContext';
 import { useAppStore } from '../store/useAppStore';
+import { useDashboardAuth } from '../contexts/DashboardAuthContext';
+import { updateProfile, uploadAvatar } from '../services/profileService';
 import { MODULE_REGISTRY } from '../config/modules';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import { supabase } from '../lib/supabase';
 
 const businessSectors = [
     { id: 'technical_services', title: 'sector_technical_services', icon: 'build' },
@@ -24,9 +27,42 @@ const Settings: React.FC = () => {
     const { isDark, toggleTheme } = useContext(ThemeContext);
     const { language, setLanguage, t } = useContext(LanguageContext);
     const { activeModules, toggleModule, setBusinessInfo, businessType, resetOnboarding } = useAppStore();
+    const { user, profile, refreshProfile } = useDashboardAuth();
 
     const [selectedLang, setSelectedLang] = useState<Language>(language);
-    const [activeTab, setActiveTab] = useState<'general' | 'modules' | 'sector'>('general');
+    const [activeTab, setActiveTab] = useState<'perfil' | 'general' | 'modules' | 'sector'>('perfil');
+
+    // Profile Edit State
+    const [fullName, setFullName] = useState(profile?.full_name || '');
+    const [companyName, setCompanyName] = useState(profile?.company_name || '');
+    const [phone, setPhone] = useState(profile?.phone || '');
+    const [taxId, setTaxId] = useState(profile?.tax_id || '');
+    const [address, setAddress] = useState(profile?.address || '');
+    const [city, setCity] = useState(profile?.city || '');
+    const [state, setState] = useState(profile?.state || '');
+    const [postalCode, setPostalCode] = useState(profile?.postal_code || '');
+    const [country, setCountry] = useState(profile?.country || 'Brasil');
+    const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || '');
+    const [isSavingProfile, setIsSavingProfile] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+    const taxLabel = country === 'Brasil' ? 'CNPJ / CPF' : country === 'EUA' ? 'Tax ID / SSN' : 'VAT / IVA / NIF';
+
+    useEffect(() => {
+        if (profile) {
+            setFullName(profile.full_name || '');
+            setCompanyName(profile.company_name || '');
+            setPhone(profile.phone || '');
+            setTaxId(profile.tax_id || '');
+            setAddress(profile.address || '');
+            setCity(profile.city || '');
+            setState(profile.state || '');
+            setPostalCode(profile.postal_code || '');
+            setCountry(profile.country || 'Brasil');
+            setAvatarUrl(profile.avatar_url || '');
+        }
+    }, [profile]);
 
     useEffect(() => {
         setSelectedLang(language);
@@ -44,6 +80,27 @@ const Settings: React.FC = () => {
         }
     }
 
+    // 🚨 SESSION RECOVERY: Tenta recuperar sessão se user for null
+    const handleRecoverSession = async () => {
+        if (!supabase) {
+            toast.error('Supabase não disponível.');
+            return;
+        }
+        toast.loading('Tentando recuperar sessão...', { id: 'recover' });
+        try {
+            const { data, error } = await supabase.auth.getSession();
+            if (error) throw error;
+            if (data.session) {
+                toast.success('Sessão recuperada! Recarregando...', { id: 'recover' });
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                toast.error('Nenhuma sessão ativa. Faça login novamente.', { id: 'recover' });
+            }
+        } catch (err: any) {
+            toast.error(`Erro: ${err.message}`, { id: 'recover' });
+        }
+    };
+
     const handleSectorChange = (id: string, titleKey: string) => {
         const translatedTitle = t(titleKey);
         setBusinessInfo(id, translatedTitle);
@@ -54,6 +111,66 @@ const Settings: React.FC = () => {
         }, 1000);
     };
 
+    const handleUpdateProfile = async () => {
+        if (!user) {
+            toast.error('Sessão não encontrada. Faça login novamente.');
+            console.error('[Settings] handleUpdateProfile: user is null');
+            return;
+        }
+        setIsSavingProfile(true);
+        try {
+            await updateProfile(user.id, {
+                full_name: fullName,
+                company_name: companyName,
+                phone: phone,
+                tax_id: taxId,
+                address: address,
+                city: city,
+                state: state,
+                postal_code: postalCode,
+                country: country,
+                avatar_url: avatarUrl,
+                onboarding_completed: true
+            });
+            await refreshProfile(user, true);
+            toast.success('Perfil atualizado com sucesso!');
+        } catch (error: any) {
+            console.error('[Settings] Erro ao atualizar perfil:', error);
+            toast.error(`Erro ao atualizar perfil: ${error.message || 'desconhecido'}`);
+        } finally {
+            setIsSavingProfile(false);
+        }
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!user) {
+            toast.error('Sessão não encontrada. Faça login novamente.');
+            console.error('[Settings] handleFileChange: user is null');
+            return;
+        }
+
+        setIsUploading(true);
+        const loadingToast = toast.loading('Enviando imagem...');
+        try {
+            const url = await uploadAvatar(user.id, file);
+            setAvatarUrl(url);
+
+            await updateProfile(user.id, { avatar_url: url });
+            await refreshProfile(user, true);
+
+            toast.success('Foto atualizada e salva!');
+        } catch (error: any) {
+            console.error('[Settings] Erro no upload:', error);
+            toast.error(`Erro ao enviar foto: ${error.message || 'desconhecido'}`);
+        } finally {
+            setIsUploading(false);
+            toast.dismiss(loadingToast);
+        }
+    };
+
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-dark-bg">
             <Header title={t('configTitle')} />
@@ -62,8 +179,9 @@ const Settings: React.FC = () => {
             <div className="px-8 pt-4 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-[#0A0F1A]">
                 <div className="flex gap-8">
                     {[
+                        { id: 'perfil', label: 'Perfil', icon: 'person' },
                         { id: 'general', label: t('appearance'), icon: 'palette' },
-                        { id: 'sector', label: t('businessSector'), icon: 'category' },
+                        ...(!profile?.onboarding_completed ? [{ id: 'sector', label: t('businessSector'), icon: 'category' }] : []),
                         { id: 'modules', label: t('modulesAndApps'), icon: 'extension' }
                     ].map((tab) => (
                         <button
@@ -72,7 +190,7 @@ const Settings: React.FC = () => {
                             className={`pb-4 text-sm font-bold transition-all relative flex items-center gap-2 ${activeTab === tab.id ? 'text-brand-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
                                 }`}
                         >
-                            <span className="material-symbols-outlined text-xl">{tab.icon}</span>
+                            <span className="material-symbols-outlined text-lg">{tab.icon}</span>
                             {tab.label}
                             {activeTab === tab.id && (
                                 <motion.span
@@ -87,6 +205,258 @@ const Settings: React.FC = () => {
 
             <div className="flex-1 p-8 pt-6 overflow-y-auto max-w-5xl mx-auto w-full scroll-smooth">
                 <AnimatePresence mode="wait">
+                    {activeTab === 'perfil' && (
+                        <motion.div
+                            key="perfil"
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 20 }}
+                            className="space-y-6"
+                        >
+                            {/* 🚨 SESSION WARNING: Alerta se usuário não está logado */}
+                            {!user && (
+                                <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-5 flex items-center justify-between shadow-lg backdrop-blur-sm">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+                                            <span className="material-symbols-outlined text-red-500 text-2xl">lock_open</span>
+                                        </div>
+                                        <div>
+                                            <p className="font-black text-red-500 text-sm italic">⚠️ Sua sessão expirou ou não foi detectada.</p>
+                                            <p className="text-[10px] text-gray-500 font-medium">Os botões de salvar, sincronização e foto exigem uma sessão ativa. Por favor, faça login pelo site principal.</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            const landingPage = import.meta.env.VITE_LANDING_PAGE_URL || (window.location.host.includes('localhost') ? 'http://localhost:8080' : window.location.origin);
+                                            window.location.href = `${landingPage}/auth-bridge?redirect_to=settings`;
+                                        }}
+                                        className="px-6 py-2.5 bg-red-500 text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-red-600 transition-all shadow-[0_0_15px_rgba(239,68,68,0.4)] active:scale-95 flex items-center gap-2"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">login</span>
+                                        Fazer Login no Site
+                                    </button>
+                                </div>
+                            )}
+
+                            <div className="glass-panel bg-white dark:bg-white/5 rounded-2xl p-6 border border-gray-200 dark:border-white/10 shadow-xl">
+                                <div className="flex flex-col md:flex-row gap-8">
+                                    <div className="flex flex-col items-center gap-4">
+                                        <div
+                                            className="relative group cursor-pointer"
+                                            onClick={() => fileInputRef.current?.click()}
+                                        >
+                                            <input
+                                                type="file"
+                                                ref={fileInputRef}
+                                                className="hidden"
+                                                accept="image/*"
+                                                onChange={handleFileChange}
+                                            />
+                                            <div className="w-24 h-24 rounded-full border-[3px] border-brand-primary shadow-xl overflow-hidden relative">
+                                                <img
+                                                    src={avatarUrl || `https://ui-avatars.com/api/?name=${fullName || user?.email}&background=8b5cf6&color=fff`}
+                                                    alt="Preview"
+                                                    className="w-full h-full object-cover hover:scale-110 transition-transform"
+                                                />
+                                                {isUploading && (
+                                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                                        <div className="w-6 h-6 border-[3px] border-white border-t-transparent rounded-full animate-spin" />
+                                                    </div>
+                                                )}
+                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
+                                                    <span className="material-symbols-outlined text-white text-2xl">upload</span>
+                                                </div>
+                                            </div>
+                                            <div className="absolute -bottom-0.5 -right-0.5 w-8 h-8 bg-brand-primary rounded-full flex items-center justify-center text-white shadow-lg border-[3px] border-white dark:border-[#0f172a]">
+                                                <span className="material-symbols-outlined text-lg">photo_camera</span>
+                                            </div>
+                                        </div>
+                                        <div className="text-center">
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Mudar Foto</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1 space-y-6">
+                                        {/* Dados Pessoais */}
+                                        <div className="space-y-3">
+                                            <h4 className="text-xs font-black uppercase tracking-tighter text-brand-primary flex items-center gap-2">
+                                                <span className="material-symbols-outlined text-base">person</span>
+                                                Dados Pessoais
+                                            </h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">Nome Completo</label>
+                                                    <input
+                                                        type="text"
+                                                        value={fullName}
+                                                        onChange={(e) => setFullName(e.target.value)}
+                                                        placeholder="Seu nome"
+                                                        className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-xs font-bold focus:ring-2 focus:ring-brand-primary outline-none transition-all"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">Email</label>
+                                                    <div className="relative group">
+                                                        <input
+                                                            type="email"
+                                                            value={profile?.email || user?.email || ''}
+                                                            readOnly
+                                                            placeholder="Email não identificado"
+                                                            className={`w-full bg-gray-100 dark:bg-black/50 border ${(!profile?.email && !user?.email) ? 'border-amber-500/50' : 'border-gray-200 dark:border-white/5'} rounded-xl px-4 py-3 text-xs font-bold text-gray-400 cursor-not-allowed`}
+                                                        />
+                                                        {(!profile?.email && !user?.email) ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={async () => {
+                                                                    if (!user) {
+                                                                        toast.error('Sessão não disponível. Tente recarregar a página.');
+                                                                        return;
+                                                                    }
+                                                                    toast.loading('Sincronizando...', { id: 'sync-toast' });
+                                                                    await refreshProfile(user, true);
+                                                                    toast.success('Perfil sincronizado!', { id: 'sync-toast' });
+                                                                }}
+                                                                className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-amber-500 hover:text-amber-400 transition-colors"
+                                                            >
+                                                                <span className="material-symbols-outlined text-sm animate-spin-slow">sync</span>
+                                                                <span className="text-[8px] font-black uppercase underline decoration-dotted">FORÇAR SINCRONIA</span>
+                                                            </button>
+                                                        ) : (
+                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-green-500/50">
+                                                                <span className="material-symbols-outlined text-sm">verified</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Dados da Empresa */}
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <h4 className="text-xs font-black uppercase tracking-tighter text-brand-primary flex items-center gap-2">
+                                                    <span className="material-symbols-outlined text-base">business</span>
+                                                    Informações da Empresa
+                                                </h4>
+                                                <div className="flex items-center gap-2">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-gray-500">País:</label>
+                                                    <select
+                                                        value={country}
+                                                        onChange={(e) => setCountry(e.target.value)}
+                                                        className="bg-transparent text-[9px] font-black uppercase tracking-widest text-brand-primary border-none focus:ring-0 cursor-pointer"
+                                                    >
+                                                        <option value="Brasil">Brasil 🇧🇷</option>
+                                                        <option value="Portugal">Portugal 🇵🇹</option>
+                                                        <option value="EUA">EUA 🇺🇸</option>
+                                                        <option value="Espanha">Espanha 🇪🇸</option>
+                                                        <option value="Outro">Outro 🌐</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">Nome da Empresa</label>
+                                                    <input
+                                                        type="text"
+                                                        value={companyName}
+                                                        onChange={(e) => setCompanyName(e.target.value)}
+                                                        placeholder="Nome do seu negócio"
+                                                        className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-xs font-bold focus:ring-2 focus:ring-brand-primary outline-none transition-all"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">{taxLabel}</label>
+                                                    <input
+                                                        type="text"
+                                                        value={taxId}
+                                                        onChange={(e) => setTaxId(e.target.value)}
+                                                        placeholder={country === 'Brasil' ? '00.000.000/0000-00' : 'Tax / Fiscal ID'}
+                                                        className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-xs font-bold focus:ring-2 focus:ring-brand-primary outline-none transition-all"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">Telefone de Contato</label>
+                                                    <input
+                                                        type="tel"
+                                                        value={phone}
+                                                        onChange={(e) => setPhone(e.target.value)}
+                                                        placeholder="+00 (00) 00000-0000"
+                                                        className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-xs font-bold focus:ring-2 focus:ring-brand-primary outline-none transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Localização */}
+                                        <div className="space-y-3">
+                                            <h4 className="text-xs font-black uppercase tracking-tighter text-brand-primary flex items-center gap-2">
+                                                <span className="material-symbols-outlined text-base">location_on</span>
+                                                Localização
+                                            </h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <div className="md:col-span-2 space-y-1.5">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">Endereço</label>
+                                                    <input
+                                                        type="text"
+                                                        value={address}
+                                                        onChange={(e) => setAddress(e.target.value)}
+                                                        placeholder="Rua, Número, Bairro"
+                                                        className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-xs font-bold focus:ring-2 focus:ring-brand-primary outline-none transition-all"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">Código Postal (CEP)</label>
+                                                    <input
+                                                        type="text"
+                                                        value={postalCode}
+                                                        onChange={(e) => setPostalCode(e.target.value)}
+                                                        placeholder="00000-000"
+                                                        className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-xs font-bold focus:ring-2 focus:ring-brand-primary outline-none transition-all"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">Cidade</label>
+                                                    <input
+                                                        type="text"
+                                                        value={city}
+                                                        onChange={(e) => setCity(e.target.value)}
+                                                        placeholder="Cidade"
+                                                        className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-xs font-bold focus:ring-2 focus:ring-brand-primary outline-none transition-all"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">Estado / Província (UF)</label>
+                                                    <input
+                                                        type="text"
+                                                        value={state}
+                                                        onChange={(e) => setState(e.target.value)}
+                                                        placeholder="UF / Estado"
+                                                        className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-xs font-bold focus:ring-2 focus:ring-brand-primary outline-none transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex justify-end pt-6 border-t border-gray-100 dark:border-white/5">
+                                            <button
+                                                onClick={handleUpdateProfile}
+                                                disabled={isSavingProfile}
+                                                className="px-10 py-3.5 rounded-xl bg-brand-primary text-white text-[11px] font-black uppercase tracking-widest hover:shadow-[0_0_20px_rgba(139,92,246,0.5)] transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
+                                            >
+                                                {isSavingProfile ? (
+                                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                ) : (
+                                                    <span className="material-symbols-outlined text-base">verified</span>
+                                                )}
+                                                Salvar Perfil
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+
                     {activeTab === 'general' && (
                         <motion.div
                             key="general"
@@ -233,7 +603,23 @@ const Settings: React.FC = () => {
                                                     type="checkbox"
                                                     className="sr-only peer"
                                                     checked={isActive}
-                                                    onChange={() => toggleModule(module.id)}
+                                                    onChange={async () => {
+                                                        // Update local store
+                                                        toggleModule(module.id);
+
+                                                        // Sync with database for persistence
+                                                        if (user) {
+                                                            const currentModules = isActive
+                                                                ? activeModules.filter(id => id !== module.id)
+                                                                : [...activeModules, module.id];
+
+                                                            try {
+                                                                await updateProfile(user.id, { modules: currentModules });
+                                                            } catch (err) {
+                                                                console.error("Failed to sync modules to cloud:", err);
+                                                            }
+                                                        }
+                                                    }}
                                                 />
                                                 <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-brand-primary shadow-inner"></div>
                                             </label>

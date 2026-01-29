@@ -14,12 +14,13 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
 
   app.post('/chat', async (req: any, res: any) => {
     try {
-      const { message, conversationId, mode, personality, userId, tenantId, liaMode } = req.body;
+      const { message, conversationId, mode, personality, userId, tenantId, liaMode, messageId, files } = req.body;
 
       console.log('\n========== 💬 NOVA REQUISIÇÃO CHAT ==========');
       console.log(`📝 Mensagem: ${message?.substring(0, 100)}`);
       console.log(`🆔 Conversa: ${conversationId || 'N/A'}`);
       console.log(`🔧 LIA Mode: ${liaMode || 'NORMAL'}`);
+      console.log(`📎 Arquivos: ${files ? files.length : 0}`);
       console.log('============================================\n');
 
       const finalUserId = userId || '00000000-0000-0000-0000-000000000001';
@@ -31,6 +32,11 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
       // 1.1 Carregar contexto completo
       const { getContext, updateSummaryIfNeeded } = await import('../services/memoryService.js');
       const context = await getContext(conversationId, finalUserId, message, session?.userLocation);
+
+      // 1.2 Buscar role do usuário
+      const { getUserProfile } = await import('../config/supabase.js');
+      const profile = await getUserProfile(finalUserId);
+      const userRole = profile?.role || 'client';
 
 
       // 2. Auto-memória (opcional/automático)
@@ -75,7 +81,8 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
         prompt: message,
         conversationId: conversationId,
         history: messages,
-        tools: availableTools
+        tools: availableTools,
+        files: files // Passar arquivos para ativar hybridPipeline
       });
 
       let replyText = aiResponse.text;
@@ -102,6 +109,7 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
             function_result = await ToolService.execute(call.name, args, {
               userId: finalUserId,
               tenantId: finalTenantId,
+              userRole: userRole,
               userLocation: session?.userLocation
             });
 
@@ -187,8 +195,9 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
       if (finalImagePayload) {
         try {
           const { saveMessage } = await import('../config/supabase.js');
-          await saveMessage(conversationId, 'user', message, 'text');
-          await saveMessage(conversationId, 'assistant', `🖼️ Imagem gerada: ${finalImagePayload.data.prompt}`, 'text');
+          const responseId = messageId ? `resp_${messageId}` : `img_${Date.now()}`;
+          await saveMessage(conversationId, 'user', message, 'text', [], messageId);
+          await saveMessage(conversationId, 'assistant', `🖼️ Imagem gerada: ${finalImagePayload.data.prompt}`, 'text', [], responseId);
         } catch (dbErr) { console.error('⚠️ persistence err:', dbErr); }
 
         return res.json({
@@ -204,8 +213,9 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
       if (finalDashboardAction) {
         try {
           const { saveMessage } = await import('../config/supabase.js');
-          await saveMessage(conversationId, 'user', message, 'text');
-          await saveMessage(conversationId, 'assistant', finalDashboardAction.message || 'Dashboard atualizado', 'text');
+          const responseId = messageId ? `resp_${messageId}` : `dash_${Date.now()}`;
+          await saveMessage(conversationId, 'user', message, 'text', [], messageId);
+          await saveMessage(conversationId, 'assistant', finalDashboardAction.message || 'Dashboard atualizado', 'text', [], responseId);
         } catch (dbErr) { console.error('⚠️ persistence err:', dbErr); }
 
         return res.json({
@@ -235,10 +245,14 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
       replyText = governed.markdown;
 
       // 7. Persistência
+      let responseMessageId = messageId ? `resp_${messageId}` : `chat_${Date.now()}`; // Fallback default
       try {
         const { saveMessage } = await import('../config/supabase.js');
-        await saveMessage(conversationId, 'user', message, 'text');
-        await saveMessage(conversationId, 'assistant', replyText, 'text');
+        // const responseMessageId = ... (Removed redeclaration)
+
+        const attachments = aiResponse.detailPayload?.attachments || [];
+        await saveMessage(conversationId, 'user', message, 'multimodal', attachments, messageId);
+        await saveMessage(conversationId, 'assistant', replyText, 'multimodal', attachments, responseMessageId);
 
         if (typeof updateSummaryIfNeeded === 'function') {
           updateSummaryIfNeeded(conversationId, (context.history?.length || 0) + 2);
@@ -260,6 +274,7 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
       // 9. Resposta final
       res.json({
         ok: true,
+        id: responseMessageId, // v6.0: ID consistente para o frontend
         reply: SecurityService.maskSensitiveData(replyText),
         audio: audioBase64,
         function_call: function_calls.length > 0 ? function_calls[0] : null,

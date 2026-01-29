@@ -81,7 +81,7 @@ const INTEGRATIONS: IntegrationDef[] = [
   { id: 'salesforce', name: 'Salesforce', description: 'CRM empresarial completo', icon: <Cloud className="text-blue-400" />, category: 'sales', planRequired: 'pro', permissions: ['Gerenciar oportunidades'] },
 
   // === MARKETING ===
-  { id: 'meta_ads', name: 'Meta Ads', description: 'Gerenciar campanhas Facebook/Instagram', icon: <Megaphone className="text-blue-500" />, category: 'marketing', planRequired: 'pro', permissions: ['Ver métricas', 'Criar anúncios'] },
+  { id: 'meta_ads', name: 'Meta Ads', description: 'Gerenciar campanhas Facebook', icon: <Megaphone className="text-blue-500" />, category: 'marketing', planRequired: 'pro', permissions: ['Ver métricas', 'Criar anúncios'] },
   { id: 'google_ads', name: 'Google Ads', description: 'Automatizar campanhas de busca', icon: <Search className="text-yellow-500" />, category: 'marketing', planRequired: 'pro', permissions: ['Ver performance'] },
   { id: 'mailchimp', name: 'Mailchimp', description: 'Enviar campanhas de email marketing', icon: <Mail className="text-yellow-600" />, category: 'marketing', planRequired: 'plus', permissions: ['Gerenciar listas'] },
   { id: 'activecampaign', name: 'ActiveCampaign', description: 'Automação de email e CRM', icon: <Mail className="text-blue-700" />, category: 'marketing', planRequired: 'plus', permissions: ['Criar automações'] },

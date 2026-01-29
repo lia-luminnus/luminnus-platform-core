@@ -13,7 +13,7 @@ interface AuthContextType {
     initialized: boolean;
     profile: UserProfile | null;
     onboardingCompleted: boolean;
-    refreshProfile: (initialUser?: User | null, forceRefresh?: boolean) => Promise<void>;
+    refreshProfile: (initialUser?: User | null) => Promise<void>;
     signOut: () => Promise<void>;
     setPlanName: (name: 'Start' | 'Plus' | 'Pro') => void;
 }
@@ -30,22 +30,16 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const [showUpdateBanner, setShowUpdateBanner] = useState(false);
     const [newVersion, setNewVersion] = useState('');
 
+    // Verificar onboarding também no estado local (permite funcionar sem autenticação)
     const localOnboardingCompleted = useAppStore((state) => state.onboarding_completed);
+
+    // Lógica de onboarding:
+    // 1. O estado local (localStorage via Zustand) é a fonte PRIMÁRIA
+    // 2. O perfil do banco é complementar
+    // 3. Se o usuário completou onboarding localmente, ele deve persistir entre refreshes
     const onboardingCompleted = localOnboardingCompleted || profile?.onboarding_completed || false;
 
-    // v3.2: Semáforo + TTL para evitar chamadas concorrentes e permitir refresh legítimo
-    const isRefreshingProfileRef = React.useRef(false);
-    const lastProfileUserIdRef = React.useRef<string | null>(null);
-    const lastProfileFetchTimeRef = React.useRef<number>(0);
-    const PROFILE_TTL_MS = 60000; // 1 minuto - permite refresh se passou mais de 1 min
-
-    const refreshProfile = async (initialUser?: User | null, forceRefresh = false) => {
-        // Evitar chamadas concorrentes
-        if (isRefreshingProfileRef.current) {
-            console.log('[DashboardAuth] refreshProfile já em andamento, ignorando chamada duplicada');
-            return;
-        }
-
+    const refreshProfile = async (initialUser?: User | null) => {
         console.log('[DashboardAuth] Iniciando refreshProfile...');
         if (!supabase) {
             console.warn('[DashboardAuth] Supabase não disponível no refreshProfile');
@@ -53,8 +47,6 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         try {
-            isRefreshingProfileRef.current = true;
-
             let currentUser = initialUser;
             if (!currentUser) {
                 const { data: userData } = await supabase.auth.getUser();
@@ -66,30 +58,22 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 return;
             }
 
-            // v3.2: Evitar re-fetch se o mesmo usuário já foi processado E TTL ainda válido
-            const now = Date.now();
-            const ttlExpired = (now - lastProfileFetchTimeRef.current) > PROFILE_TTL_MS;
+            console.log('[DashboardAuth] Carregando perfil do banco...');
 
-            if (!forceRefresh && lastProfileUserIdRef.current === currentUser.id && !ttlExpired) {
-                console.log('[DashboardAuth] Perfil já carregado para este usuário (cache válido), pulando');
-                return;
-            }
-
-            console.log('[DashboardAuth] Carregando perfil do banco...', { forceRefresh, ttlExpired });
-
+            // Timeout de segurança para a busca de perfil (tolerância aumentada para 15s)
             const profilePromise = getOrCreateProfile(currentUser.id, currentUser.email || '');
             const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), 30000)
+                setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), 15000)
             );
 
             let userProfile;
             try {
                 userProfile = await Promise.race([profilePromise, timeoutPromise]) as UserProfile;
                 console.log('[DashboardAuth] Perfil carregado com sucesso');
-                lastProfileUserIdRef.current = currentUser.id;
-                lastProfileFetchTimeRef.current = Date.now();
             } catch (pErr: any) {
-                console.error('[DashboardAuth] Erro ou Timeout ao carregar perfil:', pErr.message);
+                // Usar warn em vez de error para reduzir ruído visual
+                console.warn('[DashboardAuth] Timeout/erro no perfil (usando fallback):', pErr.message);
+                // Fallback para permitir que o dashboard carregue mesmo sem perfil do banco
                 userProfile = {
                     id: currentUser.id,
                     email: currentUser.email || '',
@@ -99,10 +83,16 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
             setProfile(userProfile);
 
+            // Buscar Plano (Fonte Única: app_metadata ou claims no JWT do Supabase)
             const metadata = currentUser.app_metadata || {};
             const userPlanName = (metadata.plan || metadata.claims?.plan || "Start") as string;
+
+            // Forçar Pro se for admin/tester (luminnus.lia.ai@gmail.com) conforme requisito
+            // MAS respeitar o override se existir
             const isAdmin = currentUser.email === "luminnus.lia.ai@gmail.com";
 
+            // Se já tiver um plano setado e for admin, mantemos o que está no estado (override)
+            // Se não, inicializamos
             setPlan((prev: any) => {
                 if (isAdmin && prev?.name) return prev;
                 const effectivePlan = isAdmin ? "Pro" : userPlanName;
@@ -115,8 +105,6 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             console.log('[DashboardAuth] Perfil e Plano inicializados');
         } catch (error) {
             console.error('[DashboardAuth] Erro fatal no refreshProfile:', error);
-        } finally {
-            isRefreshingProfileRef.current = false;
         }
     };
 
@@ -135,180 +123,126 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             return;
         }
 
-        // ============================================================
-        // 🔐 GLOBAL SESSION SYNC - Captura tokens de qualquer rota!
-        // ============================================================
-        const extractAndSyncTokens = async () => {
-            try {
-                const fullUrl = window.location.href;
-                const hash = window.location.hash;
-                const search = window.location.search;
+        // 🔑 EXTRAÇÃO DE TOKENS DA URL (para receber sessão do DashboardRedirect)
+        const extractAndSyncTokensFromUrl = async () => {
+            const hash = window.location.hash;
+            const search = window.location.search;
+            const hasTokens = hash.includes('access_token=') || search.includes('access_token=');
 
-                // Log completo para diagnóstico
-                const hasTokenInHash = hash.includes('access_token=');
-                const hasTokenInSearch = search.includes('access_token=');
-                console.log('[AuthContext] 🔍 Analisando URL para tokens:', {
-                    fullUrlLen: fullUrl.length,
-                    hashLen: hash.length,
-                    hasTokenInHash,
-                    hasTokenInSearch,
-                    hashPreview: hash.length > 100 ? hash.substring(0, 100) + '...' : hash
-                });
+            if (!hasTokens) {
+                console.log('[DashboardAuth] 📭 Nenhum token na URL');
+                return null;
+            }
 
-                let accessToken: string | null = null;
-                let refreshToken: string | null = null;
-                let adminAccess = false;
+            let accessToken: string | null = null;
+            let refreshToken: string | null = null;
+            let redirectTo: string | null = null;
 
-                // Método 1: HashRouter com query após a rota (ex: /#/integrations?access_token=...)
-                // O hash pode ser: #/integrations?access_token=xxx&refresh_token=yyy
-                if (hash.includes('access_token=')) {
-                    // Encontrar a parte da query dentro do hash
-                    const queryStart = hash.indexOf('?');
-                    if (queryStart !== -1) {
-                        const queryString = hash.substring(queryStart + 1);
-                        const params = new URLSearchParams(queryString);
-                        accessToken = params.get('access_token');
-                        refreshToken = params.get('refresh_token');
-                        adminAccess = params.get('admin_access') === 'true';
-                        console.log('[AuthContext] 📌 Tokens extraídos do hash (método 1):', {
-                            hasAccess: !!accessToken,
-                            hasRefresh: !!refreshToken,
-                            accessLen: accessToken?.length
-                        });
+            // Método 1: HashRouter com query após a rota (ex: /#/?access_token=...)
+            if (hash.includes('access_token=')) {
+                const searchPart = hash.includes('?') ? hash.split('?')[1] : hash.substring(1);
+                const params = new URLSearchParams(searchPart);
+                accessToken = params.get('access_token');
+                refreshToken = params.get('refresh_token');
+                redirectTo = params.get('redirect_to');
+                console.log('[DashboardAuth] 📌 Tokens encontrados no hash');
+            }
+
+            // Método 2: Query string normal (ex: ?access_token=...)
+            if (!accessToken && search.includes('access_token=')) {
+                const params = new URLSearchParams(search);
+                accessToken = params.get('access_token');
+                refreshToken = params.get('refresh_token');
+                redirectTo = params.get('redirect_to');
+                console.log('[DashboardAuth] 📌 Tokens encontrados na query string');
+            }
+
+            if (accessToken && accessToken.length > 100) {
+                console.log('[DashboardAuth] 🔐 Sincronizando sessão via tokens da URL...');
+                try {
+                    const { data, error } = await supabase.auth.setSession({
+                        access_token: accessToken,
+                        refresh_token: refreshToken || ''
+                    });
+
+                    if (!error && data.session) {
+                        console.log('[DashboardAuth] ✅ Sessão sincronizada com sucesso para:', data.session.user?.email);
+
+                        // Limpar tokens da URL e ir para a rota desejada (se houver)
+                        const routePath = redirectTo ? `/${redirectTo.replace(/^\//, '')}` : (hash.split('?')[0] || '/');
+                        const finalHash = routePath.startsWith('#') ? routePath : `#${routePath}`;
+
+                        console.log('[DashboardAuth] 🏠 Limpando URL e aplicando hash:', finalHash);
+                        window.history.replaceState({}, document.title, window.location.pathname + finalHash);
+
+                        return data.session;
+                    } else if (error) {
+                        console.error('[DashboardAuth] ❌ Erro ao sincronizar sessão:', error.message);
                     }
+                } catch (err) {
+                    console.error('[DashboardAuth] ❌ Exceção ao sincronizar sessão:', err);
                 }
-
-                // Método 2: Query string normal (ex: ?access_token=...)
-                if (!accessToken && search.includes('access_token')) {
-                    const params = new URLSearchParams(search);
-                    accessToken = params.get('access_token');
-                    refreshToken = params.get('refresh_token');
-                    adminAccess = params.get('admin_access') === 'true';
-                    console.log('[AuthContext] 📌 Tokens extraídos do search (método 2)');
-                }
-
-                // Método 3: Fragmento hash puro do Supabase (ex: #access_token=...)
-                if (!accessToken && hash.startsWith('#access_token=')) {
-                    const params = new URLSearchParams(hash.substring(1));
-                    accessToken = params.get('access_token');
-                    refreshToken = params.get('refresh_token');
-                    console.log('[AuthContext] 📌 Tokens extraídos do fragmento puro (método 3)');
-                }
-
-                if (accessToken && accessToken.length > 100) {
-                    console.log('[AuthContext] 🔐 Tokens válidos detectados! Sincronizando sessão...');
-
-                    // Tentar setSession, mas não bloquear se falhar
-                    try {
-                        const { data, error } = await supabase.auth.setSession({
-                            access_token: accessToken,
-                            refresh_token: refreshToken || ''
-                        });
-
-                        if (error) {
-                            console.error('[AuthContext] ❌ setSession falhou:', error.message);
-                            // Não bloquear - continuar com getSession() depois
-                        } else {
-                            console.log('[AuthContext] ✅ Sessão sincronizada com sucesso!', { userId: data.session?.user?.id });
-
-                            // Limpar tokens da URL para segurança
-                            const basePath = hash.split('?')[0] || '#/';
-                            window.history.replaceState({}, document.title, window.location.pathname + basePath);
-
-                            if (adminAccess) {
-                                console.log('[AuthContext] Admin access detectado.');
-                                localStorage.setItem('force_onboarding_reset', 'true');
-                            }
-                            return data.session;
-                        }
-                    } catch (setSessionErr) {
-                        console.error('[AuthContext] ❌ Exceção em setSession:', setSessionErr);
-                    }
-                } else if (accessToken) {
-                    console.warn('[AuthContext] ⚠️ Token encontrado mas muito curto:', accessToken.length);
-                }
-            } catch (err) {
-                console.error('[AuthContext] Erro na extração global de tokens:', err);
+            } else {
+                console.warn('[DashboardAuth] ⚠️ Token inválido ou muito curto');
             }
             return null;
         };
 
         const initializeAuth = async () => {
-            console.log('[AuthContext] 🏁 Iniciando inicialização de autenticação...');
-
-            // 1. URL Sync
-            const syncedSession = await extractAndSyncTokens();
-
-            // 2. Auth State Listener
+            // 1. Configurar listener de auth PRIMEIRO para capturar o setSession subsequente
             const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
-                console.log(`[AuthContext] 🔔 AuthEvent: ${event}`, {
-                    hasSession: !!currentSession,
-                    userId: currentSession?.user?.id
-                });
-
-                if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
-                    if (currentSession) {
-                        setSession(currentSession);
-                        setUser(currentSession.user);
-                        await refreshProfile(currentSession.user);
-                    }
-                } else if (event === 'SIGNED_OUT') {
-                    setSession(null);
-                    setUser(null);
+                console.log(`[DashboardAuth] 🔔 AuthEvent: ${event}`, { hasSession: !!currentSession });
+                setSession(currentSession);
+                setUser(currentSession?.user || null);
+                if (currentSession?.user) {
+                    await refreshProfile(currentSession.user);
+                } else {
                     setProfile(null);
                     setPlan(null);
-                    // v3.2: Reset cache refs para permitir novo fetch no próximo login
-                    lastProfileUserIdRef.current = null;
-                    lastProfileFetchTimeRef.current = 0;
                 }
+                setLoading(false);
+                setInitialized(true);
             });
 
-            // 3. Get Current Session (as fallback or to confirm)
-            const { data: { session: currentSession } } = await supabase.auth.getSession();
-            let initialSession = syncedSession || currentSession;
+            // 2. Tentar extrair tokens da URL (DashboardRedirect)
+            // Agora o listener acima já estará pronto para reagir ao setSession
+            const urlSession = await extractAndSyncTokensFromUrl();
 
-            console.log('[AuthContext] 🧬 Sessão inicial determinada:', {
-                source: syncedSession ? 'URL' : (initialSession ? 'Storage' : 'None'),
-                userId: initialSession?.user?.id
-            });
-
-            if (initialSession?.user) {
-                console.log('[AuthContext] ✅ Sessão ativa confirmada. Garantindo sincronização de estado...');
-                setSession(initialSession);
-                setUser(initialSession.user);
-                await refreshProfile(initialSession.user);
-
-                if (localStorage.getItem('force_onboarding_reset') === 'true') {
-                    localStorage.removeItem('force_onboarding_reset');
-                    // IMPORTANTE: Realmente resetar o onboarding no store!
-                    useAppStore.getState().resetOnboarding();
-                    console.log('[AuthContext] ✅ Onboarding reset executado com sucesso!');
+            // 3. Fallback: tentar getSession() se não veio da URL ou se o listener ainda não disparou
+            if (!urlSession) {
+                const { data: { session: initialSession } } = await supabase.auth.getSession();
+                if (initialSession?.user) {
+                    setSession(initialSession);
+                    setUser(initialSession.user);
+                    await refreshProfile(initialSession.user);
                 }
-            } else {
-                console.log('[AuthContext] ℹ️ Nenhuma sessão ativa encontrada no início.');
+            } else if (urlSession) {
+                // Garantir que o estado local seja atualizado com a sessão da URL
+                setSession(urlSession);
+                setUser(urlSession.user);
+                await refreshProfile(urlSession.user);
             }
-
-            console.log('[AuthContext] 🏁 Inicialização concluída.', {
-                initializedUser: !!initialSession?.user
-            });
 
             setLoading(false);
             setInitialized(true);
-            (window as any).__authSubscription = subscription;
+
+            // Guardar subscription para cleanup
+            (window as any).__dashboardAuthSubscription = subscription;
         };
 
         initializeAuth();
 
         return () => {
-            const sub = (window as any).__authSubscription;
+            const sub = (window as any).__dashboardAuthSubscription;
             if (sub) sub.unsubscribe();
         };
     }, []);
 
+    // v2.6: Sistema de Updates (Fase 8)
     useEffect(() => {
         console.log('🔄 [Dashboard-UpdateService] Iniciando monitoramento...');
         UpdateService.initialize({
-            currentVersion: '4.0.0',
+            currentVersion: '4.0.0', // Versão do Dashboard sincronizada com LIA Unified
             apiUrl: import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000',
         });
 
@@ -327,27 +261,20 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }, []);
 
     const signOut = async () => {
-        console.log('[DashboardAuth] Iniciando logout...');
-        try {
-            // Limpa explicitamente as chaves
-            localStorage.removeItem('sb-dashboard-auth');
+        console.log('[DashboardAuth] Executando logout...');
+        if (supabase) await supabase.auth.signOut();
+        setProfile(null);
+        setUser(null);
+        setSession(null);
+        setPlan(null);
 
-            if (supabase) await supabase.auth.signOut();
+        // Limpar storage explicitamente
+        localStorage.removeItem('sb-dashboard-auth');
 
-            // Limpa estados
-            setProfile(null);
-            setUser(null);
-            setSession(null);
-            setPlan(null);
-
-            console.log('[DashboardAuth] Logout concluído.');
-
-            // Opcional: Redirecionar para o site principal após logout no dashboard
-            // window.location.href = 'http://localhost:8080/';
-        } catch (err) {
-            console.error('[DashboardAuth] Erro ao deslogar:', err);
-            localStorage.removeItem('sb-dashboard-auth');
-        }
+        // Redirecionamento para o site principal/admin
+        const landingPage = import.meta.env.VITE_LANDING_PAGE_URL || 'http://localhost:8080';
+        console.log('[DashboardAuth] Redirecionando para:', landingPage);
+        window.location.href = landingPage;
     };
 
     return (
@@ -375,6 +302,9 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     );
 };
 
+/**
+ * 📢 Componente de Banner de Atualização
+ */
 function UpdateBanner({ version, onClose, onUpdate }: { version: string; onClose: () => void; onUpdate: () => void }) {
     return (
         <div className="fixed top-6 right-6 z-[9999] animate-in fade-in slide-in-from-top-4 duration-500">

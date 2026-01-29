@@ -66,11 +66,30 @@ export class SchemaValidator {
         let masked = text;
         const found: string[] = [];
 
+        // 1. Mascarar Segredos
         for (const rule of this.SECRET_PATTERNS) {
             const matches = text.match(rule.pattern);
             if (matches) {
                 found.push(`${rule.name}: ${matches.length} ocorrência(s)`);
                 masked = masked.replace(rule.pattern, `[${rule.name.toUpperCase()}_MASKED]`);
+            }
+        }
+
+        // 2. Mascarar Links Alucinados (Hallucination Guard)
+        // IDs do Google Drive/Docs/Sheets geralmente têm 44 caracteres (ex: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms)
+        // IDs curtos (< 20 chars) são quase sempre alucinação do modelo.
+        const googleLinkPattern = /https:\/\/(?:docs|drive)\.google\.com\/(?:spreadsheets|document|presentation|file|drive)(?:\/u\/\d+)?\/d\/([a-zA-Z0-9_\-]+)/gi;
+
+        let linkMatch;
+        while ((linkMatch = googleLinkPattern.exec(masked)) !== null) {
+            const fullUrl = linkMatch[0];
+            const fileId = linkMatch[1];
+
+            // Critério: ID menor que 40 chars é suspeito. (IDs reais tem 44 chars padrão Base64)
+            // IDs alucinados costumam ter 20-30 chars ou serem strings aleatórias curtas.
+            if (fileId.length < 40) {
+                found.push(`hallucinated_link: ${fileId}`);
+                masked = masked.replace(fullUrl, `[LINK_BLOQUEADO_POR_SEGURANCA: ID inválido detectado]`);
             }
         }
 

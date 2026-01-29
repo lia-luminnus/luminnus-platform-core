@@ -11,9 +11,10 @@ import { Copy, Check, Terminal } from 'lucide-react';
 interface MarkdownRendererProps {
     content: string;
     className?: string;
+    onAction?: (action: string) => void;
 }
 
-export function MarkdownRenderer({ content, className = '' }: MarkdownRendererProps) {
+export function MarkdownRenderer({ content, className = '', onAction }: MarkdownRendererProps) {
     // BUG FIX: Garantir que content seja uma string para evitar erro .includes() em objetos JSON
     if (typeof content !== 'string') {
         try {
@@ -23,12 +24,8 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
         }
     }
 
-    // Regex mais flexível para detectar blocos de código markdown
-    const codeBlockRegex = /```(\w+)?([\s\S]*?)```/g;
-
-    const sections: React.ReactNode[] = [];
-    let lastIndex = 0;
-    let match;
+    // Regex para detectar blocos de código, tags details e botões (mais robusto)
+    const combinedRegex = /(```(?:\w+)?[\s\S]*?```|<details>[\s\S]*?<\/details>|\[BOTÃO:\s*[^\]]+\])/gi;
 
     // Função para converter URLs em links clicáveis
     const renderTextWithLinks = (text: string, key: string) => {
@@ -58,12 +55,17 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
         );
     };
 
-    // Se não houver blocos de código, renderiza como texto com links
-    if (!content.includes('```')) {
+    const sections: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match;
+
+    // Se não houver blocos especiais, renderiza como texto com links (case-insensitive check)
+    const contentLower = content.toLowerCase();
+    if (!content.includes('```') && !content.includes('<details>') && !contentLower.includes('[botão:')) {
         return <div className={`markdown-content w-full ${className}`}>{renderTextWithLinks(content, 'text-main')}</div>;
     }
 
-    while ((match = codeBlockRegex.exec(content)) !== null) {
+    while ((match = combinedRegex.exec(content)) !== null) {
         // Texto antes do bloco
         if (match.index > lastIndex) {
             sections.push(
@@ -71,15 +73,41 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
             );
         }
 
-        const language = (match[1] || 'text').toLowerCase().trim();
-        const code = match[2].trim();
+        const block = match[0];
+        if (block.startsWith('```')) {
+            // Bloco de código
+            const codeMatch = /```(\w+)?([\s\S]*?)```/.exec(block);
+            if (codeMatch) {
+                const language = (codeMatch[1] || 'text').toLowerCase().trim();
+                const code = codeMatch[2].trim();
+                sections.push(<CodeBlock key={`code-${match.index}`} language={language} code={code} />);
+            }
+        } else if (block.startsWith('<details>')) {
+            // Bloco Details
+            sections.push(<DetailsBlock key={`details-${match.index}`} raw={block} onAction={onAction} />);
+        } else if (block.toLowerCase().startsWith('[botão:')) {
+            // Bloco Botão (case-insensitive)
+            const label = block.replace(/\[botão:/i, '').replace(']', '').trim();
+            sections.push(
+                <button
+                    key={`btn-${match.index}`}
+                    onClick={() => {
+                        // Show confirmation toast
+                        const toast = document.createElement('div');
+                        toast.className = 'fixed bottom-4 right-4 bg-[#00f3ff] text-black px-4 py-2 rounded-lg shadow-lg z-50 animate-pulse';
+                        toast.textContent = `⚙️ Executando: ${label}...`;
+                        document.body.appendChild(toast);
+                        setTimeout(() => toast.remove(), 3000);
+                        onAction?.(label);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 my-2 bg-[rgba(0,243,255,0.1)] border border-[rgba(0,243,255,0.3)] hover:bg-[rgba(0,243,255,0.2)] hover:border-[#00f3ff] text-[#00f3ff] rounded-lg transition-all active:scale-95 font-semibold text-sm shadow-[0_0_10px_rgba(0,243,255,0.1)]"
+                >
+                    🚀 {label}
+                </button>
+            );
+        }
 
-        // Bloco de código com cabeçalho e botão
-        sections.push(
-            <CodeBlock key={`code-${match.index}`} language={language} code={code} />
-        );
-
-        lastIndex = match.index + match[0].length;
+        lastIndex = match.index + block.length;
     }
 
     // Texto depois do último bloco
@@ -93,6 +121,42 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
         <div className={`markdown-content w-full ${className}`}>
             {sections}
         </div>
+    );
+}
+
+/**
+ * Componente para renderizar blocos <details> com estilo LIA
+ */
+function DetailsBlock({ raw, onAction }: { raw: string; onAction?: (a: string) => void }) {
+    const [isOpen, setIsOpen] = useState(false);
+
+    // Extrair summary e content
+    const summaryMatch = /<summary>([\s\S]*?)<\/summary>/.exec(raw);
+    const summary = summaryMatch ? summaryMatch[1] : 'Detalhes Técnicos';
+    const content = raw.replace(/<details>([\s\S]*?)<\/details>/, '$1')
+        .replace(/<summary>([\s\S]*?)<\/summary>/, '')
+        .trim();
+
+    return (
+        <details
+            className="group border border-[rgba(0,243,255,0.1)] bg-[rgba(10,20,40,0.4)] rounded-xl my-4 overflow-hidden transition-all hover:border-[rgba(0,243,255,0.3)]"
+            onToggle={(e) => setIsOpen((e.target as HTMLDetailsElement).open)}
+        >
+            <summary className="flex items-center gap-2 p-4 cursor-pointer font-bold text-[#e0f7ff] hover:bg-[rgba(0,243,255,0.05)] transition-all list-none select-none outline-none">
+                <span className={`text-[#00f3ff] transition-transform duration-300 ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                {summary}
+                {!isOpen && (
+                    <span className="ml-auto text-[10px] text-[rgba(0,243,255,0.5)] font-normal uppercase tracking-wider">
+                        Clique para expandir
+                    </span>
+                )}
+            </summary>
+            {isOpen && (
+                <div className="p-4 pt-0 border-t border-[rgba(0,243,255,0.05)] bg-[rgba(0,0,0,0.2)] text-[13px] leading-relaxed text-[rgba(224,247,255,0.7)] animate-in fade-in slide-in-from-top-1 duration-300">
+                    <MarkdownRenderer content={content} onAction={onAction} />
+                </div>
+            )}
+        </details>
     );
 }
 

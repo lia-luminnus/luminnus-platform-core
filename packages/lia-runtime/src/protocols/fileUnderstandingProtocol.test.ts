@@ -17,7 +17,7 @@ function runTests() {
 
     // Case 4: QA Validation (Should Fail Incident without Fix/Validation)
     const badResponse = 'O print mostra um formulário com campos vazios.';
-    const qa1 = validateResponse(IntentMode.INCIDENT, badResponse);
+    const qa1 = validateResponse(badResponse);
     console.log(`QA 1 (Failed Incident): ${(!qa1.ok && qa1.errors.length > 0) ? '✅' : '❌'}`);
 
     // Case 5: QA Validation (Should Pass Incident with Fix/Validation)
@@ -31,7 +31,7 @@ function runTests() {
 • Enviar formulário vazio.
 • Verificar se erro 400 desaparece.
 `;
-    const qa2 = validateResponse(IntentMode.INCIDENT, goodResponse);
+    const qa2 = validateResponse(goodResponse);
     console.log(`QA 2 (Passed Incident): ${qa2.ok ? '✅' : '❌'}`);
 
     console.log('🏁 Testes concluídos.');

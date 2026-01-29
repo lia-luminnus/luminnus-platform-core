@@ -7,28 +7,35 @@ import { componentTagger } from "lovable-tagger";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Gera timestamp único para cache busting
-const timestamp = Date.now();
-// Force TypeScript rebuild after Supabase schema update
-
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
     strictPort: true,
-    // Desabilita cache no servidor de desenvolvimento
-    headers: {
-      'Cache-Control': 'no-store, no-cache, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    },
     proxy: {
       // Routes hosted on LIA Live View server (port 3000)
-      '/api/admin': 'http://localhost:3000',
-      '/api/integrations': 'http://localhost:3000',
+      '/api/admin/whatsapp': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/admin': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/integrations': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+      },
       // Fallback for other API routes (port 5000)
-      '/api': 'http://localhost:5000',
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        secure: false,
+      },
       '/health': 'http://localhost:5000',
       '/version': 'http://localhost:5000',
       '/ws': {
@@ -44,52 +51,45 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    // Limpa o diretório de saída antes de buildar (equivalente ao cleanDistDir)
+    // Standard output directory cleanup
     emptyOutDir: true,
-    // Força rebuild completo ao desabilitar cache do Rollup
+
     rollupOptions: {
-      cache: false,
       output: {
-        // Adiciona hash E timestamp aos arquivos para invalidar cache do navegador
-        entryFileNames: `assets/[name].[hash].${timestamp}.js`,
-        chunkFileNames: `assets/[name].[hash].${timestamp}.js`,
-        assetFileNames: `assets/[name].[hash].${timestamp}.[ext]`,
-        // Adiciona banner com timestamp em todos os arquivos JS
-        banner: `/* Build: ${new Date().toISOString()} | Cache-bust: ${timestamp} */`,
-        // Força regeneração de chunks
-        manualChunks: undefined,
+        // Standard content hashing for long-term caching
+        entryFileNames: `assets/[name].[hash].js`,
+        chunkFileNames: `assets/[name].[hash].js`,
+        assetFileNames: `assets/[name].[hash].[ext]`,
+
+        // Manual chunk splitting to reduce main bundle size
+        manualChunks: {
+          'vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-libs': ['@radix-ui/react-dialog', '@radix-ui/react-slot', 'lucide-react', 'class-variance-authority', 'clsx', 'tailwind-merge'],
+          'animations': ['framer-motion'],
+          'charts': ['recharts'],
+          'supabase': ['@supabase/supabase-js'],
+        },
       }
     },
-    // Garante que todos os módulos sejam reconstruídos
+    // Use esbuild for minification (default and fastest)
     minify: 'esbuild',
-    // Configurações adicionais para forçar rebuild
-    sourcemap: false,
-    // Remove cache de módulos
-    commonjsOptions: {
-      transformMixedEsModules: true
-    },
-    // Força rebuild de todos os assets
+    // Generate sourcemaps only for non-production to reduce build time/maintenance
+    sourcemap: mode !== 'production',
+    // Break CSS into separate files
     cssCodeSplit: true,
-    // Adiciona timestamp aos CSS também
-    assetsInlineLimit: 0,
   },
-  // Desabilita otimização de dependências em cache
+  // Default optimization settings are usually best
   optimizeDeps: {
-    force: true,
-    // Inclui componentes admin para garantir rebuild
     include: [
       'react',
       'react-dom',
-      'react-router-dom'
+      'react-router-dom',
+      'lucide-react',
+      '@radix-ui/react-dialog'
     ]
   },
-  // Desabilita cache de ESBuild
   esbuild: {
-    keepNames: false,
+    // Drop console.log in production
+    drop: mode === 'production' ? ['console', 'debugger'] : [],
   },
-  // Define variáveis globais para cache busting no código
-  define: {
-    __BUILD_TIMESTAMP__: JSON.stringify(timestamp),
-    __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
-  }
 }));

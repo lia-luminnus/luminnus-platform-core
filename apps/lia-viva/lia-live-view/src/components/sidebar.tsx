@@ -4,6 +4,7 @@ import { useState } from "react"
 import { MessageSquare, Radio, BarChart3, Zap, Plus, FolderOpen, MoreHorizontal, Edit2, Trash2, Check, X, Layers } from "lucide-react"
 import type { ActiveView } from "@/app/page"
 import { useLIA, Conversation } from "@/context/LIAContext"
+import { filterByCapability } from "@luminnus/shared"
 
 const LIA_BUST_URL = "/images/lia-bust.png"
 
@@ -11,9 +12,9 @@ const LIA_BUST_URL = "/images/lia-bust.png"
 const navItems = [
   { id: "chat" as const, label: "Chat Mode", icon: MessageSquare, mode: 'chat' as const },
   { id: "multimodal" as const, label: "Multi-Modal", icon: Zap, mode: 'multimodal' as const },
-  { id: "live" as const, label: "Live Mode", icon: Radio, mode: 'live' as const },
-  { id: "data" as const, label: "Data Insights", icon: BarChart3, mode: null },
-  { id: "studio" as const, label: "Avatar Studio", icon: Layers, mode: null },
+  { id: "live" as const, label: "Live Mode", icon: Radio, mode: 'live' as const, requiredCapability: "canUseLiveMode" },
+  { id: "data" as const, label: "Data Insights", icon: BarChart3, mode: null, requiredCapability: "canGenerateReport" },
+  { id: "studio" as const, label: "Avatar Studio", icon: Layers, mode: null, requiredCapability: "canAccessAdminPanel" },
 ]
 
 interface SidebarProps {
@@ -31,8 +32,12 @@ export function Sidebar({ activeView, setActiveView }: SidebarProps) {
     switchConversation,
     renameConversation,
     deleteConversation,
-    plan
+    plan,
+    user // v7.0: Acessar role do usuário
   } = useLIA();
+
+  // Filtrar itens de navegação por capabilities
+  const filteredNavItems = filterByCapability(navItems, user?.role || 'client', plan || 'start');
 
   // Modo atual baseado na view ativa
   const currentMode = navItems.find(n => n.id === activeView)?.mode || null;
@@ -78,7 +83,7 @@ export function Sidebar({ activeView, setActiveView }: SidebarProps) {
 
       {/* Navigation - Modos */}
       <nav className="p-3 space-y-1 border-b border-[rgba(0,243,255,0.2)]">
-        {navItems.map((item) => {
+        {filteredNavItems.map((item) => {
           const isActive = activeView === item.id
           return (
             <button

@@ -135,20 +135,41 @@ export function setupConversationRoutes(app: Express) {
     // POST /api/messages/save - Persistir mensagem diretamente no Supabase
     app.post('/api/messages/save', async (req, res) => {
         try {
-            const { conversationId, role, content, origin = 'text', userId } = req.body;
+            const { conversationId, role, content, origin = 'text', userId, messageId, attachments = [] } = req.body;
 
             if (!conversationId || !content) {
                 return res.status(400).json({ ok: false, error: 'ID da conversa e conteúdo são obrigatórios' });
             }
 
-            console.log(`💾 Persistindo mensagem ${origin}: ${content.substring(0, 30)}...`);
+            console.log(`💾 Persistindo mensagem ${origin} (id: ${messageId || 'new'}): ${content.substring(0, 30)}...`);
 
             const { saveMessage } = await import('../config/supabase.js');
-            await saveMessage(conversationId, role, content, origin);
+            await saveMessage(conversationId, role, content, origin, attachments, messageId);
 
             res.json({ ok: true, saved: true });
         } catch (error) {
             console.error('❌ Erro ao persistir mensagem:', error);
+            res.status(500).json({ ok: false, error: String(error) });
+        }
+    });
+
+    // GET /api/messages - Buscar histórico de mensagens
+    app.get('/api/messages', async (req, res) => {
+        try {
+            const conversationId = req.query.conversationId as string;
+            const limit = parseInt(req.query.limit as string) || 100;
+
+            if (!conversationId) {
+                return res.status(400).json({ ok: false, error: 'conversationId é obrigatório' });
+            }
+
+            const { loadConversation } = await import('../config/supabase.js');
+            const messages = await loadConversation(conversationId, limit);
+
+            // Supabase order desc (recent first) -> reverse to show chronologically
+            res.json(messages.reverse());
+        } catch (error) {
+            console.error('❌ Erro ao buscar mensagens:', error);
             res.status(500).json({ ok: false, error: String(error) });
         }
     });

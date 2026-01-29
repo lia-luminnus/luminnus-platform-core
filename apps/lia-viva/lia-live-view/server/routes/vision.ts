@@ -68,79 +68,187 @@ export function setupVisionRoutes(app: Express) {
     // ======================================================================
     // POST /api/vision/analyze - Análise completa de arquivos
     // ======================================================================
-    app.post('/api/vision/analyze', upload.single('file'), async (req, res) => {
-        let filePath: string | null = null;
+    app.post('/api/vision/analyze', upload.array('files', 10), async (req, res) => {
+        let filePaths: string[] = [];
 
         try {
-            const file = req.file;
+            const files = req.files as Express.Multer.File[];
             const userPrompt = req.body.prompt || '';
-            const userId = req.body.userId || '00000000-0000-0000-0000-000000000001';
-            const tenantId = req.body.tenantId || '00000000-0000-0000-0000-000000000001';
+            const userId = req.body.userId;
+            const tenantId = req.body.tenantId;
 
-            if (!file) {
+            if (!files || files.length === 0) {
                 return res.status(400).json({ error: 'Nenhum arquivo enviado' });
             }
 
-            filePath = file.path;
+            if (!userId || !tenantId) {
+                return res.status(400).json({ error: 'userId e tenantId são obrigatórios' });
+            }
+
+            filePaths = files.map(f => f.path);
             const geminiApiKey = process.env.GEMINI_API_KEY;
 
             if (!geminiApiKey) {
                 return res.status(500).json({ error: 'GEMINI_API_KEY não configurada' });
             }
 
-            console.log(`📤 Analisando: ${file.originalname} (${file.mimetype}, ${(file.size / 1024).toFixed(1)}KB)`);
+            console.log(`📤 Analisando ${files.length} arquivo(s). Primeiro: ${files[0].originalname}`);
 
-            // 1. Log Ingestão (Seção 7.1)
-            await AuditService.log(userId, tenantId, 'native', 'file_ingested', 'success', `Arquivo recebido: ${file.originalname}`);
+            const processedFilesForAIRouter: any[] = [];
+            const attachmentsForMessage: any[] = [];
+            let inventoryPromptParts: string[] = [];
+            let wordTextPromptParts: string[] = [];
 
-            // Buffers e base64 para o Gemini
-            const fileBuffer = fs.readFileSync(filePath);
-            let base64Data = fileBuffer.toString('base64');
-            let effectiveMimetype = file.mimetype;
+            // IDs validados (já checados acima)
+            const finalUserId = userId;
+            const finalTenantId = tenantId;
 
-            // Determinar tipo de análise baseado no arquivo
-            const analysisType = getAnalysisType(file.mimetype, file.originalname);
+            for (const file of files) {
+                const filePath = file.path;
+                console.log(`  -> Processando: ${file.originalname} (${file.mimetype})`);
 
-            // ========================================
-            // TRATAMENTO ESPECIAL: Word Documents (.docx)
-            // Gemini não suporta .docx, então extraímos texto
-            // ========================================
-            const isWordDoc = file.mimetype.includes('wordprocessingml') ||
-                file.originalname.toLowerCase().endsWith('.docx') ||
-                file.originalname.toLowerCase().endsWith('.doc');
+                // 1. Log Ingestão
+                await AuditService.log(finalUserId, finalTenantId, 'native', 'file_ingested', 'success', `Arquivo recebido: ${file.originalname}`);
 
-            let extractedText = '';
-            if (isWordDoc) {
+                // Buffers e base64 para o Gemini
+                const fileBuffer = fs.readFileSync(filePath);
+                let base64Data = fileBuffer.toString('base64');
+                let effectiveMimetype = file.mimetype;
+
+                // Determinar tipo de análise baseado no arquivo
+                const analysisType = getAnalysisType(file.mimetype, file.originalname);
+
+                // ========================================
+                // TRATAMENTO ESPECIAL: Word Documents (.docx)
+                // ========================================
+                const isWordDoc = file.mimetype.includes('wordprocessingml') ||
+                    file.originalname.toLowerCase().endsWith('.docx') ||
+                    file.originalname.toLowerCase().endsWith('.doc');
+
+                let extractedText = '';
+                if (isWordDoc) {
+                    try {
+                        const mammoth = await import('mammoth');
+                        const extractFn = (mammoth as any).extractRawText || (mammoth as any).default?.extractRawText;
+                        if (!extractFn) throw new Error('Não foi possível encontrar a função de extração do mammoth');
+                        
+                        const result = await extractFn({ buffer: fileBuffer });
+                        extractedText = result.value;
+                        console.log(`    📄 Texto extraído do Word: ${extractedText.length} caracteres`);
+
+                        // Converter para texto simples para o Gemini
+                        base64Data = Buffer.from(extractedText, 'utf-8').toString('base64');
+                        effectiveMimetype = 'text/plain';
+                        wordTextPromptParts.push(`CONTEÚDO DO DOCUMENTO "${file.originalname}":\n\n${extractedText}`);
+                    } catch (wordError: any) {
+                        console.error('    ❌ Erro ao extrair texto do Word:', wordError);
+                    }
+                }
+
+                // Tratamento especial para compactados
+                if (analysisType === 'archive') {
+                    try {
+                        const { ArchiveService } = await import('../services/archiveService.js');
+                        const inventory = ArchiveService.getInventory(filePath, file.originalname);
+                        inventoryPromptParts.push(`INVENTÁRIO DO ARQUIVO COMPACTADO "${file.originalname}":\n${JSON.stringify(inventory, null, 2)}`);
+                        console.log(`    📦 Inventário gerado para ${file.originalname}`);
+                    } catch (archiveErr) {
+                        console.error('    ❌ Erro ao gerar inventário:', archiveErr);
+                    }
+                }
+
+                // 1. Upload do arquivo para Supabase Storage
+                let storageUrl: string | null = null;
+                let storagePath: string | null = null;
+                let fileId: string | undefined = undefined;
+
                 try {
-                    const mammoth = await import('mammoth');
-                    const result = await mammoth.default.extractRawText({ buffer: fileBuffer });
-                    extractedText = result.value;
-                    console.log(`📄 Texto extraído do Word: ${extractedText.length} caracteres`);
+                    const uploadResult = await FileService.uploadToStorage(
+                        finalTenantId,
+                        finalUserId,
+                        fileBuffer,
+                        file.originalname,
+                        file.mimetype
+                    );
 
-                    // Converter para texto simples para o Gemini
-                    base64Data = Buffer.from(extractedText, 'utf-8').toString('base64');
-                    effectiveMimetype = 'text/plain';
-                } catch (wordError: any) {
-                    console.error('❌ Erro ao extrair texto do Word:', wordError);
-                    throw new Error(`Não foi possível processar o arquivo Word: ${wordError.message}`);
+                    if (uploadResult) {
+                        storageUrl = uploadResult.url;
+                        storagePath = uploadResult.path;
+                        console.log(`    ✅ Arquivo salvo no Storage: ${storagePath}`);
+
+                        // Determinar pasta
+                        let folderName = 'Documentos';
+                        if (file.mimetype.startsWith('image/')) folderName = 'Imagens';
+                        else if (file.mimetype.includes('spreadsheet') || file.mimetype.includes('excel') || file.originalname.match(/\.(xls|xlsx|csv)$/i)) folderName = 'Planilhas';
+                        else if (file.mimetype.includes('presentation') || file.originalname.match(/\.(ppt|pptx)$/i)) folderName = 'Apresentações';
+
+                        const folderId = await FileService.getOrCreateFolder(finalTenantId, finalUserId, folderName, 'lia_shared');
+
+                        // 2. REGISTRO NO BANCO DE DADOS
+                        const fileRecord = await FileService.saveMetadata({
+                            tenant_id: finalTenantId,
+                            user_id: finalUserId,
+                            file_name: file.originalname,
+                            file_type: file.mimetype,
+                            file_size: file.size,
+                            storage_path: storagePath,
+                            storage_url: storageUrl,
+                            folder_id: folderId,
+                            parse_method: 'gemini-vision',
+                            status: 'uploaded',
+                            scope: 'lia_shared',
+                            source: 'lia_attachment'
+                        });
+
+                        fileId = fileRecord?.id;
+
+                        // Emitir evento Socket
+                        const io = req.app.get('io');
+                        if (io && fileRecord) {
+                            io.to(`tenant:${finalTenantId}`).emit('file-uploaded', fileRecord);
+                        }
+
+                        // Adicionar aos anexos da mensagem
+                        attachmentsForMessage.push({
+                            id: fileId,
+                            name: file.originalname,
+                            type: file.mimetype.startsWith('image/') ? 'image' : 'document',
+                            url: storageUrl || '',
+                            snapshot: extractedText || null
+                        });
+
+                        // Adicionar ao array para o AIRouter
+                        processedFilesForAIRouter.push({
+                            mimetype: effectiveMimetype,
+                            data: base64Data,
+                            name: file.originalname,
+                            size: file.size,
+                            id: fileId,
+                            storage_url: storageUrl || undefined,
+                            storage_path: storagePath || undefined,
+                            folder_id: folderId || undefined
+                        });
+                    }
+                } catch (upErr: any) {
+                    console.error(`    ❌ Erro no upload de ${file.originalname}:`, upErr.message);
                 }
             }
 
-            // Tratamento especial para compactados (v1.1 Inventário)
+            // Gating: Verificar se pelo menos um arquivo foi processado
+            if (processedFilesForAIRouter.length === 0) {
+                return res.status(500).json({ error: 'Nenhum arquivo pôde ser processado ou salvo no Storage.' });
+            }
+
+            // Construir prompt final
             let finalPrompt = userPrompt;
-            if (analysisType === 'archive') {
-                const { ArchiveService } = await import('../services/archiveService.js');
-                const inventory = ArchiveService.getInventory(filePath, file.originalname);
-                finalPrompt = `O usuário enviou um arquivo compactado. INVENTÁRIO DO ARQUIVO:\n${JSON.stringify(inventory, null, 2)}\n\nPergunta do usuário: ${userPrompt}`;
-                console.log(`📦 Inventário gerado para ${file.originalname}: ${inventory.total_files} arquivos`);
+            if (inventoryPromptParts.length > 0) {
+                finalPrompt = `${finalPrompt}\n\n${inventoryPromptParts.join('\n\n')}`;
+            }
+            if (wordTextPromptParts.length > 0) {
+                finalPrompt = `${finalPrompt}\n\n${wordTextPromptParts.join('\n\n')}`;
             }
 
-            // Se for Word, adicionar contexto ao prompt
-            if (isWordDoc && extractedText) {
-                finalPrompt = `O usuário enviou um documento Word. CONTEÚDO DO DOCUMENTO:\n\n${extractedText}\n\n---\nPergunta do usuário: ${userPrompt || 'Analise este documento e me dê um resumo.'}`;
-            }
-
-            // 1.5 Detectar intenção do usuário (v1.1.1)
+            // Detectar intenção
             let userIntent: 'resumo' | 'tabela' | 'completo' = 'resumo';
             const lowerPrompt = (userPrompt || '').toLowerCase();
             if (lowerPrompt.includes('tabela') || lowerPrompt.includes('planilha') || lowerPrompt.includes('coluna')) {
@@ -149,44 +257,31 @@ export function setupVisionRoutes(app: Express) {
                 userIntent = 'completo';
             }
 
-            // =====================================================
-            // OUTPUT GOVERNANCE v1.3 - Enriquecer prompt
-            // =====================================================
+            // Governança de Output (Prompt Enrichment)
             const { OutputGovernance } = await import('../services/outputGovernance.js');
-            const enrichedPrompt = OutputGovernance.enrichPrompt(finalPrompt, [{ type: file.mimetype }]);
-
-            // 2. Processar via AIRouter (Pipeline Híbrido v1.2.1)
-            // Para Word, enviamos o texto extraído; para outros, o arquivo original
-            // v1.2.1: Incluir userPlan e connections para detecção correta de Admin/Plano
             const userPlan = req.body.userPlan || 'free';
+            const userRole = req.body.userRole || 'client';
+            const enrichedPrompt = OutputGovernance.enrichPrompt(finalPrompt, files.map(f => ({ type: f.mimetype })), userPlan);
+
+            // 2. Processar via AIRouter
             const connections = req.body.connections || {};
 
             let result = await AIRouter.route({
                 userId,
                 tenantId,
                 prompt: enrichedPrompt,
-                conversationId: req.body.conversationId, // v1.1.2: Para contexto
+                conversationId: req.body.conversationId,
                 userIntent,
-                userPlan, // v1.2.1: Plano do usuário para Execution Router
-                connections, // v1.2.1: Conexões ativas para verificação de capacidades
-                files: (analysisType === 'archive' || isWordDoc) ? [] : [{
-                    mimetype: effectiveMimetype,
-                    data: base64Data,
-                    name: file.originalname,
-                    size: file.size
-                }]
+                userPlan,
+                userRole,
+                connections,
+                files: processedFilesForAIRouter
             });
 
-
-            // =====================================================
-            // OUTPUT GOVERNANCE v1.3 - Validação, Retry, Formatação
-            // =====================================================
-            // Skip governance if it's an execution router fallback/placeholder
+            // Governança de Output (Response)
             if (!result.detailPayload?.isFallback) {
                 try {
-                    const { OutputGovernance } = await import('../services/outputGovernance.js');
                     const { OpenAIService } = await import('../services/openAIService.js');
-
                     const governed = await OutputGovernance.forMultiModal(
                         result.text || '',
                         finalPrompt,
@@ -194,115 +289,90 @@ export function setupVisionRoutes(app: Express) {
                             const retryResult = await OpenAIService.chat(retryPrompt, [], 'gpt-4o-mini');
                             return retryResult.text;
                         },
-                        [{ type: file.mimetype }]
+                        files.map(f => ({ type: f.mimetype })),
+                        userPlan
                     );
-
                     result = { ...result, text: governed.markdown, detailPayload: governed.detailPayload };
-
-                    if (governed.retryAttempts > 0 || governed.secretsDetected) {
-                        console.log(`📋 [OutputGovernance] MultiModal: ${governed.contractType}, Retries: ${governed.retryAttempts}`);
-                    }
                 } catch (govError) {
                     console.warn('⚠️ [OutputGovernance] Erro na governança multimodal:', govError);
                 }
-            } else {
-                console.log(`🛡️ [OutputGovernance] Skipped for Execution Router response.`);
             }
 
-            // 3. Upload do arquivo para Supabase Storage (v2.0 - Persistência)
-            let storageUrl: string | null = null;
-            let storagePath: string | null = null;
-            let storageError: string | null = null;
-
-            try {
-                // IDs de fallback mais robustos se não informados
-                const finalUserId = userId || '00000000-0000-0000-0000-000000000001';
-                const finalTenantId = tenantId || '00000000-0000-0000-0000-000000000001';
-
-                const uploadResult = await FileService.uploadToStorage(
-                    finalTenantId,
-                    finalUserId,
-                    fileBuffer,
-                    file.originalname,
-                    file.mimetype
-                );
-
-                if (uploadResult) {
-                    storageUrl = uploadResult.url;
-                    storagePath = uploadResult.path;
-                    console.log(`✅ Arquivo salvo no Storage: ${storagePath}`);
-                }
-            } catch (upErr: any) {
-                console.error('❌ Erro no upload (continuando análise):', upErr.message);
-                storageError = upErr.message;
-                if (storageError?.includes('Bucket not found')) {
-                    storageError = "ERRO: O bucket 'user-files' não foi encontrado. Crie-o no Dashboard do Supabase.";
-                }
-            }
-
-            // 4. Persistir mensagens no Banco de Dados (v2.1)
+            // 4. Persistir mensagens no Banco de Dados
             const conversationId = req.body.conversationId;
+            const messageId = req.body.messageId || null;
+            let responseMessageId: string | undefined;
+
             if (conversationId) {
                 try {
-                    // Salvar mensagem do usuário com o arquivo
-                    await saveMessage(conversationId, 'user', userPrompt || `Analise: ${file.originalname}`, 'multimodal', [{
-                        name: file.originalname,
-                        type: file.mimetype.startsWith('image/') ? 'image' : 'document',
-                        url: storageUrl || ''
-                    }]);
+                    responseMessageId = messageId ? `resp_${messageId}` : `vision_${Date.now()}`;
 
-                    // Salvar resposta da LIA (usando 'assistant' para compatibilidade com DB)
-                    await saveMessage(conversationId, 'assistant', result.text, 'multimodal', storageUrl ? [{
-                        name: file.originalname,
-                        type: file.mimetype.startsWith('image/') ? 'image' : 'document',
-                        url: storageUrl
-                    }] : []);
+                    // Salvar mensagem do usuário
+                    await saveMessage(conversationId, 'user', userPrompt || `Analise ${files.length} arquivo(s)`, 'multimodal', attachmentsForMessage, messageId);
 
-                    console.log(`💾 Mensagens persistidas para conversa: ${conversationId}`);
+                    // Salvar resposta da LIA
+                    await saveMessage(conversationId, 'assistant', result.text, 'multimodal', attachmentsForMessage, responseMessageId);
 
+                    // Emitir eventos Socket
+                    const io = req.app.get('io');
+                    if (io) {
+                        io.to(`conv:${conversationId}`).emit('lia-message', {
+                            id: messageId || `user_${Date.now()}`,
+                            conversation_id: conversationId,
+                            role: 'user',
+                            type: 'user',
+                            content: userPrompt || `Analise ${files.length} arquivo(s)`,
+                            origin: 'multimodal',
+                            attachments: attachmentsForMessage,
+                            created_at: new Date().toISOString()
+                        });
+
+                        io.to(`conv:${conversationId}`).emit('lia-message', {
+                            id: responseMessageId,
+                            conversation_id: conversationId,
+                            role: 'assistant',
+                            type: 'lia',
+                            content: result.text,
+                            origin: 'multimodal',
+                            attachments: attachmentsForMessage,
+                            created_at: new Date().toISOString()
+                        });
+                    }
                 } catch (saveError) {
-                    console.error('⚠️ Erro ao persistir mensagens (continuando):', saveError);
+                    console.error('⚠️ Erro ao persistir mensagens:', saveError);
                 }
             }
 
-            // Limpar arquivo temporário
-            if (filePath) {
-                fs.unlinkSync(filePath);
-                filePath = null;
+            // Limpar arquivos temporários
+            for (const f of files) {
+                if (fs.existsSync(f.path)) {
+                    fs.unlinkSync(f.path);
+                }
             }
-
 
             res.json({
                 success: true,
-                filename: file.originalname,
-                mimeType: file.mimetype,
-                fileSize: file.size,
-                analysisType,
-                // v2.0: URLs de download
-                storageUrl,
-                storagePath,
-                storageError, // Para debug se necessário
+                id: responseMessageId,
+                fileIds: processedFilesForAIRouter.map(f => f.id),
                 analysis: {
-                    title: file.originalname,
+                    title: files.length > 1 ? `${files.length} Arquivos` : files[0].originalname,
                     summary: result?.text || 'Análise completa.',
-                    details: [],
-                    insights: [],
                     detailPayload: result?.detailPayload
                 },
-                provider: result?.provider || 'gemini',
-                model: result?.model || 'vision'
+                provider: result?.provider || 'hybrid',
+                model: result?.model || 'lia-execution'
             });
-
-
-
-
 
         } catch (error: any) {
             console.error('❌ Erro ao analisar arquivo:', error);
 
-            // Limpar arquivo
-            if (filePath && fs.existsSync(filePath)) {
-                try { fs.unlinkSync(filePath); } catch (e) { }
+            // Limpar arquivos
+            if (filePaths && Array.isArray(filePaths)) {
+                for (const path of filePaths) {
+                    if (fs.existsSync(path)) {
+                        try { fs.unlinkSync(path); } catch (e) { }
+                    }
+                }
             }
 
             res.status(500).json({
@@ -364,7 +434,7 @@ Para ANÁLISES:
 Gere dados realistas e úteis baseados no contexto.`;
 
             const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

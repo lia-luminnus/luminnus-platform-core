@@ -10,7 +10,8 @@ export type AuditEvent =
     | 'execution_requested'
     | 'execution_success'
     | 'execution_failed'
-    | 'permission_denied';
+    | 'permission_denied'
+    | 'governor_audit';
 
 export class AuditService {
     /**

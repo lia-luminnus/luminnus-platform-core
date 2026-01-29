@@ -66,7 +66,8 @@ class BackendService {
   async sendChatMessage(
     message: string,
     conversationId: string,
-    personality: 'clara' | 'viva' | 'firme' = 'viva'
+    personality: 'clara' | 'viva' | 'firme' = 'viva',
+    messageId?: string // v6.0: Idempotência
   ): Promise<ChatResponse | null> {
     try {
       console.log('📤 Enviando mensagem para backend:', message.substring(0, 50));
@@ -79,7 +80,8 @@ class BackendService {
           conversationId,
           personality,
           userId: this.getUserId(),
-          tenantId: this.getUserId()
+          tenantId: this.getUserId(),
+          messageId // v6.0
         }),
       });
 
@@ -404,7 +406,7 @@ class BackendService {
    * v2.4: Salva uma mensagem no banco de dados sem processamento AI
    * Usado para persistir transcrições do modo Live
    */
-  async saveMessage(conversationId: string, role: 'user' | 'assistant' | 'lia', content: string, origin: string = 'voice'): Promise<boolean> {
+  async saveMessage(conversationId: string, role: 'user' | 'assistant' | 'lia', content: string, origin: string = 'voice', messageId: string | null = null): Promise<boolean> {
     try {
       const response = await fetch(`${BACKEND_URL}/api/messages/save`, {
         method: 'POST',
@@ -414,13 +416,68 @@ class BackendService {
           role: role === 'lia' ? 'assistant' : role,
           content,
           origin,
-          userId: this.getUserId()
+          userId: this.getUserId(),
+          messageId // v6.0: Idempotência
         }),
       });
       return response.ok;
     } catch (error) {
       console.error('❌ Erro ao salvar mensagem:', error);
       return false;
+    }
+  }
+
+  /**
+   * v6.0: Busca histórico de mensagens de uma conversa no Supabase
+   */
+  async loadMessagesFromDB(conversationId: string): Promise<Message[]> {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/messages?conversationId=${conversationId}`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Converter formato do backend para o formato Message da LIA
+        return data.map((m: any) => ({
+          id: m.id,
+          type: m.role === 'assistant' ? 'lia' : 'user',
+          content: m.content,
+          timestamp: new Date(m.created_at).getTime(),
+          attachments: m.attachments || []
+        }));
+      }
+      return [];
+    } catch (error) {
+      console.error('❌ Erro ao carregar mensagens do DB:', error);
+      return [];
+    }
+  }
+
+  /**
+   * v1.3.1: Busca perfil do usuário incluindo plano
+   * Backend: GET /api/profile
+   */
+  async getUserProfile(): Promise<{ plan?: string; plan_level?: string; email?: string } | null> {
+    try {
+      const userId = this.getUserId();
+      if (!userId) return null;
+
+      const response = await fetch(`${BACKEND_URL}/api/profile?userId=${userId}`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+
+      if (response.ok) {
+        const profile = await response.json();
+        console.log('📋 [BackendService] Perfil carregado:', profile);
+        return profile;
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Erro ao buscar perfil:', error);
+      return null;
     }
   }
 

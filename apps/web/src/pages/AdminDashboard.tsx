@@ -21,8 +21,7 @@ import AdminLIAContainer from "@/components/admin/AdminLIAContainer";
 import AdminWhatsAppGovernance from "@/components/admin/AdminWhatsAppGovernance";
 import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-
-const ADMIN_EMAILS = ["luminnus.lia.ai@gmail.com"];
+import { isAdminEmail } from "@/config/auth";
 
 const AdminDashboard = () => {
   const { user, loading: authLoading } = useAuth();
@@ -39,7 +38,7 @@ const AdminDashboard = () => {
   }, []);
 
   // Verificação extra por email (para evitar flash)
-  const isAdminByEmail = user?.email && ADMIN_EMAILS.includes(user.email);
+  const isAdminByEmail = isAdminEmail(user?.email);
   const shouldShowAdmin = isAdmin || isAdminByEmail;
 
   // Enquanto verifica autenticação

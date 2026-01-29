@@ -6,6 +6,16 @@ import { supabase } from '../config/supabase.js';
 
 const router = Router();
 
+// Rota de diagnóstico para testar o Proxy do Vite
+router.get('/ping', (req: Request, res: Response) => {
+    console.log('📡 [AdminWhatsApp] Diagnostic PING hit on port 3000');
+    res.json({
+        status: 'ok',
+        message: 'WhatsApp Admin API está acessível na porta 3000',
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Redact helpers
 function maskPhoneNumber(phone: string): string {
     if (!phone) return 'N/A';
@@ -20,6 +30,7 @@ function maskPhoneNumber(phone: string): string {
  * Returns platform-wide WhatsApp configuration
  */
 router.get('/platform-config', adminGate, async (req: Request, res: Response) => {
+    console.log('📡 [AdminWhatsApp] GET /platform-config solicitado');
     const ctx = getAdminContext(req);
 
     try {
@@ -41,9 +52,9 @@ router.get('/platform-config', adminGate, async (req: Request, res: Response) =>
             },
             trace_id: ctx?.traceId
         });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error('❌ Error fetching platform config:', error);
-        res.status(500).json({ error: String(error) });
+        res.status(500).json({ error: String(error), trace_id: ctx?.traceId });
     }
 });
 
@@ -53,6 +64,7 @@ router.get('/platform-config', adminGate, async (req: Request, res: Response) =>
  * BYO model: each tenant has their own WABA/Token, admin only manages webhook config
  */
 router.post('/platform-config', adminGate, async (req: Request, res: Response) => {
+    console.log('📡 [AdminWhatsApp] POST /platform-config solicitado');
     const ctx = getAdminContext(req);
     const { config } = req.body;
 
@@ -118,23 +130,64 @@ router.post('/platform-config', adminGate, async (req: Request, res: Response) =
 
 /**
  * GET /api/admin/whatsapp/overview
- * Returns KPI data for WhatsApp governance
+ * Returns KPI data for WhatsApp governance from database
  */
 router.get('/overview', adminGate, async (req: Request, res: Response) => {
     const ctx = getAdminContext(req);
 
-    // In a real scenario, we would query the database here.
-    // For now, we return mock data consistent with the dashboard.
-    res.json({
-        totalTenants: 42,
-        errorTenants: 3,
-        webhookHealth: '98%',
-        messagesToday: '15.4k',
-        templatesToday: '2.1k',
-        activeAlerts: 4,
-        timestamp: new Date().toISOString(),
-        trace_id: ctx?.traceId
-    });
+    try {
+        const platformId = '00000000-0000-0000-0000-000000000000';
+
+        // 1. Total Tenants with WhatsApp connections
+        const { count: totalTenants } = await supabase
+            .from('whatsapp_connections')
+            .select('*', { count: 'exact', head: true })
+            .neq('tenant_id', platformId);
+
+        // 2. Tenants with error status
+        const { count: errorTenants } = await supabase
+            .from('whatsapp_connections')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', 'error')
+            .neq('tenant_id', platformId);
+
+        // 3. Messages today
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const { count: messagesToday } = await supabase
+            .from('whatsapp_messages')
+            .select('*', { count: 'exact', head: true })
+            .gte('created_at', today.toISOString());
+
+        // 4. Templates (Mocked as we don't have a template table yet, but could be a query to messages metadata)
+        const templatesToday = Math.floor((messagesToday || 0) * 0.15);
+
+        // 5. Calculate Webhook Health (connected / total)
+        const { count: activeWebhook } = await supabase
+            .from('whatsapp_connections')
+            .select('*', { count: 'exact', head: true })
+            .neq('status', 'error')
+            .neq('tenant_id', platformId);
+
+        const healthPercent = totalTenants && totalTenants > 0
+            ? Math.round(((activeWebhook || 0) / totalTenants) * 100)
+            : 100;
+
+        res.json({
+            totalTenants: totalTenants || 0,
+            errorTenants: errorTenants || 0,
+            webhookHealth: `${healthPercent}%`,
+            messagesToday: messagesToday > 1000 ? `${(messagesToday / 1000).toFixed(1)}k` : String(messagesToday || 0),
+            templatesToday: String(templatesToday),
+            activeAlerts: errorTenants || 0,
+            timestamp: new Date().toISOString(),
+            trace_id: ctx?.traceId
+        });
+    } catch (error: unknown) {
+        console.error('❌ Error fetching overview stats:', error);
+        res.status(500).json({ error: String(error), trace_id: ctx?.traceId });
+    }
 });
 
 /**
@@ -142,8 +195,10 @@ router.get('/overview', adminGate, async (req: Request, res: Response) => {
  * Returns list of tenants with WhatsApp integrations from Supabase
  */
 router.get('/tenants', adminGate, async (req: Request, res: Response) => {
+    console.log('📡 [AdminWhatsApp] GET /tenants solicitado');
     const ctx = getAdminContext(req);
-    const { search } = req.query;
+    const searchRaw = req.query.search;
+    const search = typeof searchRaw === 'string' ? searchRaw : undefined;
 
     try {
         // Fetch real tenant data from whatsapp_connections
@@ -172,8 +227,8 @@ router.get('/tenants', adminGate, async (req: Request, res: Response) => {
         // Filter by search if provided
         const filteredTenants = search
             ? tenants.filter(t =>
-                t.name.toLowerCase().includes((search as string).toLowerCase()) ||
-                t.phone.includes(search as string)
+                t.name.toLowerCase().includes(search.toLowerCase()) ||
+                t.phone.includes(search)
             )
             : tenants;
 

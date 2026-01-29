@@ -38,7 +38,7 @@ const allAvailableFeatures = [
     "Chat integrado (com histórico)",
     "Integração com e-mail",
     "E-mail profissional",
-    "Messenger (Facebook), Telegram, Instagram Direct",
+    "Messenger (Facebook), Telegram",
     "Criação de 1 fluxo de automação",
     "10 fluxos de automação customizados",
     "Construtor visual de fluxos com IA",

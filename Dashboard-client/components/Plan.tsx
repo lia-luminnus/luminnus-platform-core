@@ -1,23 +1,84 @@
+import { Bot, Check, Loader2 } from "lucide-react";
 import React, { useContext, useState } from 'react';
-import Header from './Header';
+import { useNavigate } from 'react-router-dom';
+import { ThemeContext } from '../App';
+import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 import { LanguageContext } from '../contexts/LanguageContext';
 import { usePlans, Plan as PlanType } from '../hooks/usePlans';
-import { useDashboardAuth } from '../contexts/DashboardAuthContext';
-import { Loader2, Check, Rocket } from 'lucide-react';
+import { useSubscription } from '../hooks/useSubscription';
+import { supabase } from '../lib/supabase';
+import Header from './Header';
+import { toast } from 'react-hot-toast';
 
 const Plan: React.FC = () => {
    const { t } = useContext(LanguageContext);
-   const { plans, loading } = usePlans();
-   const { plan: currentPlan } = useDashboardAuth();
+   const { plans, loading: loadingPlans } = usePlans();
+   const { user, profile, plan: authPlan, setPlanName } = useDashboardAuth();
+   const { subscription, invoices, loading: loadingSub } = useSubscription();
    const [isAnnual, setIsAnnual] = useState(true);
+   const navigate = useNavigate();
 
-   const handleAction = (action: string) => {
-      alert(`${t('featureComingSoon')} (${action})`);
+   // Usar plan_name do subscription (Supabase) como fonte primária, com fallback para authPlan
+   const currentPlanName = subscription?.plan_name || authPlan?.name || 'Start';
+
+   const PLAN_ORDER: Record<string, number> = { 'Start': 1, 'Plus': 2, 'Pro': 3 };
+   const currentTier = PLAN_ORDER[currentPlanName] || 1;
+
+   // 🔐 ADMIN PRIVILEGE: Se for admin, mostrar todos os planos e permitir troca livre
+   const isAdmin = user?.email === "luminnus.lia.ai@gmail.com";
+   const filteredPlans = isAdmin ? plans : plans.filter(p => (PLAN_ORDER[p.name] || 0) >= currentTier);
+
+   const handleManage = async () => {
+      try {
+         const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+         const { data: { session } } = await supabase.auth.getSession();
+         const response = await fetch(`${API_URL}/api/stripe/create-portal-session`, {
+            method: 'POST',
+            headers: {
+               'Content-Type': 'application/json',
+               'Authorization': `Bearer ${session?.access_token}`
+            }
+         });
+         const { url } = await response.json();
+         if (url) window.location.href = url;
+         else toast.error('Não foi possível abrir o portal de gerenciamento.');
+      } catch (err) {
+         toast.error('Erro ao conectar com o serviço de pagamentos.');
+      }
    };
 
-   if (loading) {
+   const handleCancel = () => {
+      if (subscription?.payment_type === 'annual_12x') {
+         toast((t) => (
+            <div className="flex flex-col gap-2">
+               <span className="font-bold border-b border-white/10 pb-1 mb-1">Aviso de Fidelidade</span>
+               <p className="text-xs text-white/80">Este plano possui contrato de 12 meses. O cancelamento antecipado deve ser tratado diretamente com nossa equipe.</p>
+               <div className="flex gap-2 mt-2">
+                  <button onClick={() => { toast.dismiss(t.id); navigate('/support'); }} className="bg-brand-primary text-white text-[10px] font-black px-4 py-2 rounded-lg hover:scale-105 transition-all shadow-lg shadow-brand-primary/20">Falar com Suporte</button>
+                  <button onClick={() => toast.dismiss(t.id)} className="bg-white/10 text-white/60 text-[10px] font-black px-4 py-2 rounded-lg hover:bg-white/20 transition-all">Fechar</button>
+               </div>
+            </div>
+         ), { duration: 8000, icon: '🛡️', style: { background: '#1A1A24', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } });
+      } else {
+         handleManage();
+      }
+   };
+
+   const handleSubscribe = (plan: PlanType) => {
+      if (plan.customCTA) {
+         window.open(plan.customCTA.action, '_blank');
+      } else {
+         toast.success(`Redirecionando para checkout ${plan.name}...`);
+         setTimeout(() => {
+            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+            window.location.href = `${API_URL}/api/stripe/create-checkout?plan=${plan.name.toLowerCase()}&annual=${isAnnual}`;
+         }, 1000);
+      }
+   };
+
+   if (loadingPlans || loadingSub) {
       return (
-         <div className="flex flex-col h-full">
+         <div className="flex flex-col h-full bg-[#0B0B0F]">
             <Header title={t('planTitle')} />
             <div className="flex-1 flex items-center justify-center">
                <Loader2 className="w-12 h-12 text-brand-primary animate-spin" />
@@ -27,172 +88,208 @@ const Plan: React.FC = () => {
    }
 
    return (
-      <div className="flex flex-col h-full bg-[#0B0B0F]">
-         <Header title={t('planTitle')} />
-         <div className="flex-1 p-6 pt-2 overflow-y-auto max-w-7xl mx-auto w-full space-y-8">
+      <div className="flex flex-col h-full bg-[#0B0B0F] relative overflow-hidden">
+         {/* Background Glows (Matching Website) */}
+         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#FF2E9E]/5 rounded-full blur-[120px] -z-0 pointer-events-none" />
 
-            {/* Billing Toggle (Matches Web App) */}
+         <Header title={t('planTitle')} />
+
+         <div className="flex-1 p-6 pt-2 overflow-y-auto max-w-7xl mx-auto w-full space-y-10 relative z-10 custom-scrollbar">
+
+            {/* Billing Toggle (Identical to Website) */}
             <div className="flex items-center justify-center gap-4 mt-8">
-               <span className={`text-sm font-semibold transition-all ${!isAnnual ? 'text-white' : 'text-white/50'}`}>
-                  Mensal
-               </span>
+               <span className={`text-base font-bold transition-all ${!isAnnual ? 'text-white' : 'text-white/40'}`}>Mensal</span>
                <button
                   onClick={() => setIsAnnual(!isAnnual)}
-                  className={`relative w-12 h-6 rounded-full transition-all duration-300 ${isAnnual ? 'bg-gradient-to-r from-[#7C3AED] to-[#FF2E9E]' : 'bg-white/20'}`}
+                  className={`relative w-14 h-7 rounded-full transition-all duration-300 ${isAnnual ? 'bg-gradient-to-r from-[#7C3AED] to-[#FF2E9E]' : 'bg-white/10 group hover:bg-white/20'}`}
                >
-                  <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-300 ${isAnnual ? 'translate-x-6' : 'translate-x-0'}`} />
+                  <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full shadow-lg transition-transform duration-300 ${isAnnual ? 'translate-x-7' : 'translate-x-0'}`} />
                </button>
-               <span className={`text-sm font-semibold transition-all ${isAnnual ? 'text-white' : 'text-white/50'}`}>
+               <span className={`text-base font-bold transition-all ${isAnnual ? 'text-white' : 'text-white/40'}`}>
                   Anual
-                  <span className="ml-2 px-2 py-0.5 text-[10px] bg-green-500/20 text-green-400 rounded-full border border-green-500/30">
-                     Economize
-                  </span>
+                  <span className="ml-2 px-2 py-0.5 text-[10px] bg-gradient-to-r from-[#7C3AED] to-[#FF2E9E] rounded-full text-white font-black uppercase">Economize 20%</span>
                </span>
             </div>
 
-            {/* Current Subscription Status */}
-            <div className="glass-panel bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-md relative overflow-hidden group">
-               <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/10 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-brand-primary/20 transition-all" />
-               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
-                  <div className="space-y-2">
-                     <p className="text-sm font-medium text-gray-400">Assinatura Atual</p>
-                     <h2 className="text-3xl font-black bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-                        {currentPlan?.name || 'Start'}
-                     </h2>
-                     <div className="flex flex-wrap items-center gap-4 mt-3">
-                        <span className="px-3 py-1 rounded-full bg-green-500/10 text-green-500 text-[10px] font-black border border-green-500/20 tracking-widest">ATIVA</span>
-                        <span className="text-xs text-gray-500">Renovação em 15 de Julho, 2024</span>
+            {/* Current Subscription Status - Compact Version */}
+            <div className="bg-gradient-to-br from-white/5 to-transparent border border-white/10 rounded-3xl p-6 backdrop-blur-xl relative overflow-hidden group">
+               <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/10 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-brand-primary/15 transition-all duration-700" />
+               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative z-10">
+                  <div className="space-y-1.5">
+                     <p className="text-[9px] font-black uppercase tracking-[0.2em] text-brand-primary/60">Assinatura Atual</p>
+                     <div className="flex items-center gap-3">
+                        <h2 className="text-2xl font-black text-white tracking-tight leading-none">
+                           {currentPlanName}
+                        </h2>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[8px] font-black border tracking-widest uppercase ${subscription?.status === 'active'
+                           ? 'bg-green-500/10 text-green-500 border-green-500/20'
+                           : 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                           }`}>
+                           {subscription?.status === 'active' ? 'Ativa' : 'Pendente'}
+                        </span>
                      </div>
+                     <p className="text-[10px] font-bold text-white/40">
+                        Olá, <span className="text-brand-primary">{profile?.full_name || user?.email?.split('@')[0] || 'Usuário'}</span>
+                     </p>
+                     {subscription?.current_period_end && (
+                        <p className="text-[10px] font-bold text-white/30 flex items-center gap-1.5">
+                           {subscription.cancel_at_period_end ? 'Expira em ' : 'Renovação em '}
+                           <span className="text-white/60">{new Date(subscription.current_period_end).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                        </p>
+                     )}
                   </div>
-                  <div className="flex gap-3">
-                     <button
-                        onClick={() => handleAction(t('manageSubscription'))}
-                        className="px-6 py-2.5 rounded-xl bg-white text-black font-black text-xs hover:bg-gray-200 transition-all active:scale-95"
-                     >
-                        GERENCIAR
-                     </button>
-                     <button
-                        onClick={() => handleAction(t('cancelPlan'))}
-                        className="px-6 py-2.5 rounded-xl border border-white/10 text-white/70 font-black text-xs hover:bg-white/5 transition-all active:scale-95"
-                     >
-                        CANCELAR
-                     </button>
-                  </div>
+                  <button
+                     onClick={handleCancel}
+                     className="px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white border border-white/10 font-bold text-[10px] transition-all active:scale-95 uppercase tracking-wider"
+                  >
+                     Gerenciar Plano
+                  </button>
                </div>
             </div>
 
-            {/* Upgrade Options */}
-            <div className="space-y-8">
-               <div className="text-center">
-                  <h2 className="text-3xl font-black mb-2">Upgrade seu nível</h2>
-                  <p className="text-gray-500">Mude seu plano para desbloquear novos recursos e inteligência</p>
-               </div>
+            {/* Upgrade Options Header */}
+            <div className="text-center space-y-2">
+               <h2 className="text-4xl font-black text-white tracking-tighter">Escolha seu novo nível</h2>
+               <p className="text-white/40 font-medium">Desbloqueie o poder total da LIA e escale seu negócio.</p>
+            </div>
 
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                  {plans.map((p, idx) => {
-                     // Lógica de cálculo de preços robusta
-                     const parsePrice = (str: string) => {
-                        const clean = str.replace(/[^0-9.,]/g, '');
-                        if (clean.includes(',') && clean.includes('.')) {
-                           return parseFloat(clean.replace(/\./g, '').replace(',', '.')) || 0;
-                        }
-                        if (clean.includes(',')) return parseFloat(clean.replace(',', '.')) || 0;
-                        return parseFloat(clean) || 0;
-                     };
+            {/* Plan Cards Grid - Matching Website Design */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-20">
+               {filteredPlans.map((p, idx) => {
+                  const isCurrent = currentPlanName === p.name;
+                  const displayPriceValue = isAnnual ? p.annualPrice : p.price;
 
-                     const numericPrice = parsePrice(p.price);
-                     const annualTotal = !isNaN(numericPrice) ? (numericPrice * 12) * (1 - (p.discount / 100)) : 0;
-                     const annualMonthlyPrice = annualTotal / 12;
-                     const displayPrice = isAnnual ? `€${Math.round(annualMonthlyPrice)}` : p.price;
-                     const isCurrent = currentPlan?.name === p.name;
-
-                     return (
-                        <div
-                           key={idx}
-                           className={`glass-panel border-2 rounded-3xl p-6 flex flex-col transition-all duration-500 relative overflow-hidden group hover:scale-[1.01] ${p.popular ? 'border-brand-primary/50 shadow-[0_0_40px_rgba(124,58,237,0.15)]' : 'border-white/5 hover:border-white/20'
-                              } ${isCurrent ? 'opacity-80' : ''}`}
-                        >
-                           {p.popular && (
-                              <div className="absolute top-0 right-0 bg-brand-primary text-white text-[10px] font-black px-4 py-1.5 rounded-bl-2xl tracking-tighter">
-                                 MAIS POPULAR
+                  return (
+                     <div
+                        key={p.name}
+                        className={`relative p-8 rounded-[32px] border transition-all duration-500 hover:scale-[1.02] flex flex-col group ${p.popular
+                           ? "bg-gradient-to-br from-[#7C3AED]/15 to-[#FF2E9E]/15 border-brand-primary shadow-[0_30px_60px_-15px_rgba(124,58,237,0.3)]"
+                           : "bg-white/5 border-white/10 hover:border-white/20"
+                           } ${isCurrent ? 'opacity-60 ring-2 ring-brand-primary/50' : ''}`}
+                     >
+                        {p.popular && (
+                           <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                              <div className="px-6 py-2 rounded-full bg-gradient-to-r from-[#7C3AED] to-[#FF2E9E] shadow-xl ring-4 ring-dark-bg">
+                                 <p className="text-[10px] font-black text-white uppercase tracking-widest whitespace-nowrap">Mais Popular</p>
                               </div>
-                           )}
-
-                           <h3 className="text-xl font-black tracking-tight mb-1">{p.name}</h3>
-                           <p className="text-xs text-gray-500 mb-6">{p.description}</p>
-
-                           <div className="flex items-baseline gap-1 mb-6">
-                              <span className="text-5xl font-black tracking-tighter">{displayPrice}</span>
-                              <span className="text-sm text-gray-500">{isAnnual ? '/mês' : '/mês'}</span>
                            </div>
+                        )}
 
-                           <ul className="space-y-4 mb-10 flex-1">
-                              {p.features.slice(0, 8).map((feat, i) => (
-                                 <li key={i} className="flex items-start gap-3 text-xs text-gray-400 group-hover:text-gray-200 transition-colors">
-                                    <Check className="w-4 h-4 text-brand-primary flex-shrink-0" />
-                                    {feat}
-                                 </li>
-                              ))}
-                           </ul>
+                        <div className="mb-8">
+                           <h3 className="text-2xl font-black text-white mb-2 tracking-tight">{p.name}</h3>
+                           <p className="text-xs text-white/40 leading-relaxed min-h-[40px]">{p.description}</p>
+                        </div>
 
-                           {isCurrent ? (
-                              <button disabled className="w-full py-4 rounded-2xl bg-white/5 border border-white/10 text-white/40 font-black text-xs cursor-default">
-                                 PLANO ATUAL
-                              </button>
-                           ) : (
-                              <button
-                                 onClick={() => handleSubscribe(p)}
-                                 className={`w-full py-4 rounded-2xl font-black text-xs transition-all active:scale-95 ${p.popular
-                                    ? 'bg-gradient-to-r from-[#7C3AED] to-[#FF2E9E] text-white shadow-lg hover:shadow-brand-primary/30'
-                                    : 'bg-white text-black hover:bg-gray-200'
-                                    }`}
+                        <div className="mb-8">
+                           <div className="flex items-baseline gap-1">
+                              <span
+                                 className="text-5xl font-black tracking-tighter bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent group-hover:from-white group-hover:to-white transition-all duration-500"
+                                 style={{
+                                    backgroundImage: `linear-gradient(to right, ${p.name === 'Pro' ? '#FF2E9E, #F97316' : p.popular ? '#7C3AED, #FF2E9E' : 'white, #ffffff60'})`,
+                                    WebkitBackgroundClip: 'text',
+                                    WebkitTextFillColor: 'transparent'
+                                 }}
                               >
-                                 {p.customCTA?.text || `ESCOLHER ${p.name.toUpperCase()}`}
-                              </button>
+                                 {displayPriceValue}
+                              </span>
+                              <span className="text-sm font-bold text-white/30 uppercase tracking-widest">/mês</span>
+                           </div>
+                           {isAnnual && (
+                              <p className="text-[10px] font-black text-green-400 mt-2 uppercase tracking-widest">
+                                 Faturado anualmente
+                              </p>
                            )}
                         </div>
-                     );
-                  })}
-               </div>
+
+                        <ul className="space-y-4 mb-10 flex-1">
+                           {p.features.map((feature, i) => (
+                              <li key={i} className="flex items-start gap-3">
+                                 <div className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-primary/20 flex items-center justify-center mt-0.5">
+                                    <Check className="w-3 h-3 text-brand-primary" />
+                                 </div>
+                                 <span className="text-xs font-bold text-white/60 leading-tight group-hover:text-white/80 transition-colors">{feature}</span>
+                              </li>
+                           ))}
+                        </ul>
+
+                        {/* Lia Quote Section (Icon + Quote) */}
+                        <div className="p-5 rounded-2xl bg-white/5 border border-white/5 mb-8 relative group/quote">
+                           <div className="flex items-center gap-2 mb-3">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#FF2E9E] flex items-center justify-center shadow-lg">
+                                 <Bot className="w-4 h-4 text-white" />
+                              </div>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-[#7C3AED]">Lia diz:</span>
+                           </div>
+                           <p className="text-xs text-white/70 italic leading-relaxed font-medium">"{p.liaQuote || 'Este plano é excelente para seu crescimento!'}"</p>
+                        </div>
+
+                        {isCurrent && !isAdmin ? (
+                           <button disabled className="w-full py-5 rounded-2xl bg-white/5 border border-white/10 text-white/30 font-black text-[10px] uppercase tracking-widest cursor-default">
+                              Plano Atual
+                           </button>
+                        ) : (
+                           <button
+                              onClick={() => {
+                                 if (isAdmin) {
+                                    setPlanName(p.name as any);
+                                    toast.success(`Admin: Visualização alterada para ${p.name}`);
+                                 } else {
+                                    handleSubscribe(p);
+                                 }
+                              }}
+                              className={`w-full py-5 rounded-2xl font-black text-[11px] uppercase tracking-[0.15em] transition-all active:scale-[0.98] shadow-2xl ${p.popular
+                                 ? 'bg-gradient-to-r from-[#7C3AED] to-[#FF2E9E] text-white shadow-brand-primary/20 hover:shadow-brand-primary/40'
+                                 : 'bg-white text-black hover:bg-gray-200 shadow-white/5'
+                                 } ${isCurrent && isAdmin ? 'ring-2 ring-white/20' : ''}`}
+                           >
+                              {isAdmin && isCurrent ? 'Plano Ativo (Admin)' : p.customCTA?.text || `Assinar ${p.name}`}
+                           </button>
+                        )}
+                     </div>
+                  );
+               })}
             </div>
 
-            {/* History (Static but visually updated) */}
-            <div className="space-y-6 pt-8">
-               <h2 className="text-xl font-black">{t('paymentHistory')}</h2>
-               <div className="glass-panel bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-                  <table className="w-full text-left text-xs">
-                     <thead className="bg-white/5 text-gray-500 border-b border-white/10">
+            {/* History Table - Refined Style */}
+            <div className="space-y-6 pt-10 pb-20">
+               <h2 className="text-2xl font-black text-white tracking-tight">Histórico de Pagamentos</h2>
+               <div className="bg-white/5 border border-white/10 rounded-3xl overflow-hidden backdrop-blur-md">
+                  <table className="w-full text-left text-[11px]">
+                     <thead className="bg-white/5 border-b border-white/10">
                         <tr>
-                           <th className="p-5 font-black uppercase tracking-wider">{t('date')}</th>
-                           <th className="p-5 font-black uppercase tracking-wider">{t('description')}</th>
-                           <th className="p-5 font-black uppercase tracking-wider">{t('amount')}</th>
-                           <th className="p-5 font-black uppercase tracking-wider">{t('status')}</th>
-                           <th className="p-5 font-black uppercase tracking-wider text-right">{t('invoice')}</th>
+                           <th className="p-6 font-black uppercase tracking-widest text-white/40">Data</th>
+                           <th className="p-6 font-black uppercase tracking-widest text-white/40">Descrição</th>
+                           <th className="p-6 font-black uppercase tracking-widest text-white/40">Valor</th>
+                           <th className="p-6 font-black uppercase tracking-widest text-white/40">Status</th>
+                           <th className="p-6 font-black uppercase tracking-widest text-white/40 text-right">Fatura</th>
                         </tr>
                      </thead>
                      <tbody className="divide-y divide-white/5">
-                        {[
-                           { date: 'Jun 15, 2024', desc: 'Assinatura Plano Essencial', amt: '€27', status: 'Pago' },
-                           { date: 'Mai 15, 2024', desc: 'Assinatura Plano Essencial', amt: '€27', status: 'Pago' },
-                           { date: 'Abr 15, 2024', desc: 'Assinatura Plano Essencial', amt: '€27', status: 'Pago' },
-                        ].map((row, i) => (
-                           <tr key={i} className="hover:bg-white/5 transition-colors group">
-                              <td className="p-5 text-gray-400 group-hover:text-white transition-colors">{row.date}</td>
-                              <td className="p-5 font-bold">{row.desc}</td>
-                              <td className="p-5">{row.amt}</td>
-                              <td className="p-5">
-                                 <span className="flex items-center gap-2 text-green-500 font-bold">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                                    {row.status}
+                        {invoices.length > 0 ? invoices.map((row) => (
+                           <tr key={row.id} className="hover:bg-white/5 transition-colors group">
+                              <td className="p-6 font-bold text-white/60 group-hover:text-white">{new Date(row.created_at).toLocaleDateString('pt-BR')}</td>
+                              <td className="p-6 font-black text-white">{row.description || 'Assinatura LUMINNUS'}</td>
+                              <td className="p-6 font-black text-white/60">{row.amount_paid.toLocaleString('pt-BR', { style: 'currency', currency: row.currency || 'EUR' })}</td>
+                              <td className="p-6">
+                                 <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full font-black uppercase tracking-tighter text-[9px] ${row.status === 'paid' ? 'bg-green-500/10 text-green-500' : 'bg-orange-500/10 text-orange-400'
+                                    }`}>
+                                    <span className={`w-1 h-1 rounded-full ${row.status === 'paid' ? 'bg-green-500' : 'bg-orange-500'}`} />
+                                    {row.status === 'paid' ? 'Pago' : 'Pendente'}
                                  </span>
                               </td>
-                              <td className="p-5 text-right">
-                                 <button onClick={() => handleAction('Download')} className="text-brand-primary font-black hover:underline inline-flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-sm">download</span> PDF
-                                 </button>
+                              <td className="p-6 text-right">
+                                 {row.invoice_pdf ? (
+                                    <a href={row.invoice_pdf} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-brand-primary font-black uppercase tracking-widest hover:text-white transition-colors">
+                                       <span className="material-symbols-outlined text-sm">download</span> PDF
+                                    </a>
+                                 ) : <span className="text-white/20">-</span>}
                               </td>
                            </tr>
-                        ))}
+                        )) : (
+                           <tr>
+                              <td colSpan={5} className="p-20 text-center text-white/30 font-bold italic">Nenhuma fatura encontrada.</td>
+                           </tr>
+                        )}
                      </tbody>
                   </table>
                </div>
@@ -201,14 +298,6 @@ const Plan: React.FC = () => {
          </div>
       </div>
    );
-
-   function handleSubscribe(plan: PlanType) {
-      if (plan.customCTA) {
-         window.open(plan.customCTA.action, '_blank');
-      } else {
-         handleAction(`Assinar ${plan.name}`);
-      }
-   }
 };
 
 export default Plan;

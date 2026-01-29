@@ -32,7 +32,16 @@ const AdminWhatsAppGovernance = () => {
         wabaId: "",
         accessToken: "",
         verifyToken: "",
-        webhookUrl: "https://api.luminnus.lia.ai/api/whatsapp-webhook"
+        webhookUrl: "https://api.luminnus.lia.ai/api/whatsapp/webhook"
+    });
+
+    const [overview, setOverview] = useState({
+        totalTenants: 0,
+        errorTenants: 0,
+        webhookHealth: "0%",
+        messagesToday: "0",
+        templatesToday: "0",
+        activeAlerts: 0
     });
 
     useEffect(() => {
@@ -44,6 +53,9 @@ const AdminWhatsAppGovernance = () => {
                         'Authorization': `Bearer ${token}`
                     }
                 });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
                 const data = await response.json();
                 if (data.config) {
                     setPlatformConfig(data.config);
@@ -56,8 +68,29 @@ const AdminWhatsAppGovernance = () => {
             }
         };
 
+        const fetchOverview = async () => {
+            try {
+                const token = session?.access_token || '';
+                const response = await fetch('/api/admin/whatsapp/overview', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const data = await response.json();
+                if (data && !data.error) {
+                    setOverview(data);
+                }
+            } catch (error) {
+                console.error('❌ Error fetching overview:', error);
+            }
+        };
+
         fetchConfig();
-    }, []);
+        fetchOverview();
+    }, [session]);
 
     const [tenants, setTenants] = useState<any[]>([]);
 
@@ -120,7 +153,7 @@ const AdminWhatsAppGovernance = () => {
                         </div>
                         <div>
                             <p className="text-xs font-bold text-emerald-600/60 uppercase">Total de Clientes</p>
-                            <h3 className="text-2xl font-black text-emerald-700">42</h3>
+                            <h3 className="text-2xl font-black text-emerald-700">{overview.totalTenants}</h3>
                         </div>
                     </CardContent>
                 </Card>
@@ -132,7 +165,7 @@ const AdminWhatsAppGovernance = () => {
                         </div>
                         <div>
                             <p className="text-xs font-bold text-red-600/60 uppercase">Erros Ativos</p>
-                            <h3 className="text-2xl font-black text-red-700">3</h3>
+                            <h3 className="text-2xl font-black text-red-700">{overview.errorTenants}</h3>
                         </div>
                     </CardContent>
                 </Card>
@@ -144,7 +177,7 @@ const AdminWhatsAppGovernance = () => {
                         </div>
                         <div>
                             <p className="text-xs font-bold text-indigo-600/60 uppercase">Webhook Health</p>
-                            <h3 className="text-2xl font-black text-indigo-700">98%</h3>
+                            <h3 className="text-2xl font-black text-indigo-700">{overview.webhookHealth}</h3>
                         </div>
                     </CardContent>
                 </Card>
@@ -156,7 +189,7 @@ const AdminWhatsAppGovernance = () => {
                         </div>
                         <div>
                             <p className="text-xs font-bold text-amber-600/60 uppercase">Mgs Hoje</p>
-                            <h3 className="text-2xl font-black text-amber-700">15.4k</h3>
+                            <h3 className="text-2xl font-black text-amber-700">{overview.messagesToday}</h3>
                         </div>
                     </CardContent>
                 </Card>

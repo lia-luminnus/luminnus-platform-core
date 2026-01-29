@@ -12,7 +12,7 @@ import { secureStorage } from "@/lib/secureStorage";
 /**
  * URL base da API da LIA no Render (fallback padrão)
  */
-const LIA_API_URL_DEFAULT = "https://lia-chat-api.onrender.com";
+const LIA_API_URL_DEFAULT = import.meta.env.VITE_BACKEND_URL || "https://lia-chat-api.onrender.com";
 
 /**
  * FUNÇÃO: Obter URL da API da LIA configurada
@@ -92,6 +92,17 @@ export async function enviarMensagemLIA(mensagem: string, options?: EnviarMensag
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`[LIA API] Erro HTTP ${response.status}:`, errorText);
+
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(`🔒 Erro de Autenticação (${response.status}): Verifique suas credenciais API.`);
+        }
+        if (response.status === 500) {
+          throw new Error(`🔥 Erro no Servidor LIA (${response.status}): Tente novamente em instantes.`);
+        }
+        if (response.status === 503 || response.status === 504) {
+          throw new Error(`⏱️ Servidor LIA Indisponível/Timeout (${response.status})`);
+        }
+
         throw new Error(`Erro da API (${response.status}): ${response.statusText}`);
       }
 
