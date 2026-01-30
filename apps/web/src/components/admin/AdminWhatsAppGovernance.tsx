@@ -132,12 +132,16 @@ const AdminWhatsAppGovernance = () => {
             if (!response.ok) {
                 let errorMsg = `Erro ${response.status}: ${response.statusText}`;
                 try {
-                    const errorData = await response.json();
-                    errorMsg = errorData.error || errorMsg;
-                } catch (e) {
-                    // Not a JSON error, try to get text
                     const text = await response.text();
-                    if (text && text.length < 100) errorMsg = text;
+                    try {
+                        const errorData = JSON.parse(text);
+                        errorMsg = errorData.error || errorMsg;
+                    } catch {
+                        // Not a JSON error, try to get text if short
+                        if (text && text.length < 200) errorMsg = text;
+                    }
+                } catch (e) {
+                    console.error('Error reading error response:', e);
                 }
                 throw new Error(errorMsg);
             }
