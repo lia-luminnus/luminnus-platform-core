@@ -14,10 +14,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import { apiUrl } from "@/lib/api";
 
 /**
  * AdminWhatsAppGovernance
- * Provides centralized control over the platform's WhatsApp ecosystem.
  */
 const AdminWhatsAppGovernance = () => {
     const { session } = useAuth();
@@ -48,7 +48,7 @@ const AdminWhatsAppGovernance = () => {
         const fetchConfig = async () => {
             try {
                 const token = session?.access_token || '';
-                const response = await fetch('/api/admin/whatsapp/platform-config', {
+                const response = await fetch(apiUrl('/api/admin/whatsapp/platform-config'), {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -71,7 +71,7 @@ const AdminWhatsAppGovernance = () => {
         const fetchOverview = async () => {
             try {
                 const token = session?.access_token || '';
-                const response = await fetch('/api/admin/whatsapp/overview', {
+                const response = await fetch(apiUrl('/api/admin/whatsapp/overview'), {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -97,7 +97,7 @@ const AdminWhatsAppGovernance = () => {
     const fetchTenants = async () => {
         try {
             const token = session?.access_token || '';
-            const response = await fetch(`/api/admin/whatsapp/tenants?search=${search}`, {
+            const response = await fetch(apiUrl(`/api/admin/whatsapp/tenants?search=${search}`), {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -119,7 +119,7 @@ const AdminWhatsAppGovernance = () => {
         setLoading(true);
         try {
             const token = session?.access_token || '';
-            const response = await fetch('/api/admin/whatsapp/platform-config', {
+            const response = await fetch(apiUrl('/api/admin/whatsapp/platform-config'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

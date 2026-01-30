@@ -3,6 +3,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import type { Company, Plan } from '@/types/shared';
 import { ADMIN_EMAILS, isAdminEmail, AUTH_URLS } from '@/config/auth';
+import { apiUrl } from '@/lib/api';
 
 export type UserRole = "cliente" | "admin" | null;
 
@@ -189,7 +190,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return;
       }
 
-      const response = await fetch('/api/me', {
+      const response = await fetch(apiUrl('/api/me'), {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
         }

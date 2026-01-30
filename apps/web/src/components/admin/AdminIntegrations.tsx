@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from "@/lib/utils";
+import { apiUrl } from '@/lib/api';
 
 // Sub-serviços do Google Workspace
 interface GoogleService {
@@ -162,7 +163,7 @@ const AdminIntegrations = ({ onSectionChange }: AdminIntegrationsProps) => {
     if (!user?.id || !session?.access_token) return;
     setLoading(true);
     try {
-      const response = await fetch('/api/integrations', {
+      const response = await fetch(apiUrl('/api/integrations'), {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
         }
@@ -240,9 +241,9 @@ const AdminIntegrations = ({ onSectionChange }: AdminIntegrationsProps) => {
     try {
       // IMPORTANTE: O redirect_uri deve corresponder EXATAMENTE ao configurado no Google Cloud Console
       // Google Cloud Console está configurado com: http://localhost:3000/api/auth/google/callback
-      const callbackUrl = 'http://localhost:3000/api/auth/google/callback';
+      const callbackUrl = apiUrl('/api/auth/google/callback');
       const response = await fetch(
-        `/api/auth/google?services=${selectedGoogleServices.join(',')}&user_id=${user?.id}&redirect_uri=${encodeURIComponent(callbackUrl)}`
+        apiUrl(`/api/auth/google?services=${selectedGoogleServices.join(',')}&user_id=${user?.id}&redirect_uri=${encodeURIComponent(callbackUrl)}`)
       );
       if (!response.ok) throw new Error('Falha ao obter URL de autenticação');
       const data = await response.json();
