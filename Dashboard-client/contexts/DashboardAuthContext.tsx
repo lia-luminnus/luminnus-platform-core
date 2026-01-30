@@ -166,15 +166,7 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                     });
 
                     if (!error && data.session) {
-                        console.log('[DashboardAuth] ✅ Sessão sincronizada com sucesso para:', data.session.user?.email);
-
-                        // Limpar tokens da URL e ir para a rota desejada (se houver)
-                        const routePath = redirectTo ? `/${redirectTo.replace(/^\//, '')}` : (hash.split('?')[0] || '/');
-                        const finalHash = routePath.startsWith('#') ? routePath : `#${routePath}`;
-
-                        console.log('[DashboardAuth] 🏠 Limpando URL e aplicando hash:', finalHash);
-                        window.history.replaceState({}, document.title, window.location.pathname + finalHash);
-
+                        console.log('[DashboardAuth] ✅ Sessão sincronizada, aguardando aplicação no estado...');
                         return data.session;
                     } else if (error) {
                         console.error('[DashboardAuth] ❌ Erro ao sincronizar sessão:', error.message);
@@ -221,6 +213,18 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 setSession(urlSession);
                 setUser(urlSession.user);
                 await refreshProfile(urlSession.user);
+
+                // 🏠 Limpar tokens da URL APÓS o estado estar garantido
+                // Isso evita que o SubscriptionGate veja !user && !tokens
+                const hash = window.location.hash;
+                const search = window.location.search;
+                const params = new URLSearchParams(hash.includes('?') ? hash.split('?')[1] : (hash.substring(1) || search));
+                const redirectTo = params.get('redirect_to');
+                const routePath = redirectTo ? `/${redirectTo.replace(/^\//, '')}` : (hash.split('?')[0] || '/');
+                const finalHash = routePath.startsWith('#') ? routePath : `#${routePath}`;
+
+                console.log('[DashboardAuth] 🏠 Limpando URL e aplicando hash final:', finalHash);
+                window.history.replaceState({}, document.title, window.location.pathname + finalHash);
             }
 
             setLoading(false);
@@ -262,7 +266,7 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const signOut = async () => {
         console.log('[DashboardAuth] Executando logout...');
-        
+
         try {
             if (supabase) {
                 // Adicionamos um timeout para evitar que o logout trave se o Supabase demorar
@@ -284,14 +288,14 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
         // Limpar storage explicitamente
         localStorage.removeItem('sb-dashboard-auth');
         localStorage.removeItem('luminnus-storage');
-        
+
         // v4.1: Garantir que o estado de onboarding também seja resetado se necessário
         // (Isso força o sistema a re-inicializar do zero no próximo login)
-        
+
         // Redirecionamento para o site principal/admin
         const landingPage = import.meta.env.VITE_LANDING_PAGE_URL || 'http://localhost:8080';
         console.log('[DashboardAuth] Redirecionando para:', landingPage);
-        
+
         // Pequeno delay para garantir que os estados do React foram aplicados
         setTimeout(() => {
             window.location.href = landingPage;

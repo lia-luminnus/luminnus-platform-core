@@ -124,8 +124,7 @@ export type ModuleId =
   | 'settings'
   | 'plan'
   | 'support'
-  | 'whatsapp_agent'
-  | 'emails';
+  | 'whatsapp_agent';
 
 export interface ModuleDefinition {
   id: ModuleId;

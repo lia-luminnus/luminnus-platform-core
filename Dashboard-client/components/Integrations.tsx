@@ -30,7 +30,6 @@ interface GoogleService {
 }
 
 const GOOGLE_SERVICES: GoogleService[] = [
-    { id: 'gmail', name: 'Gmail', icon: <Mail className="w-4 h-4 text-red-500" />, description: 'Emails', planRequired: 'start' },
     { id: 'calendar', name: 'Calendar', icon: <Calendar className="w-4 h-4 text-blue-500" />, description: 'Eventos', planRequired: 'start' },
     { id: 'meet', name: 'Meet', icon: <Video className="w-4 h-4 text-green-500" />, description: 'Reuniões', planRequired: 'plus' },
     { id: 'drive', name: 'Drive', icon: <Folder className="w-4 h-4 text-yellow-500" />, description: 'Arquivos', planRequired: 'plus' },
@@ -57,11 +56,11 @@ const INTEGRATIONS_LIST: IntegrationDef[] = [
     {
         id: 'google_workspace',
         name: 'Google Workspace',
-        description: 'Conecte Gmail e Calendar para a LIA gerenciar seus compromissos e comunicações.',
+        description: 'Conecte o Calendar para a LIA gerenciar seus compromissos e agenda.',
         icon: <div className="flex gap-1 items-center"><span className="text-blue-500 font-black">G</span><span className="text-red-500 font-black">o</span><span className="text-yellow-500 font-black">o</span><span className="text-blue-400 font-black">g</span><span className="text-green-500 font-black">l</span><span className="text-red-400 font-black whitespace-nowrap">e</span></div>,
         category: 'productivity',
         planRequired: 'start',
-        permissions: ['Gmail', 'Calendar'],
+        permissions: ['Calendar'],
         isComposite: true
     },
     {
@@ -308,7 +307,7 @@ const Integrations: React.FC = () => {
                     setSelectedGoogleServices(existingIntegration.services.filter((s: string) => allowedServices.includes(s)));
                 } else {
                     // Se não conectado, selecionar apenas os básicos por padrão
-                    setSelectedGoogleServices(['gmail', 'calendar']);
+                    setSelectedGoogleServices(['calendar']);
                 }
             }
             setSelectedIntegration(integration);

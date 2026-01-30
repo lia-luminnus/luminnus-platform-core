@@ -25,7 +25,6 @@ import WhatsAppIntegration from './components/integrations/WhatsAppIntegration';
 import Onboarding from './components/Onboarding';
 import AuthBridge from './components/AuthBridge';
 import WhatsAppAgent from './components/WhatsAppAgent';
-import Emails from './components/Emails';
 import { useDashboardAuth } from './contexts/DashboardAuthContext';
 import { useAppStore } from './store/useAppStore';
 import { Toaster } from 'react-hot-toast';
@@ -232,7 +231,6 @@ const AppContent: React.FC = () => {
                     <Route path="/whatsapp" element={<WhatsAppAgent />} />
                     <Route path="/projects" element={<PlaceholderModule title={t('projects')} icon="rocket_launch" />} />
                     <Route path="/reports" element={<Reports />} />
-                    <Route path="/emails" element={<Emails />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </motion.div>
