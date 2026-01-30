@@ -21,9 +21,13 @@ export const SnapshotService = {
                 .from('profiles')
                 .select('*')
                 .eq('id', tenantId)
-                .single();
+                .maybeSingle();
 
             if (profileError) throw profileError;
+            if (!profile) {
+                console.warn(`⚠️ [SnapshotService] Perfil não encontrado para tenant: ${tenantId}`);
+                return { error: 'PROFILE_NOT_FOUND', tenantId };
+            }
 
             // 2. Buscar integrações conectadas
             const { data: integrations, error: intError } = await supabase
@@ -36,7 +40,7 @@ export const SnapshotService = {
                 .from('whatsapp_settings')
                 .select('*')
                 .eq('tenant_id', profile.id)
-                .single();
+                .maybeSingle();
 
             // 4. Montar o snapshot baseado no Product Catalog Manifest
             const planId = profile.plan_level || 'start';

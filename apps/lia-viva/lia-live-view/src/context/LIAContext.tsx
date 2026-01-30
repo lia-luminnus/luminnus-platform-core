@@ -228,7 +228,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
   // Estado do Usuário
   const [userId, setUserId] = useState<string | null>(null);
-  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [contextTenantId, setContextTenantId] = useState<string | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const userIdRef = useRef<string | null>(null);
@@ -312,8 +312,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
   // Sync tenant ID / User ID refs
   useEffect(() => {
     userIdRef.current = userId;
-    tenantIdRef.current = tenantId;
-  }, [userId, tenantId]);
+    tenantIdRef.current = contextTenantId;
+  }, [userId, contextTenantId]);
 
   // v2.6: MENTE ÚNICA - Sincronizar Usuário e Autenticação do multi-tenant
   useEffect(() => {
@@ -326,7 +326,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
           let userPlan = authData.user?.app_metadata?.plan || null;
           if (uId) {
             setUserId(uId);
-            setTenantId(uId); // Em dev usamos o mesmo ID para tenant
+            setContextTenantId(uId); // Em dev usamos o mesmo ID para tenant
 
             let userRole = authData.user?.app_metadata?.role || 'client';
 
@@ -1161,7 +1161,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
           // O tenantId geralmente vem do perfil ou do próprio token se for JWT customizado
           // No nosso caso, o handshake passa userId e tenantId (assumindo tenantId igual ao userId se não informado)
           setUserId(uid);
-          setTenantId(uid); // Fallback inicial
+          setContextTenantId(uid); // Fallback inicial
           console.log('🔑 LIAContext: Auth sync - User:', uid);
         } catch (e) {
           console.error('Erro ao parsear auth token:', e);
@@ -1627,9 +1627,9 @@ export function LIAProvider({ children }: LIAProviderProps) {
       formData.append('prompt', prompt);
       formData.append('conversationId', convId);
       // v1.2.1: Enviar userId e userPlan para detecção correta no Execution Router
-      console.log(`🔐 [sendMessageWithFiles] Enviando: userId="${userId}", tenantId="${tenantId}", plan="${plan}"`);
+      console.log(`🔐 [sendMessageWithFiles] Enviando: userId="${userId}", tenantId="${contextTenantId}", plan="${plan}"`);
       if (userId) formData.append('userId', userId);
-      if (tenantId) formData.append('tenantId', tenantId);
+      if (contextTenantId) formData.append('tenantId', contextTenantId);
       if (plan) formData.append('userPlan', plan);
       formData.append('messageId', userMessage.id); // v6.0: Idempotência
 
@@ -2157,6 +2157,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
    */
   const startLiveMode = useCallback(async () => {
     try {
+      console.log('📍 [startLiveMode] Stack trace do chamador:');
+      console.trace();
       // v4.5: SSOT - SEMPRE usar o ID do Chat. Chat é a mente.
       const unifiedConvId = activeIdsByModeRef.current.chat || '';
 
@@ -2225,6 +2227,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
   const stopLiveMode = useCallback(async () => {
     try {
       console.log('🛑 Parando Gemini Live...');
+      console.log('📍 [stopLiveMode] Stack trace do chamador:');
+      console.trace();
 
       // Remover handler e parar sessão
       geminiLiveService.removeEventListener(handleGeminiLiveEvent);
@@ -2239,6 +2243,13 @@ export function LIAProvider({ children }: LIAProviderProps) {
       console.error('❌ Erro ao parar Gemini Live:', error);
     }
   }, [handleGeminiLiveEvent]);
+
+  useEffect(() => {
+    console.log('🔄 [LIAContext] Componente montado/remontado');
+    return () => {
+      console.log('🔄 [LIAContext] Componente desmontado');
+    };
+  }, []);
 
   // v5.8: SYNC VOZ - Recuperar estado da sessão se o componente remontar (troca de aba/app)
   useEffect(() => {
@@ -2473,7 +2484,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
     saveMemory,
     deleteMemory,
     userId,
-    tenantId,
+    tenantId: contextTenantId,
     plan,
     role,
     user: { id: userId, role, plan },

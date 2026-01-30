@@ -57,11 +57,29 @@ export const useSubscription = () => {
             }
 
             // 2. Fetch Invoices
-            const { data: invData } = await supabase
-                .from('invoices')
-                .select('*')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false });
+            // v5.6: Tabela invoices usa tenant_id, não user_id. 
+            // Só buscamos se tivermos um tenant_id da subscription ou do user metadata
+            let tenantId = subData?.tenant_id || (user.user_metadata as any)?.tenant_id;
+            
+            let invData: any[] = [];
+            
+            if (tenantId) {
+                const { data } = await supabase
+                    .from('invoices')
+                    .select('*')
+                    .eq('tenant_id', tenantId)
+                    .order('created_at', { ascending: false });
+                invData = data || [];
+            } else {
+                // Tenta buscar por customer_id como fallback se for igual ao user.id
+                // Mas apenas se não tiver tenant_id para evitar query pesada
+                 const { data } = await supabase
+                    .from('invoices')
+                    .select('*')
+                    .eq('customer_id', user.id)
+                    .order('created_at', { ascending: false });
+                 invData = data || [];
+            }
 
             if (invData) {
                 setInvoices(invData.map(inv => ({

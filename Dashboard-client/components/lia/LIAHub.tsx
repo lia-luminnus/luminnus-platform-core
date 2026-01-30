@@ -331,8 +331,6 @@ function LIAHubContent() {
 
 export default function LIAHub() {
     return (
-        <LIAProvider>
-            <LIAHubContent />
-        </LIAProvider>
+        <LIAHubContent />
     );
 }

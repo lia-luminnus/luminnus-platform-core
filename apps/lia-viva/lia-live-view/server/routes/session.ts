@@ -248,6 +248,11 @@ ${DASHBOARD_CONTROL_PROMPT}
             config: {
               // v4.26: OBRIGATÓRIO manter apenas AUDIO para evitar erro 1007 (TEXT não suportado em ephemeral tokens do Live API)
               responseModalities: ['AUDIO'],
+
+              // v5.0: Google Search Grounding (busca nativa - NÃO causa erro 1008)
+              // Permite que o Gemini faça buscas em tempo real diretamente, sem precisar de tools customizados
+              tools: [{ googleSearch: {} }],
+
               speechConfig: {
                 voiceConfig: {
                   prebuiltVoiceConfig: {
@@ -260,175 +265,10 @@ ${DASHBOARD_CONTROL_PROMPT}
               // v4.21: Transcrição - OBRIGATÓRIO para obter texto junto com áudio
               // Usar camelCase (implementação original usa camelCase)
               inputAudioTranscription: {},   // Transcreve fala do usuário
-              outputAudioTranscription: {},  // Transcreve resposta da LIA
+              outputAudioTranscription: {},  // v4.32: RESTAURADO - necessário para transcrição limpa (sem thinking)
 
-              tools: [
-                // v4.28: Removido googleSearch nativo - usar apenas searchWeb para controle total
-                {
-                  functionDeclarations: [
-                    // === BUSCA E INFORMAÇÃO ===
-                    {
-                      name: 'searchWeb',
-                      description: 'Use para pesquisar fatos externos, cotações de moedas, preços de bitcoin e notícias atuais. NÃO use para funções internas do dashboard.',
-                      parameters: { type: 'object', properties: { query: { type: 'string', description: 'Busca' } }, required: ['query'] }
-                    },
-                    {
-                      name: 'getWeather',
-                      description: 'Clima e previsão. Gatilhos: tempo, clima, previsão, chover.',
-                      parameters: { type: 'object', properties: { location: { type: 'string', description: 'Cidade' } }, required: ['location'] }
-                    },
-                    {
-                      name: 'getCurrentTime',
-                      description: 'Data e hora. Gatilhos: que horas, que dia.',
-                      parameters: { type: 'object', properties: { timezone: { type: 'string' } } }
-                    },
-                    // === MEMÓRIA ===
-                    {
-                      name: 'saveMemory',
-                      description: 'Salva info sobre usuário. Gatilhos: lembre, meu nome é, anote.',
-                      parameters: { type: 'object', properties: { content: { type: 'string' }, category: { type: 'string' } }, required: ['content'] }
-                    },
-                    // === LOCALIZAÇÃO (Maps) ===
-                    {
-                      name: 'getLocation',
-                      description: 'OBRIGATÓRIO para buscar lugares (farmácias, restaurantes, lojas). IMPORTANTE: Se o usuário especificar uma cidade ou área (ex: "em Aveiro", "no centro"), você DEVE passar essa localização no parâmetro location para garantir precisão.',
-                      parameters: { type: 'object', properties: { query: { type: 'string', description: 'O que buscar' }, location: { type: 'string', description: 'Onde buscar - OBRIGATÓRIO se o usuário especificar cidade/área.' } }, required: ['query'] }
-                    },
-                    {
-                      name: 'getDirections',
-                      description: 'OBRIGATÓRIO para calcular rotas, distâncias e tempo de viagem. Se o usuário perguntar da "casa dele" ou de "minha localização", use o endereço salvo no contexto como origin.',
-                      parameters: { type: 'object', properties: { origin: { type: 'string', description: 'Ponto de partida' }, destination: { type: 'string', description: 'Destino final' } }, required: ['origin', 'destination'] }
-                    },
-                    // === GOOGLE WORKSPACE ===
-                    {
-                      name: 'createGoogleSheet',
-                      description: 'Cria planilha. Gatilhos: cria planilha, tabela.',
-                      parameters: { type: 'object', properties: { title: { type: 'string' }, headers: { type: 'array', items: { type: 'string' } } }, required: ['title'] }
-                    },
-                    {
-                      name: 'createGoogleDoc',
-                      description: 'Cria documento. Gatilhos: cria documento, escreve texto.',
-                      parameters: { type: 'object', properties: { title: { type: 'string' }, content: { type: 'string' } }, required: ['title', 'content'] }
-                    },
-                    {
-                      name: 'sendGmail',
-                      description: 'Envia e-mail. Gatilhos: manda email, envia mensagem.',
-                      parameters: { type: 'object', properties: { to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } }, required: ['to', 'subject', 'body'] }
-                    },
-                    {
-                      name: 'createCalendarEvent',
-                      description: 'Agenda evento. Gatilhos: agenda, marca reunião, lembra-me.',
-                      parameters: { type: 'object', properties: { title: { type: 'string' }, start: { type: 'string', description: 'ISO String' }, end: { type: 'string', description: 'ISO String' }, description: { type: 'string' } }, required: ['title', 'start', 'end'] }
-                    },
-                    {
-                      name: 'listCalendarEvents',
-                      description: 'Lista compromissos da agenda. Gatilhos: o que tenho hoje, compromissos extras.',
-                      parameters: { type: 'object', properties: { timeMin: { type: 'string' }, timeMax: { type: 'string' } } }
-                    },
-                    {
-                      name: 'listGmailMessages',
-                      description: 'Lista e-mails recentes.',
-                      parameters: { type: 'object', properties: { maxResults: { type: 'number' }, query: { type: 'string' } } }
-                    },
-                    {
-                      name: 'getGmailMessage',
-                      description: 'Lê o conteúdo de um e-mail específico pelo ID.',
-                      parameters: { type: 'object', properties: { messageId: { type: 'string' } }, required: ['messageId'] }
-                    },
-                    {
-                      name: 'searchGmail',
-                      description: 'Pesquisa e-mails usando termos de busca.',
-                      parameters: { type: 'object', properties: { searchTerm: { type: 'string' } }, required: ['searchTerm'] }
-                    },
-                    // === DIAGNÓSTICO E SISTEMA ===
-                    {
-                      name: 'getSystemHealth',
-                      description: 'Verifica a saúde do sistema LIA.'
-                    },
-                    {
-                      name: 'getSystemLogs',
-                      description: 'Recupera logs recentes do sistema.',
-                      parameters: { type: 'object', properties: { limit: { type: 'number' }, level: { type: 'string' } } }
-                    },
-                    {
-                      name: 'readProjectFile',
-                      description: 'Lê um arquivo específico do projeto.',
-                      parameters: { type: 'object', properties: { filePath: { type: 'string' } }, required: ['filePath'] }
-                    },
-                    {
-                      name: 'getProjectMap',
-                      description: 'Mostra a estrutura do projeto.'
-                    },
-                    // === DASHBOARD CONTROL (LIA Action Protocol v3.0) ===
-                    {
-                      name: 'dashboardGetSnapshot',
-                      description: 'OBRIGATÓRIO antes de qualquer manipulação de dashboard. Retorna lista de widgets atuais com IDs e posições.',
-                      parameters: { type: 'object', properties: {} }
-                    },
-                    {
-                      name: 'getBusinessMetrics',
-                      description: 'Consulta métricas financeiras reais (faturamento, despesas, etc). Gatilhos: quanto faturei, quais meus gastos.',
-                      parameters: {
-                        type: 'object',
-                        properties: {
-                          metricKey: { type: 'string', enum: ['cash_in', 'cash_out', 'net_cash', 'transaction_count', 'deals_value'] },
-                          period: { type: 'string', enum: ['day', 'week', 'month', 'year'] }
-                        },
-                        required: ['metricKey']
-                      }
-                    },
-                    {
-                      name: 'dashboardAddWidget',
-                      description: 'Adiciona um novo widget. RECOMENDADO: Omita x e y para adicionar automaticamente abaixo de tudo. Use x/y apenas para posicionamento preciso ("ao lado de X") baseado em snapshot.',
-                      parameters: {
-                        type: 'object',
-                        properties: {
-                          widgetType: {
-                            type: 'string',
-                            enum: ['kpi_card', 'line_timeseries', 'bar_grouped', 'donut_breakdown', 'table_rank', 'table_transactions', 'funnel', 'gauge', 'heatmap_calendar', 'alerts_list', 'radar_multidim', 'bar_horizontal', 'area_timeseries', 'pie_chart'],
-                            description: 'Tipo exato. Funil = funnel, Pizza = pie_chart.'
-                          },
-                          title: { type: 'string', description: 'Título visível' },
-                          x: { type: 'integer', description: 'Coluna (0-11). Omitir para auto.' },
-                          y: { type: 'integer', description: 'Linha. Omitir para auto.' },
-                          w: { type: 'integer', description: 'Largura. Padrão: 6.' },
-                          h: { type: 'integer', description: 'Altura. Padrão: 4.' }
-                        },
-                        required: ['widgetType']
-                      }
-                    },
-
-                    {
-                      name: 'dashboardReplaceWidget',
-                      description: 'Substitui um widget existente por outro tipo.',
-                      parameters: {
-                        type: 'object',
-                        properties: {
-                          targetWidgetType: { type: 'string', description: 'Tipo atual do widget a substituir' },
-                          targetWidgetTitle: { type: 'string', description: 'Título do widget a substituir' },
-                          newWidgetType: {
-                            type: 'string',
-                            enum: ['kpi_card', 'line_timeseries', 'bar_grouped', 'donut_breakdown', 'table_rank', 'table_transactions', 'funnel', 'gauge', 'heatmap_calendar', 'alerts_list', 'radar_multidim', 'bar_horizontal', 'area_timeseries', 'pie_chart']
-                          },
-                          newWidgetTitle: { type: 'string' }
-                        },
-                        required: ['newWidgetType']
-                      }
-                    },
-                    {
-                      name: 'dashboardReorganize',
-                      description: 'Reorganiza o layout do dashboard.',
-                      parameters: {
-                        type: 'object',
-                        properties: {
-                          layout: { type: 'string', enum: ['kpis-top', 'charts-first', 'auto'] }
-                        }
-                      }
-                    }
-
-                  ]
-                }
-              ],
+              // v4.31: Tools customizados removidos (causa erro 1008)
+              // v5.0: googleSearch habilitado acima como alternativa nativa
 
               systemInstruction: fullSystemInstruction
             }

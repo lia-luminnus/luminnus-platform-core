@@ -247,6 +247,7 @@ const AppContent: React.FC = () => {
 
 import { DashboardAuthProvider } from './contexts/DashboardAuthContext';
 import { SubscriptionGate } from './components/SubscriptionGate';
+import { LIAProvider } from './components/lia/LIAContext';
 
 const App: React.FC = () => {
   const [isDark, setIsDark] = useState(true);
@@ -268,18 +269,20 @@ const App: React.FC = () => {
 
   return (
     <DashboardAuthProvider>
-      <ThemeContext.Provider value={{ isDark, toggleTheme }}>
-        <LanguageContext.Provider value={{ language, setLanguage, t }}>
-          <div className={isDark ? 'dark' : ''}>
-            <Router>
-              <Toaster position="top-right" />
-              <SubscriptionGate>
-                <AppContent />
-              </SubscriptionGate>
-            </Router>
-          </div>
-        </LanguageContext.Provider>
-      </ThemeContext.Provider>
+      <LIAProvider>
+        <ThemeContext.Provider value={{ isDark, toggleTheme }}>
+          <LanguageContext.Provider value={{ language, setLanguage, t }}>
+            <div className={isDark ? 'dark' : ''}>
+              <Router>
+                <Toaster position="top-right" />
+                <SubscriptionGate>
+                  <AppContent />
+                </SubscriptionGate>
+              </Router>
+            </div>
+          </LanguageContext.Provider>
+        </ThemeContext.Provider>
+      </LIAProvider>
     </DashboardAuthProvider>
   );
 };

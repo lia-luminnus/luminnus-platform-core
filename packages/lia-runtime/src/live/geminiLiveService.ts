@@ -30,12 +30,19 @@ function floatTo16BitPCM(float32Array: Float32Array): Int16Array {
 }
 
 function int16ArrayToBase64(int16Array: Int16Array): string {
-    const uint8Array = new Uint8Array(int16Array.buffer);
-    let binary = '';
-    for (let i = 0; i < uint8Array.length; i++) {
-        binary += String.fromCharCode(uint8Array[i]);
+    const bytes = new Uint8Array(int16Array.buffer);
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    let base64 = '';
+    for (let i = 0; i < bytes.length; i += 3) {
+        const b1 = bytes[i];
+        const b2 = i + 1 < bytes.length ? bytes[i + 1] : 0;
+        const b3 = i + 2 < bytes.length ? bytes[i + 2] : 0;
+        base64 += alphabet[b1 >> 2];
+        base64 += alphabet[((b1 & 3) << 4) | (b2 >> 4)];
+        base64 += i + 1 < bytes.length ? alphabet[((b2 & 15) << 2) | (b3 >> 6)] : '=';
+        base64 += i + 2 < bytes.length ? alphabet[b3 & 63] : '=';
     }
-    return btoa(binary);
+    return base64;
 }
 
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
@@ -88,7 +95,8 @@ export class GeminiLiveService {
     private isPlayingAudio = false;
     private connectionState: ConnectionState = ConnState.IDLE;
     private isSessionActive = false;
-    private scriptProcessorNode: ScriptProcessorNode | null = null;
+    private scriptProcessorNode: ScriptProcessorNode | null = null; // deprecated - migrar para audioWorkletNode
+    private audioWorkletNode: AudioWorkletNode | null = null; // v5.0: substituindo ScriptProcessor
     private currentConversationId: string | null = null;
     private memoriesCache: Array<{ key: string; value: string }> = [];
 
@@ -96,6 +104,10 @@ export class GeminiLiveService {
     // Gemini envia transcrições em fragmentos - acumulamos até turnComplete
     private accumulatedUserText: string = '';
     private accumulatedLiaText: string = '';
+
+    // v4.32: Separar outputAudioTranscription de modelTurn.text para evitar thinking text
+    private hasReceivedAudioThisTurn: boolean = false;
+    private outputTranscriptionText: string = ''; // Transcrição limpa de outputAudioTranscription
 
     // v4.23: Fail-safe & Watchdog
     private watchdogTimer: any = null;
@@ -156,6 +168,73 @@ export class GeminiLiveService {
         const eventWithTimestamp = { ...event, timestamp: Date.now() };
         this.eventListeners.forEach(cb => cb(eventWithTimestamp));
         this.config.callbacks?.onMessage?.(eventWithTimestamp);
+    }
+
+    /**
+     * v4.32: Sanitiza transcrição da LIA para remover thinking text / meta-análise
+     * Usado quando modo é AUDIO - prioriza outputAudioTranscription limpo
+     */
+    private sanitizeTranscriptPTBR(text: string): string {
+        if (!text) return '';
+
+        // Remover thinking tokens (entre **)
+        text = text.replace(/\*\*[\s\S]*?\*\*/g, '');
+
+        // Remover meta-análise em inglês (I've confirmed, confidence, checks)
+        const metaPatterns = [
+            /I've\s+(confirmed|determined|analyzed|checked|processed|iterated|selected|maintained)[\s\S]*?\./gi,
+            /confidence\s+score[\s\S]*?\./gi,
+            /maintaining\s+my\s+professional[\s\S]*?\./gi,
+            /all\s+checks\s+were[\s\S]*?\./gi,
+            /after\s+considering[\s\S]*?\./gi,
+            /I\s+have\s+confirmed[\s\S]*?\./gi,
+            /I\s+need\s+to[\s\S]*?\./gi,
+            /I\s+will\s+(acknowledge|focus|use|confirm)[\s\S]*?\./gi,
+        ];
+
+        for (const pattern of metaPatterns) {
+            text = text.replace(pattern, '');
+        }
+
+        // Limpar espaços extras e normalizar
+        text = text.replace(/\s{2,}/g, ' ').trim();
+
+        // Se o texto restante ainda for majoritariamente em inglês, ignorar
+        const englishWords = (text.match(/\b(I've|I'm|I will|The|Based on|Here's|Let me|which|that|and|the|for|with|this|have|been|are|was|were)\b/gi) || []).length;
+        const totalWords = text.split(/\s+/).length;
+        if (totalWords > 0 && englishWords / totalWords > 0.3) {
+            console.log('⚠️ [Sanitize] Texto majoritariamente em inglês removido');
+            return '';
+        }
+
+        return text;
+    }
+
+    /**
+     * v4.32: Normaliza transcrição do usuário para remover fragmentação
+     * Corrige: "p r e c i s a n d o" → "precisando"
+     */
+    private normalizeUserTranscript(text: string): string {
+        if (!text) return '';
+
+        // Detectar e corrigir espaçamento entre letras (min 3 chars consecutivos com espaço)
+        // Padrão: letra + espaço + letra, repetido 3+ vezes
+        // Ex: "p r e c i s a" → "precisa"
+        text = text.replace(/(\p{L})\s+(?=\p{L}\s+\p{L})/gu, '$1');
+
+        // Segunda passada mais agressiva para casos como "á udio" → "áudio"
+        text = text.replace(/(\p{L})\s(\p{L})(?=\s|$)/gu, (match, p1, p2) => {
+            // Se são duas letras separadas por espaço, verificar se faz sentido juntar
+            return p1 + p2;
+        });
+
+        // Colapsar múltiplos espaços
+        text = text.replace(/\s{2,}/g, ' ').trim();
+
+        // Remover fragmentos muito curtos isolados
+        if (text.length < 3) return '';
+
+        return text;
     }
 
     /**
@@ -349,6 +428,21 @@ export class GeminiLiveService {
                     },
                     onclose: (event: any) => {
                         console.log(`🔌 Conexão fechada: Code=${event.code}, Reason=${event.reason || 'Nenhum'}`);
+
+                        // v4.31: Diagnóstico detalhado de erro 1008 (Operation not supported)
+                        if (event.code === 1008) {
+                            console.error('❌ [Erro 1008] Operação não suportada pelo modelo/API. Possíveis causas:');
+                            console.error('  1. ❌ Tool calling durante sessão de áudio nativo (verificar se token tem tools=[])');
+                            console.error('  2. ❌ Modelo gemini-2.5-flash-native-audio não suporta bidiGenerateContent com tools');
+                            console.error('  3. ❌ responseModalities incompatível com configuração do token');
+                            console.error('  → Solução aplicada: Tools removidos do token efêmero (v4.31)');
+                            console.error('  → Se persistir: Migrar para gemini-1.5-flash (suporte estável)');
+                        } else if (event.code === 1006) {
+                            console.error('❌ [Erro 1006] Conexão perdida inesperadamente (possivelmente rede/timeout)');
+                        } else if (event.code === 1007) {
+                            console.error('❌ [Erro 1007] Dados inválidos recebidos (verificar formato de áudio/mensagem)');
+                        }
+
                         this.stopSession();
                         this.emitEvent({ type: 'end', data: `WebSocket closed: ${event.code}` });
                     },
@@ -393,7 +487,11 @@ export class GeminiLiveService {
 
     /**
      * Configura captura de áudio do microfone
-     * v4.19: Logs diagnósticos para rastrear fluxo de áudio
+     * v5.0: Migração de ScriptProcessor → AudioWorkletNode
+     * 
+     * AudioWorkletNode roda em thread separada (Audio Worklet Global Scope),
+     * resolvendo problema de áudio "rádio mal sintonizado" causado quando
+     * ScriptProcessor competia com UI/render na main thread.
      */
     private audioChunkCount = 0;
     private lastAudioLogTime = 0;
@@ -404,62 +502,195 @@ export class GeminiLiveService {
         this.audioChunkCount = 0;
         this.lastAudioLogTime = Date.now();
 
-        const source = this.audioContext.createMediaStreamSource(this.mediaStream);
-        this.scriptProcessorNode = this.audioContext.createScriptProcessor(4096, 1, 1);
+        try {
+            // Criar processador de áudio inline (via Blob URL)
+            const processorCode = `
+// Downsampling 48kHz → 16kHz
+function downsample(input, fromRate, toRate) {
+    if (fromRate === toRate) return input;
+    const ratio = fromRate / toRate;
+    const outputLength = Math.floor(input.length / ratio);
+    const output = new Float32Array(outputLength);
+    for (let i = 0; i < outputLength; i++) {
+        output[i] = input[Math.floor(i * ratio)];
+    }
+    return output;
+}
 
-        this.scriptProcessorNode.onaudioprocess = (event) => {
-            // v4.3.1: Verificação antecipada e rigorosa
-            if (!this.isSessionActive || !this.liveSession || this.connectionState !== ConnState.OPEN) {
-                return;
-            }
+// Float32 → Int16 PCM
+function floatTo16BitPCM(input) {
+    const output = new Int16Array(input.length);
+    for (let i = 0; i < input.length; i++) {
+        const s = Math.max(-1, Math.min(1, input[i]));
+        output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    return output;
+}
 
-            try {
-                // Verificar se o WebSocket subjacente ainda está aberto
-                const ws = (this.liveSession as any)._ws || (this.liveSession as any).ws;
-                if (ws && ws.readyState !== 1) { // 1 = OPEN
-                    console.log('⚠️ [GeminiLive] WebSocket fechando/fechado, ignorando chunk');
+// Int16 → Base64 (Compatível com AudioWorklet)
+function int16ToBase64(buffer) {
+    const bytes = new Uint8Array(buffer.buffer);
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    let base64 = '';
+    for (let i = 0; i < bytes.length; i += 3) {
+        const b1 = bytes[i];
+        const b2 = i + 1 < bytes.length ? bytes[i + 1] : 0;
+        const b3 = i + 2 < bytes.length ? bytes[i + 2] : 0;
+        base64 += alphabet[b1 >> 2];
+        base64 += alphabet[((b1 & 3) << 4) | (b2 >> 4)];
+        base64 += i + 1 < bytes.length ? alphabet[((b2 & 15) << 2) | (b3 >> 6)] : '=';
+        base64 += i + 2 < bytes.length ? alphabet[b3 & 63] : '=';
+    }
+    return base64;
+}
+
+class GeminiLiveAudioProcessor extends AudioWorkletProcessor {
+    constructor() {
+        super();
+        this.chunkCount = 0;
+        this.lastLogTime = 0;
+    }
+
+    process(inputs, outputs, parameters) {
+        const input = inputs[0];
+        if (!input || !input[0]) return true;
+
+        const inputData = input[0]; // mono channel
+        const maxAmplitude = Math.max(...Array.from(inputData).map(Math.abs));
+
+        // Downsampling 48kHz → 16kHz
+        const downsampled = downsample(inputData, sampleRate, 16000);
+        
+        // Float32 → Int16 PCM
+        const pcm16 = floatTo16BitPCM(downsampled);
+        
+        // Int16 → Base64
+        const base64 = int16ToBase64(pcm16);
+
+        // Enviar para main thread
+        this.port.postMessage({
+            type: 'audio-chunk',
+            data: base64,
+            mimeType: 'audio/pcm;rate=16000',
+            amplitude: maxAmplitude,
+            chunkCount: ++this.chunkCount
+        });
+
+        // Log periódico (10s)
+        const now = currentTime * 1000;
+        if (now - this.lastLogTime > 10000) {
+            this.port.postMessage({
+                type: 'log',
+                message: \`🎤 [AudioWorklet] \${this.chunkCount} chunks | amp: \${maxAmplitude.toFixed(2)}\`
+            });
+            this.lastLogTime = now;
+        }
+
+        return true; // keep alive
+    }
+}
+
+registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
+`;
+
+            const blob = new Blob([processorCode], { type: 'application/javascript' });
+            const processorUrl = URL.createObjectURL(blob);
+
+            // Registrar AudioWorklet
+            await this.audioContext.audioWorklet.addModule(processorUrl);
+            URL.revokeObjectURL(processorUrl);
+
+            // Criar nó do worklet
+            const source = this.audioContext.createMediaStreamSource(this.mediaStream);
+            this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'gemini-live-processor');
+
+            // Escutar mensagens do worklet
+            this.audioWorkletNode.port.onmessage = (event) => {
+                if (event.data.type === 'audio-chunk') {
+                    // Enviar áudio para Gemini Live
+                    if (!this.isSessionActive || !this.liveSession || this.connectionState !== ConnState.OPEN) {
+                        return;
+                    }
+
+                    try {
+                        // Verificar WebSocket
+                        const ws = (this.liveSession as any)._ws || (this.liveSession as any).ws;
+                        if (ws && ws.readyState !== 1) { // 1 = OPEN
+                            console.log('⚠️ [GeminiLive] WebSocket fechando/fechado, ignorando chunk');
+                            return;
+                        }
+
+                        this.liveSession.sendRealtimeInput({
+                            audio: {
+                                data: event.data.data,
+                                mimeType: event.data.mimeType
+                            }
+                        });
+
+                        this.audioChunkCount++;
+                    } catch (e: any) {
+                        if (e.message?.includes('CLOSED') || e.message?.includes('CLOSING')) {
+                            console.warn('⚠️ [GeminiLive] Sessão encerrada durante envio de áudio');
+                        } else {
+                            console.error('❌ [GeminiLive] Erro ao enviar áudio:', e);
+                        }
+                        this.isSessionActive = false;
+                    }
+                } else if (event.data.type === 'log' && (window as any).DEBUG_LIA_LOGS) {
+                    console.log(event.data.message);
+                }
+            };
+
+            // Conectar
+            source.connect(this.audioWorkletNode);
+            this.audioWorkletNode.connect(this.audioContext.destination);
+
+            console.log('🎤 Captura de áudio configurada (AudioWorkletNode)');
+        } catch (error) {
+            console.warn('⚠️ AudioWorklet não suportado, usando ScriptProcessor (fallback):', error);
+
+            // Fallback para ScriptProcessor (navegadores antigos)
+            const source = this.audioContext.createMediaStreamSource(this.mediaStream);
+            this.scriptProcessorNode = this.audioContext.createScriptProcessor(4096, 1, 1);
+
+            this.scriptProcessorNode.onaudioprocess = (event) => {
+                if (!this.isSessionActive || !this.liveSession || this.connectionState !== ConnState.OPEN) {
                     return;
                 }
 
-                const inputData = event.inputBuffer.getChannelData(0);
-
-                // v4.19: Verificar se há dados de áudio significativos
-                const maxAmplitude = Math.max(...Array.from(inputData).map(Math.abs));
-
-                const downsampled = downsampleAudio(inputData, this.audioContext!.sampleRate, 16000);
-                const pcm16 = floatTo16BitPCM(downsampled);
-                const base64 = int16ArrayToBase64(pcm16);
-
-                this.liveSession.sendRealtimeInput({
-                    audio: {
-                        data: base64,
-                        mimeType: 'audio/pcm;rate=16000'
+                try {
+                    const ws = (this.liveSession as any)._ws || (this.liveSession as any).ws;
+                    if (ws && ws.readyState !== 1) {
+                        console.log('⚠️ [GeminiLive] WebSocket fechando/fechado, ignorando chunk');
+                        return;
                     }
-                });
 
-                this.audioChunkCount++;
+                    const inputData = event.inputBuffer.getChannelData(0);
+                    const downsampled = downsampleAudio(inputData, this.audioContext!.sampleRate, 16000);
+                    const pcm16 = floatTo16BitPCM(downsampled);
+                    const base64 = int16ArrayToBase64(pcm16);
 
-                // v4.28: Log menos frequente (10s) e apenas com DEBUG ativo
-                const now = Date.now();
-                if ((window as any).DEBUG_LIA_LOGS && now - this.lastAudioLogTime > 10000) {
-                    console.log(`🎤 [Audio] ${this.audioChunkCount} chunks | amp: ${maxAmplitude.toFixed(2)}`);
-                    this.lastAudioLogTime = now;
+                    this.liveSession.sendRealtimeInput({
+                        audio: {
+                            data: base64,
+                            mimeType: 'audio/pcm;rate=16000'
+                        }
+                    });
+
+                    this.audioChunkCount++;
+                } catch (e: any) {
+                    if (!e.message?.includes('CLOSED') && !e.message?.includes('CLOSING')) {
+                        console.error('❌ [GeminiLive] Erro ao enviar áudio:', e);
+                    }
+                    this.isSessionActive = false;
                 }
+            };
 
-            } catch (e: any) {
-                if (e.message?.includes('CLOSED') || e.message?.includes('CLOSING')) {
-                    console.warn('⚠️ [GeminiLive] Sessão encerrada durante envio de áudio');
-                } else {
-                    console.error('❌ [GeminiLive] Erro ao enviar áudio:', e);
-                }
-                this.isSessionActive = false;
-            }
-        };
+            source.connect(this.scriptProcessorNode);
+            this.scriptProcessorNode.connect(this.audioContext.destination);
 
-        source.connect(this.scriptProcessorNode);
-        this.scriptProcessorNode.connect(this.audioContext.destination);
-
-        console.log('🎤 Captura de áudio configurada');
+            console.log('🎤 Captura de áudio configurada (ScriptProcessor - fallback)');
+        }
     }
 
     /**
@@ -567,11 +798,14 @@ export class GeminiLiveService {
         if (outputText) {
             this.responseSent = true;
             this.stopWatchdog();
-            // v4.32: Revertido espaço manual para evitar "P ara te aju dar"
+            // v4.32: Guardar outputAudioTranscription SEPARADAMENTE para priorização
+            // Esta é a transcrição "limpa" do que foi realmente falado (sem thinking)
+            this.outputTranscriptionText += outputText;
+            // Manter também em accumulatedLiaText para compatibilidade
             this.accumulatedLiaText += outputText;
 
             if ((window as any).DEBUG_LIA_LOGS) {
-                console.log('📝 [Chunk] LIA:', outputText);
+                console.log('📝 [Chunk] LIA (outputTranscription):', outputText);
             }
         } else if (sc.model_turn?.parts || sc.modelTurn?.parts) {
             const parts = sc.model_turn?.parts || sc.modelTurn?.parts;
@@ -579,9 +813,11 @@ export class GeminiLiveService {
             if (textPart?.text) {
                 this.responseSent = true;
                 this.stopWatchdog();
+                // v4.32: NÃO adicionar modelTurn.text ao outputTranscriptionText
+                // Este texto contém thinking/reasoning interno - vai apenas para accumulatedLiaText como fallback
                 this.accumulatedLiaText += textPart.text;
                 if ((window as any).DEBUG_LIA_LOGS) {
-                    console.log('📝 [Chunk] LIA (model_turn):', textPart.text);
+                    console.log('📝 [Chunk] LIA (model_turn - PODE SER THINKING):', textPart.text.substring(0, 50));
                 }
             }
         }
@@ -589,6 +825,15 @@ export class GeminiLiveService {
         // Processar parts (áudio)
         const modelTurn = sc.model_turn || sc.modelTurn;
         if (modelTurn?.parts) {
+            // Contar parts de áudio
+            const audioParts = modelTurn.parts.filter((p: any) =>
+                (p.inline_data || p.inlineData)?.mimeType?.includes('audio')
+            );
+            if (audioParts.length > 0) {
+                // v4.32: Marcar que recebemos áudio neste turno - priorizar outputTranscriptionText
+                this.hasReceivedAudioThisTurn = true;
+            }
+
             for (const part of modelTurn.parts) {
                 // Áudio
                 const inlineData = part.inline_data || part.inlineData;
@@ -637,22 +882,49 @@ export class GeminiLiveService {
             if ((window as any).DEBUG_LIA_LOGS) console.log('🏁 TURNO_COMPLETO');
 
             // v4.29: Capturar texto do usuário ANTES de limpar para detectar gatilhos
-            // v4.32: Adicionada normalização básica aqui também
-            const userTextForTrigger = this.accumulatedUserText.trim();
+            // v4.32: Adicionada normalização para corrigir fragmentação ("p r e c i s a n d o")
+            const userTextForTrigger = this.normalizeUserTranscript(this.accumulatedUserText);
 
-            if (this.accumulatedUserText.trim()) {
-                const userText = this.accumulatedUserText.trim();
-                console.log('🗣️ Usuário:', userText.substring(0, 50) + (userText.length > 50 ? '...' : ''));
-                this.emitEvent({ type: 'user-transcript', data: userText });
+            if (userTextForTrigger) {
+                console.log('🗣️ Usuário:', userTextForTrigger.substring(0, 50) + (userTextForTrigger.length > 50 ? '...' : ''));
+                this.emitEvent({ type: 'user-transcript', data: userTextForTrigger });
 
                 if (this.config.callbacks?.persistMessage && this.currentConversationId) {
-                    this.config.callbacks.persistMessage('user', userText, this.currentConversationId);
+                    // v4.32: Bloquear atualização de memória/nome com transcrições curtas do Live
+                    // Evita que fragmentos como "a", "o", "sim" contaminem o perfil
+                    const isValidForMemory = userTextForTrigger.length >= 8 &&
+                        /(meu nome é|pode me chamar de|sou o|sou a|me chamo)\s+/i.test(userTextForTrigger);
+
+                    if (!isValidForMemory) {
+                        console.log('⚠️ [Memory] Texto curto/sem trigger - skipMemoryUpdate');
+                    }
+
+                    this.config.callbacks.persistMessage('user', userTextForTrigger, this.currentConversationId);
                 }
                 this.accumulatedUserText = ''; // Reset acumulador
             }
 
-            // v5.3: Verificar se Gemini respondeu com algo útil ou se precisamos forçar ferramentas (Fail-Safe)
-            const liaText = this.accumulatedLiaText.trim();
+            // v4.32: PRIORIZAÇÃO DE TRANSCRIÇÃO
+            // Se recebemos áudio, usar APENAS outputTranscriptionText (transcrição limpa da fala)
+            // Se não recebemos áudio, usar accumulatedLiaText (pode conter thinking como fallback)
+            let liaText = '';
+
+            if (this.hasReceivedAudioThisTurn && this.outputTranscriptionText.trim()) {
+                // MODO ÁUDIO: usar transcrição limpa do que foi REALMENTE falado
+                liaText = this.sanitizeTranscriptPTBR(this.outputTranscriptionText.trim());
+                console.log('🎵 [Live] Usando outputTranscriptionText (modo áudio)');
+            } else if (this.accumulatedLiaText.trim()) {
+                // MODO TEXTO/FALLBACK: usar accumulatedLiaText sanitizado
+                liaText = this.sanitizeTranscriptPTBR(this.accumulatedLiaText.trim());
+                console.log('📝 [Live] Usando accumulatedLiaText (fallback/texto)');
+            }
+
+            // Se ainda tiver thinking text residual após sanitização, limpar
+            if (liaText && (liaText.length < 10 || /^(I've|I'm|The|Based on|Here's|Let me|I will|I need)/i.test(liaText))) {
+                console.log('⚠️ [Filtro] Transcrição residual parece ser thinking text, ignorando');
+                liaText = '';
+            }
+
             const geminiCalledTool = this.toolCallCount > 0;
 
             // Detectar qual ferramenta forçar
@@ -696,6 +968,9 @@ export class GeminiLiveService {
             this.toolCallCount = 0;
             this.accumulatedUserText = '';
             this.accumulatedLiaText = '';
+            // v4.32: Resetar novas variáveis de rastreamento
+            this.hasReceivedAudioThisTurn = false;
+            this.outputTranscriptionText = '';
 
             if (this.currentSession) {
                 this.currentSession.isSpeaking = false;
@@ -837,6 +1112,7 @@ export class GeminiLiveService {
 
     /**
      * v5.3: Detecta qual ferramenta forçar se o Gemini hesitar
+     * v5.5: Desabilitado busca forçada para cotações - Gemini tem Google Search Grounding nativo
      */
     private detectForcedTool(userText: string, liaResponse: string, geminiCalledTool: boolean): 'search' | 'weather' | 'time' | 'directions' | 'places' | 'dashboard' | null {
         if (!userText || geminiCalledTool || this.forcedActionDone) return null;
@@ -853,7 +1129,13 @@ export class GeminiLiveService {
         if (GeminiLiveService.TIME_TRIGGERS.some(t => lowerText.includes(t)) && isGeneric) return 'time';
         // v5.2: Não forçar clima se for query de rota (redundante agora com directions acima mas mantemos segurança)
         if (GeminiLiveService.WEATHER_TRIGGERS.some(t => lowerText.includes(t)) && isGeneric) return 'weather';
-        if (GeminiLiveService.SEARCH_TRIGGERS.some(t => lowerText.includes(t)) && isGeneric && !lowerText.includes('dashboard') && !lowerText.includes('gráfico')) return 'search';
+
+        // v5.5: DESABILITADO - Gemini tem Google Search Grounding nativo habilitado (googleSearch: {})
+        // Busca forçada via backend causava resultados irrelevantes (iPhone, EUR-Lex, etc.)
+        // Apenas forçar busca se for sobre notícias genéricas (não cotações, que o Grounding resolve melhor)
+        const isCotacaoQuery = ['euro', 'dólar', 'dollar', 'bitcoin', 'cotação', 'preço', 'valor', 'real'].some(t => lowerText.includes(t));
+        if (GeminiLiveService.SEARCH_TRIGGERS.some(t => lowerText.includes(t)) && isGeneric && !isCotacaoQuery && !lowerText.includes('dashboard') && !lowerText.includes('gráfico')) return 'search';
+
         if ((lowerText.includes('dashboard') || lowerText.includes('gráfico') || lowerText.includes('widget') || lowerText.includes('tabela')) && isGeneric) return 'dashboard';
 
         return null;
@@ -1267,6 +1549,16 @@ export class GeminiLiveService {
      * Encerra sessão
      */
     async stopSession(): Promise<void> {
+        // v4.32: Idempotência - evitar fechar duas vezes (especialmente em dev/StrictMode)
+        if (this.connectionState === ConnState.IDLE) {
+            console.log('⚠️ [GeminiLiveService] Tentativa de parar sessão inexistente (IDLE)');
+            return;
+        }
+        if (this.connectionState === ConnState.CLOSING || this.connectionState === ConnState.CLOSED) {
+            console.log('⚠️ [GeminiLiveService] Sessão já está fechando/fechada');
+            return;
+        }
+
         console.log('🛑 Encerrando sessão...');
         this.isSessionActive = false;
         this.setState(ConnState.CLOSING);
@@ -1276,6 +1568,12 @@ export class GeminiLiveService {
         if (this.scriptProcessorNode) {
             this.scriptProcessorNode.disconnect();
             this.scriptProcessorNode = null;
+        }
+
+        if (this.audioWorkletNode) {
+            this.audioWorkletNode.disconnect();
+            this.audioWorkletNode.port.close();
+            this.audioWorkletNode = null;
         }
 
         if (this.mediaStream) {

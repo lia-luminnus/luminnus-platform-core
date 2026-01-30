@@ -231,9 +231,7 @@ const WhatsAppAgentContent: React.FC = () => {
 
 const WhatsAppAgent: React.FC = () => {
     return (
-        <LIAProvider>
-            <WhatsAppAgentContent />
-        </LIAProvider>
+        <WhatsAppAgentContent />
     );
 };
 

@@ -15,6 +15,18 @@ import OpenAI from 'openai';
 import fs from 'fs';
 import { execSync } from 'child_process';
 
+// ===========================================================
+// GLOBAL ERROR HANDLERS (v4.1.1 - Diagnosis)
+// ===========================================================
+process.on('uncaughtException', (err) => {
+  console.error('💥 [CRITICAL] Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('💥 [CRITICAL] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+
 // Port Cleaner Helper (Dev only)
 function cleanPort(port: number | string) {
   if (process.env.NODE_ENV === 'production') return;
@@ -73,6 +85,9 @@ import { setupRealtimeVoiceAPI } from './realtime/realtime-voice-api.js';
 
 // Auth Middleware para Socket.IO
 import { socketAuth, socketAuthDev } from './middleware/socketAuth.js';
+
+// Diagnostic Service
+import { diagnosticService } from './services/diagnosticService.js';
 
 // ===========================================================
 // CORS DINÂMICO VIA ENV (PRODUÇÃO-READY)
@@ -284,6 +299,9 @@ async function startServer() {
     });
   });
 
+  console.log('🚀 [Server] Iniciando setup de rotas...');
+
+
   // API Routes
   setupSessionRoutes(app);
   setupChatRoutes(app, openai);
@@ -309,8 +327,13 @@ async function startServer() {
   setupWhatsAppIntegrationRoutes(app); // WhatsApp Integration Management (for Hub)
   setupGoogleAuthRoutes(app); // Google OAuth Integration
 
+  console.log('🚀 [Server] Rotas básicas carregadas. Inicializando inteligência...');
+
   // WhatsApp Intelligence Initialization
   WhatsAppIntelligence.init();
+
+  console.log('✅ [Server] WhatsApp Intelligence inicializado');
+
 
 
   // Admin Diagnostic Routes (Admin-Only, protected by adminGate)
@@ -318,13 +341,16 @@ async function startServer() {
   app.use('/api/admin', adminRoutes);
 
   console.log('✅ Core LIA Functions loaded');
-  
+
   // v4.0.2: Diagnostic of critical env vars
   console.log('🔍 [System] Checking critical env vars...');
   const criticalVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'OPENAI_API_KEY'];
   criticalVars.forEach(v => {
     console.log(`   - ${v}: ${process.env[v] ? 'LOADED' : 'MISSING'}`);
   });
+
+  console.log('🚀 [Server] Verificando variáveis críticas...');
+
 
   // ===========================================================
   // OAUTH CALLBACK REDIRECT (Port 3000 -> Frontend 8080)
@@ -359,17 +385,21 @@ async function startServer() {
   });
 
   // ===========================================================
-  // REALTIME SETUP (Socket.io + WebRTC)
-  // ===========================================================
+
+  console.log('🚀 [Server] Configurando Realtime Systems...');
 
   setupRealtime(io, ensureSession);
   setupRealtimeVoiceAPI(app, openai);
 
+  console.log('🚀 [Server] Inicializando Diagnostic Service...');
+
+
   // v4.1: Inicializar serviço de diagnóstico para transmissão de pensamentos
-  const { diagnosticService } = await import('./services/diagnosticService.js');
+  // const { diagnosticService } = await import('./services/diagnosticService.js');
   diagnosticService.init(io);
 
-  console.log('✅ Realtime Systems active');
+  console.log('✅ Realtime Systems active (Server listening sequence starting)');
+
 
   // ===========================================================
   // VITE INTEGRATION (Development + Production)

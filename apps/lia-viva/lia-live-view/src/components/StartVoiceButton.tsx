@@ -36,6 +36,9 @@ export function StartVoiceButton({
     isConnected,
   } = useLIA();
 
+  // v4.32: Debounce para evitar double-toggle (liga/desliga instantâneo)
+  const [isToggling, setIsToggling] = useState(false);
+
   // Estado do modo LIA (persistido apenas no Admin)
   const [liaMode, setLiaMode] = useState<LiaMode>(() => {
     if (!isAdminPanel) return 'NORMAL';
@@ -72,15 +75,33 @@ export function StartVoiceButton({
   };
 
   const handleToggle = async () => {
+    if (isToggling) {
+      console.log('⏳ [VoiceButton] Ignorando clique - toggle em andamento');
+      return;
+    }
+
+    setIsToggling(true);
     if (isLiveActive) {
-      await stopLiveMode();
-    } else {
-      // Injetar o modo na sessão antes de iniciar
-      if (isAdminPanel && liaMode === 'DIAGNOSTIC') {
-        console.log('🔧 [LIA] Starting in DIAGNOSTIC mode...');
-        // O modo será passado para o backend via contexto
+      try {
+        await stopLiveMode();
+      } catch (error) {
+        console.error('❌ [VoiceButton] Erro ao parar Live:', error);
+      } finally {
+        setTimeout(() => setIsToggling(false), 500);
       }
-      await startLiveMode();
+    } else {
+      try {
+        // Injetar o modo na sessão antes de iniciar
+        if (isAdminPanel && liaMode === 'DIAGNOSTIC') {
+          console.log('🔧 [LIA] Starting in DIAGNOSTIC mode...');
+          // O modo será passado para o backend via contexto
+        }
+        await startLiveMode();
+      } catch (error) {
+        console.error('❌ [VoiceButton] Erro ao iniciar Live:', error);
+      } finally {
+        setTimeout(() => setIsToggling(false), 500);
+      }
     }
   };
 
@@ -109,7 +130,7 @@ export function StartVoiceButton({
     return (
       <button
         onClick={handleToggle}
-        disabled={!isConnected && !isLiveActive}
+        disabled={(!isConnected && !isLiveActive) || isToggling}
         className={baseStyles}
         title={isLiveActive ? 'Parar conversa por voz' : 'Iniciar conversa por voz (Gemini Live)'}
       >
@@ -146,7 +167,7 @@ export function StartVoiceButton({
       {/* Botão principal */}
       <button
         onClick={handleToggle}
-        disabled={!isConnected && !isLiveActive}
+        disabled={(!isConnected && !isLiveActive) || isToggling}
         className={`
           ${baseStyles}
           rounded-r-none border-r-0
@@ -183,7 +204,7 @@ export function StartVoiceButton({
       {/* Botão do dropdown (seta) */}
       <button
         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-        disabled={!isConnected || isLiveActive}
+        disabled={!isConnected || isLiveActive || isToggling}
         className={`
           ${isLiveActive
             ? 'bg-[rgba(255,0,255,0.3)] border-2 border-[#ff00ff] text-[#ff00ff]'

@@ -456,37 +456,135 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                     }
                 }
             },
-            // ========== OPERATIONAL LAYER TOOLS (v4.0) ==========
+            // ========== CRM TOOLS (v5.0 - Real CRM Implementation) ==========
             {
                 name: 'crmCreateLead',
                 description: 'Cria um novo lead/contato no CRM.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        name: { type: 'string' },
+                        name: { type: 'string', description: 'Nome do lead (obrigatório)' },
                         email: { type: 'string' },
                         phone: { type: 'string' },
                         company: { type: 'string' },
+                        position: { type: 'string', description: 'Cargo/Posição' },
                         source: { type: 'string', description: 'Ex: WhatsApp, Website, Indicação' },
-                        notes: { type: 'string' }
+                        notes: { type: 'string' },
+                        tags: { type: 'array', items: { type: 'string' } }
                     },
                     required: ['name']
                 }
             },
             {
-                name: 'crmUpdateDeal',
-                description: 'Atualiza o status de um negócio/oportunidade.',
+                name: 'crmUpdateLead',
+                description: 'Atualiza um lead existente.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        dealId: { type: 'string' },
-                        stage: { type: 'string', enum: ['contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost'] },
-                        value: { type: 'number' },
-                        notes: { type: 'string' }
+                        leadId: { type: 'string', description: 'ID do lead (obrigatório)' },
+                        name: { type: 'string' },
+                        email: { type: 'string' },
+                        phone: { type: 'string' },
+                        company: { type: 'string' },
+                        position: { type: 'string' },
+                        source: { type: 'string' },
+                        status: { type: 'string', enum: ['new', 'contacted', 'qualified', 'converted', 'lost'] },
+                        notes: { type: 'string' },
+                        tags: { type: 'array', items: { type: 'string' } }
                     },
-                    required: ['dealId', 'stage']
+                    required: ['leadId']
                 }
             },
+            {
+                name: 'crmListLeads',
+                description: 'Lista leads do usuário com filtros opcionais.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        status: {
+                            oneOf: [
+                                { type: 'string', enum: ['new', 'contacted', 'qualified', 'converted', 'lost'] },
+                                { type: 'array', items: { type: 'string', enum: ['new', 'contacted', 'qualified', 'converted', 'lost'] } }
+                            ]
+                        },
+                        source: { type: 'string' }
+                    }
+                }
+            },
+            {
+                name: 'crmCreateDeal',
+                description: 'Cria um novo negócio/oportunidade no pipeline de vendas.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        leadId: { type: 'string', description: 'ID do lead relacionado (opcional)' },
+                        title: { type: 'string', description: 'Título do negócio (obrigatório)' },
+                        description: { type: 'string' },
+                        value: { type: 'number', description: 'Valor estimado' },
+                        currency: { type: 'string', default: 'BRL' },
+                        expectedCloseDate: { type: 'string', description: 'Data esperada de fechamento (ISO)' },
+                        probability: { type: 'integer', description: 'Probabilidade de fechar (0-100)' },
+                        notes: { type: 'string' },
+                        tags: { type: 'array', items: { type: 'string' } }
+                    },
+                    required: ['title']
+                }
+            },
+            {
+                name: 'crmUpdateDeal',
+                description: 'Atualiza um negócio/oportunidade existente.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        dealId: { type: 'string', description: 'ID do deal (obrigatório)' },
+                        title: { type: 'string' },
+                        description: { type: 'string' },
+                        value: { type: 'number' },
+                        stage: { type: 'string', enum: ['prospecting', 'qualification', 'proposal', 'negotiation', 'closed_won', 'closed_lost'] },
+                        probability: { type: 'integer' },
+                        expectedCloseDate: { type: 'string' },
+                        actualCloseDate: { type: 'string' },
+                        notes: { type: 'string' },
+                        tags: { type: 'array', items: { type: 'string' } }
+                    },
+                    required: ['dealId']
+                }
+            },
+            {
+                name: 'crmListDeals',
+                description: 'Lista negócios/oportunidades com filtros opcionais.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        stage: {
+                            oneOf: [
+                                { type: 'string', enum: ['prospecting', 'qualification', 'proposal', 'negotiation', 'closed_won', 'closed_lost'] },
+                                { type: 'array', items: { type: 'string', enum: ['prospecting', 'qualification', 'proposal', 'negotiation', 'closed_won', 'closed_lost'] } }
+                            ]
+                        },
+                        leadId: { type: 'string', description: 'Filtrar por lead específico' }
+                    }
+                }
+            },
+            {
+                name: 'crmGetPipeline',
+                description: 'Obtém visão geral do pipeline de vendas (resumo por estágio).',
+                parameters: { type: 'object', properties: {} }
+            },
+            {
+                name: 'crmAddNote',
+                description: 'Adiciona uma nota a um lead ou deal.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        entityType: { type: 'string', enum: ['lead', 'deal'], description: 'Tipo de entidade' },
+                        entityId: { type: 'string', description: 'ID do lead ou deal' },
+                        content: { type: 'string', description: 'Conteúdo da nota (obrigatório)' }
+                    },
+                    required: ['entityType', 'entityId', 'content']
+                }
+            },
+            // ========== OPERATIONAL LAYER TOOLS (v4.0) ==========
             {
                 name: 'createSupportTicket',
                 description: 'Abre um chamado de suporte.',
@@ -527,6 +625,97 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                         reason: { type: 'string' }
                     },
                     required: ['targetId', 'channel']
+                }
+            },
+            // ========== TASK MANAGEMENT TOOLS (v5.0) ==========
+            {
+                name: 'createTask',
+                description: 'Cria uma nova tarefa com data, prioridade e categoria.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        title: { type: 'string', description: 'Título da tarefa (obrigatório)' },
+                        description: { type: 'string', description: 'Descrição detalhada (opcional)' },
+                        dueDate: { type: 'string', description: 'Data de vencimento (ISO string, ex: "2026-02-01T10:00:00")' },
+                        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
+                        category: { type: 'string', description: 'Categoria da tarefa (ex: trabalho, pessoal)' }
+                    },
+                    required: ['title']
+                }
+            },
+            {
+                name: 'updateTask',
+                description: 'Atualiza uma tarefa existente.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        taskId: { type: 'string', description: 'ID da tarefa a ser atualizada' },
+                        title: { type: 'string' },
+                        description: { type: 'string' },
+                        dueDate: { type: 'string' },
+                        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+                        status: { type: 'string', enum: ['pending', 'in_progress', 'completed', 'cancelled'] },
+                        category: { type: 'string' }
+                    },
+                    required: ['taskId']
+                }
+            },
+            {
+                name: 'moveTask',
+                description: 'Move uma tarefa para outra data.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        taskId: { type: 'string', description: 'ID da tarefa' },
+                        newDueDate: { type: 'string', description: 'Nova data (ISO string)' }
+                    },
+                    required: ['taskId', 'newDueDate']
+                }
+            },
+            {
+                name: 'listTasks',
+                description: 'Lista tarefas do usuário com filtros opcionais.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        status: {
+                            oneOf: [
+                                { type: 'string', enum: ['pending', 'in_progress', 'completed', 'cancelled'] },
+                                { type: 'array', items: { type: 'string', enum: ['pending', 'in_progress', 'completed', 'cancelled'] } }
+                            ]
+                        },
+                        category: { type: 'string' },
+                        dateRange: {
+                            type: 'object',
+                            properties: {
+                                start: { type: 'string' },
+                                end: { type: 'string' }
+                            }
+                        },
+                        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] }
+                    }
+                }
+            },
+            {
+                name: 'completeTask',
+                description: 'Marca uma tarefa como concluída.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        taskId: { type: 'string', description: 'ID da tarefa' }
+                    },
+                    required: ['taskId']
+                }
+            },
+            {
+                name: 'deleteTask',
+                description: 'Deleta uma tarefa permanentemente.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        taskId: { type: 'string', description: 'ID da tarefa' }
+                    },
+                    required: ['taskId']
                 }
             },
             // ========== CORE ORCHESTRATOR TOOLS (v5.0) ==========
@@ -759,6 +948,73 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                     const { fileService } = await import('./fileService.js');
                     return await fileService.getFileAnalysis(args.fileId);
                 }
+                // ========== TASK MANAGEMENT TOOLS (v5.0) ==========
+                case 'createTask': {
+                    const { TaskService } = await import('./taskService.js');
+                    return await TaskService.createTask({
+                        userId,
+                        tenantId,
+                        title: args.title,
+                        description: args.description,
+                        dueDate: args.dueDate,
+                        priority: args.priority,
+                        category: args.category
+                    });
+                }
+                case 'updateTask': {
+                    const { TaskService } = await import('./taskService.js');
+                    return await TaskService.updateTask({
+                        taskId: args.taskId,
+                        userId,
+                        tenantId,
+                        updates: {
+                            title: args.title,
+                            description: args.description,
+                            dueDate: args.dueDate,
+                            priority: args.priority,
+                            status: args.status,
+                            category: args.category
+                        }
+                    });
+                }
+                case 'moveTask': {
+                    const { TaskService } = await import('./taskService.js');
+                    return await TaskService.moveTask({
+                        taskId: args.taskId,
+                        userId,
+                        tenantId,
+                        newDueDate: args.newDueDate
+                    });
+                }
+                case 'listTasks': {
+                    const { TaskService } = await import('./taskService.js');
+                    return await TaskService.listTasks({
+                        userId,
+                        tenantId,
+                        filter: {
+                            status: args.status,
+                            category: args.category,
+                            dateRange: args.dateRange,
+                            priority: args.priority
+                        }
+                    });
+                }
+                case 'completeTask': {
+                    const { TaskService } = await import('./taskService.js');
+                    return await TaskService.completeTask({
+                        taskId: args.taskId,
+                        userId,
+                        tenantId
+                    });
+                }
+                case 'deleteTask': {
+                    const { TaskService } = await import('./taskService.js');
+                    return await TaskService.deleteTask({
+                        taskId: args.taskId,
+                        userId,
+                        tenantId
+                    });
+                }
                 case 'getSystemHealth': return await diagnosticService.getHealth();
                 case 'getSystemLogs': return await diagnosticService.getLogs(args.limit, args.level);
                 case 'readProjectFile': return await diagnosticService.readFile(args.filePath);
@@ -839,15 +1095,114 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                     };
                 }
 
-                // v4.0 Operational Layer Fallbacks (Stubs)
+                // ========== CRM TOOLS (v5.0 - Real CRM Implementation) ==========
                 case 'crmCreateLead': {
-                    const { saveMemory } = await import('../config/supabase.js');
-                    // Salva como memória e evento até termos integração real com CRM
-                    await saveMemory(userId, `lead_${Date.now()}`, JSON.stringify(args), true);
-                    return { success: true, message: `Lead ${args.name} criado com sucesso no CRM operacional.`, data: args };
+                    const { CRMService } = await import('./crmService.js');
+                    return await CRMService.createLead({
+                        userId,
+                        tenantId,
+                        name: args.name,
+                        email: args.email,
+                        phone: args.phone,
+                        company: args.company,
+                        position: args.position,
+                        source: args.source,
+                        notes: args.notes,
+                        tags: args.tags
+                    });
+                }
+                case 'crmUpdateLead': {
+                    const { CRMService } = await import('./crmService.js');
+                    return await CRMService.updateLead({
+                        leadId: args.leadId,
+                        userId,
+                        tenantId,
+                        updates: {
+                            name: args.name,
+                            email: args.email,
+                            phone: args.phone,
+                            company: args.company,
+                            position: args.position,
+                            source: args.source,
+                            status: args.status,
+                            notes: args.notes,
+                            tags: args.tags
+                        }
+                    });
+                }
+                case 'crmListLeads': {
+                    const { CRMService } = await import('./crmService.js');
+                    return await CRMService.listLeads({
+                        userId,
+                        tenantId,
+                        filter: {
+                            status: args.status,
+                            source: args.source
+                        }
+                    });
+                }
+                case 'crmCreateDeal': {
+                    const { CRMService } = await import('./crmService.js');
+                    return await CRMService.createDeal({
+                        userId,
+                        tenantId,
+                        leadId: args.leadId,
+                        title: args.title,
+                        description: args.description,
+                        value: args.value,
+                        currency: args.currency,
+                        expectedCloseDate: args.expectedCloseDate,
+                        probability: args.probability,
+                        notes: args.notes,
+                        tags: args.tags
+                    });
                 }
                 case 'crmUpdateDeal': {
-                    return { success: true, message: `Negócio ${args.dealId} atualizado para o estágio ${args.stage}.`, data: args };
+                    const { CRMService } = await import('./crmService.js');
+                    return await CRMService.updateDeal({
+                        dealId: args.dealId,
+                        userId,
+                        tenantId,
+                        updates: {
+                            title: args.title,
+                            description: args.description,
+                            value: args.value,
+                            stage: args.stage,
+                            probability: args.probability,
+                            expectedCloseDate: args.expectedCloseDate,
+                            actualCloseDate: args.actualCloseDate,
+                            notes: args.notes,
+                            tags: args.tags
+                        }
+                    });
+                }
+                case 'crmListDeals': {
+                    const { CRMService } = await import('./crmService.js');
+                    return await CRMService.listDeals({
+                        userId,
+                        tenantId,
+                        filter: {
+                            stage: args.stage,
+                            leadId: args.leadId
+                        }
+                    });
+                }
+                case 'crmGetPipeline': {
+                    const { CRMService } = await import('./crmService.js');
+                    return await CRMService.getPipeline({
+                        userId,
+                        tenantId
+                    });
+                }
+                case 'crmAddNote': {
+                    const { CRMService } = await import('./crmService.js');
+                    return await CRMService.addNote({
+                        userId,
+                        tenantId,
+                        entityType: args.entityType,
+                        entityId: args.entityId,
+                        content: args.content
+                    });
                 }
                 case 'createSupportTicket': {
                     return { success: true, message: `Ticket de suporte criado: "${args.subject}". Prioridade: ${args.priority}.`, ticketId: `TKT-${Math.floor(Math.random() * 9000) + 1000}` };

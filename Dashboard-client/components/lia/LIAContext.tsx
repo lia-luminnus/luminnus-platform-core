@@ -82,6 +82,21 @@ export interface AnalysisData {
     insights?: string[];
 }
 
+export interface Suggestion {
+    type: 'task' | 'crm' | 'insight' | 'system';
+    title: string;
+    description: string;
+    priority: 'low' | 'medium' | 'high' | 'urgent';
+    metadata?: Record<string, any>;
+}
+
+export interface UrgentAlert {
+    alert_type: 'error' | 'warning' | 'info';
+    alert_message: string;
+    alert_timestamp: string;
+    alert_metadata?: Record<string, any>;
+}
+
 export interface DynamicContent {
     type: DynamicContentType;
     title?: string;
@@ -142,6 +157,11 @@ export interface LIAState {
     isListening: boolean;
     isLiveActive: boolean; // Gemini Live ativo
     isInitialLoadDone: boolean; // Sincronização inicial concluída
+
+    // Consciência Operacional (Suggestions & Alerts)
+    suggestions: Suggestion[];
+    urgentAlerts: UrgentAlert[];
+    refreshOperationalAwareness: () => Promise<void>;
 
     // Estados de UI e Processamento
     isTyping: boolean; // Global, ativado por socket lia-typing
@@ -231,6 +251,51 @@ export function LIAProvider({ children }: LIAProviderProps) {
     const [dynamicContainers, setDynamicContainers] = useState<DynamicContainer[]>([]);
     const [liaStatus, setLiaStatus] = useState<string | null>(null);
 
+    // Estado do Usuário (MOVIDO PARA O TOPO PARA EVITAR TDZ)
+    const { user: authUser, initialized: authInitialized, plan: authPlan, profile: authProfile } = useDashboardAuth();
+    const [userId, setUserId] = useState<string | null>(null);
+    const [contextTenantId, setContextTenantId] = useState<string | null>(null);
+    const [plan, setPlanState] = useState<string | null>(null);
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const userIdRef = useRef<string | null>(null);
+    const tenantIdRef = useRef<string | null>(null);
+    const userRoleRef = useRef<string | null>(null);
+
+    // Consciência Operacional
+    const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+    const [urgentAlerts, setUrgentAlerts] = useState<UrgentAlert[]>([]);
+
+    const refreshOperationalAwareness = useCallback(async () => {
+        if (!contextTenantId) return;
+        try {
+            console.log('🧠 [LIAContext] Atualizando consciência operacional...');
+            const [sugRes, alertRes] = await Promise.all([
+                fetch(`/api/metrics/query?tenant_id=${contextTenantId}&type=suggestions`),
+                fetch(`/api/metrics/query?tenant_id=${contextTenantId}&type=alerts`)
+            ]);
+
+            if (sugRes.ok) {
+                const sugData = await sugRes.json();
+                setSuggestions(sugData.data || []);
+            }
+
+            if (alertRes.ok) {
+                const alertData = await alertRes.json();
+                setUrgentAlerts(alertData.data || []);
+            }
+        } catch (error) {
+            console.error('❌ [LIAContext] Falha ao atualizar consciência operacional:', error);
+        }
+    }, [contextTenantId]);
+
+    // Polling de consciência operacional (5 min)
+    useEffect(() => {
+        if (!contextTenantId) return;
+        refreshOperationalAwareness();
+        const interval = setInterval(refreshOperationalAwareness, 300000);
+        return () => clearInterval(interval);
+    }, [contextTenantId, refreshOperationalAwareness]);
+
     // Sincronizar com DynamicContentManager
     useEffect(() => {
         const updateContainers = (containers: DynamicContainer[]) => {
@@ -252,15 +317,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         return () => dynamicContentManager.removeListener(updateContainers);
     }, []);
 
-    // Estado do Usuário
-    const { user, initialized: authInitialized, plan: authPlan, profile: authProfile } = useDashboardAuth();
-    const [userId, setUserId] = useState<string | null>(null);
-    const [tenantId, setTenantId] = useState<string | null>(null);
-    const [plan, setPlanState] = useState<string | null>(null);
-    const [userRole, setUserRole] = useState<string | null>(null);
-    const userIdRef = useRef<string | null>(null);
-    const tenantIdRef = useRef<string | null>(null);
-    const userRoleRef = useRef<string | null>(null);
+
 
     // ======================================================================
     // ESTADOS POR ESCOPO (scope = mode:conversationId)
@@ -309,9 +366,9 @@ export function LIAProvider({ children }: LIAProviderProps) {
     // Sync tenant ID / User ID refs
     useEffect(() => {
         userIdRef.current = userId;
-        tenantIdRef.current = tenantId;
+        tenantIdRef.current = contextTenantId;
         userRoleRef.current = userRole;
-    }, [userId, tenantId, userRole]);
+    }, [userId, contextTenantId, userRole]);
 
     // v2.6: MENTE ÚNICA - Sincronizar Usuário e Autenticação do multi-tenant
     useEffect(() => {
@@ -324,9 +381,9 @@ export function LIAProvider({ children }: LIAProviderProps) {
                     const userPlan = authData.user?.app_metadata?.plan || null;
                     const role = authData.user?.app_metadata?.role || authProfile?.role || 'client';
                     if (uId) {
-                        const activePlan = authPlan || user?.app_metadata?.plan || userPlan;
+                        const activePlan = authPlan || authUser?.app_metadata?.plan || userPlan;
                         setUserId(uId);
-                        setTenantId(uId);
+                        setContextTenantId(uId);
                         setPlanState(activePlan);
                         setUserRole(role);
                         console.log('👤 [LIAContext] Sincronizado via AuthContext:', uId, 'Plano:', activePlan, 'Role:', role);
@@ -381,8 +438,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
     }, [userId]);
 
     useEffect(() => {
-        tenantIdRef.current = tenantId;
-    }, [tenantId]);
+        tenantIdRef.current = contextTenantId;
+    }, [contextTenantId]);
 
     const setActiveMode = useCallback((mode: 'chat' | 'multimodal' | 'live') => {
         setActiveModeState(mode);
@@ -1058,7 +1115,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
                     // O tenantId geralmente vem do perfil ou do próprio token se for JWT customizado
                     // No nosso caso, o handshake passa userId e tenantId (assumindo tenantId igual ao userId se não informado)
                     setUserId(uid);
-                    setTenantId(uid); // Fallback inicial
+                    setContextTenantId(uid); // Fallback inicial
                     console.log('🔑 LIAContext: Auth sync - User:', uid);
                 } catch (e) {
                     console.error('Erro ao parsear auth token:', e);
@@ -1077,14 +1134,14 @@ export function LIAProvider({ children }: LIAProviderProps) {
         const initSocket = async () => {
             const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
             const devGuestUUID = '00000000-0000-0000-0000-000000000001';
-            const finalUserId = user?.id || (isDev ? devGuestUUID : null);
+            const finalUserId = authUser?.id || (isDev ? devGuestUUID : null);
 
             if (!finalUserId) {
                 console.log('⏳ [LIAContext] Aguardando login para conectar socket...');
                 return;
             }
 
-            console.log(`🔌 [LIAContext] Iniciando socket para ${user ? 'usuário: ' + user.email : 'GUEST (Dev Mode)'}`);
+            console.log(`🔌 [LIAContext] Iniciando socket para ${authUser ? 'usuário: ' + authUser.email : 'GUEST (Dev Mode)'}`);
 
             // Tentar pegar token
             let token = '';
@@ -1113,7 +1170,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
             }
 
             // v1.3.0: Definir plano do usuário
-            const userPlan = authPlan?.name || user?.app_metadata?.plan || 'free';
+            const userPlan = authPlan?.name || authUser?.app_metadata?.plan || 'free';
 
             // Configurar parâmetros de autenticação COM plano e conexões
             socketService.setAuthParams({
@@ -1132,7 +1189,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
             });
 
             setUserId(finalUserId);
-            setTenantId(finalUserId);
+            setContextTenantId(finalUserId);
             userIdRef.current = finalUserId;
             tenantIdRef.current = finalUserId;
             if (authPlan) setPlanState(authPlan.name);
@@ -1142,7 +1199,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         }
 
         initSocket();
-    }, [authInitialized, user?.id, authPlan]);
+    }, [authInitialized, authUser?.id, authPlan]);
 
     // Registro de eventos - Refatorado para evitar duplicação ou perda de eventos
     useEffect(() => {
@@ -1855,7 +1912,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
             const convId = scopeKey.split(':')[1] || '';
             const formData = new FormData();
-            
+
             files.forEach(f => {
                 formData.append('files', f.file);
             });
@@ -2347,6 +2404,12 @@ export function LIAProvider({ children }: LIAProviderProps) {
         isListening,
         isLiveActive,
         isInitialLoadDone,
+
+        // Consciência Operacional
+        suggestions,
+        urgentAlerts,
+        refreshOperationalAwareness,
+
         isThinking,
         isProcessingUpload,
         isProcessingDynamic,
@@ -2377,7 +2440,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         saveMemory,
         deleteMemory,
         userId,
-        tenantId,
+        tenantId: contextTenantId,
         plan,
         userRole,
         clearMessages,
@@ -2392,12 +2455,13 @@ export function LIAProvider({ children }: LIAProviderProps) {
         typingByScope, isGeneratingImageByScope, getTypingForScope,
         setTypingForScope, setGeneratingImageForScope, voicePersonality,
         isSpeaking, isListening, isLiveActive, isInitialLoadDone,
+        suggestions, urgentAlerts, refreshOperationalAwareness,
         isThinking, isProcessingUpload, isProcessingDynamic, isCameraActive,
         memories, dynamicContent, dynamicContainers, liaStatus,
         sendTextMessage, addMessage, sendMessageWithFiles, sendAudioMessage,
         transcribeAndFillInput, analyzeFile, setVoicePersonality,
         startListening, stopListening, startLiveMode, stopLiveMode,
-        loadMemories, saveMemory, deleteMemory, userId, tenantId,
+        loadMemories, saveMemory, deleteMemory, userId, contextTenantId,
         plan, userRole, clearMessages, isTyping
     ]);
 

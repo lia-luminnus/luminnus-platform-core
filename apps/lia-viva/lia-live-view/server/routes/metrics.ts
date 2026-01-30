@@ -104,15 +104,16 @@ router.post('/update-efficiency', (req, res) => {
 
 /**
  * GET /api/metrics/query - Dashboard Engine Generic Query
- * Retorna dados mock no formato esperado pelo DashboardRenderer
+ * Retorna dados mock ou reais baseados no tipo solicitado
  */
-router.get('/query', (req, res) => {
+router.get('/query', async (req, res) => {
   try {
     const { metric_key, tenant_id, type = 'timeseries' } = req.query;
     const mKey = (metric_key as string) || 'unknown';
     const qType = (type as string) || 'timeseries';
+    const tId = (tenant_id as string) || '00000000-0000-0000-0000-000000000001';
 
-    console.log(`🔍 [Metrics] Query recebida: tenant=${tenant_id}, metric=${mKey}, type=${qType}`);
+    console.log(`🔍 [Metrics] Query recebida: tenant=${tId}, metric=${mKey}, type=${qType}`);
 
     // Helper: Generate random number in range
     const rand = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -121,6 +122,69 @@ router.get('/query', (req, res) => {
     let data: any;
 
     switch (qType) {
+      case 'alerts': {
+        // Alertas de anomalias e urgências (formato DashboardRenderer)
+        data = [
+          {
+            alert_type: 'error',
+            alert_message: 'Detetei uma queda brusca no checkout hoje (23%).',
+            alert_timestamp: new Date().toISOString(),
+            alert_metadata: { source: 'anomaly', priority: 'high' }
+          },
+          {
+            alert_type: 'warning',
+            alert_message: '3 novos leads do WhatsApp não foram respondidos há mais de 1h.',
+            alert_timestamp: new Date().toISOString(),
+            alert_metadata: { source: 'crm', priority: 'medium' }
+          }
+        ];
+        break;
+      }
+
+      case 'suggestions': {
+        // Sugestões reais baseadas em tarefas e CRM
+        const { TaskService } = await import('../services/taskService.js');
+        const { CRMService } = await import('../services/crmService.js');
+
+        const [tasksRes, leadsRes] = await Promise.all([
+          TaskService.listTasks({ userId: tId, tenantId: tId, filter: { status: 'pending' } }),
+          CRMService.listLeads({ userId: tId, tenantId: tId, filter: { status: 'new' } })
+        ]);
+
+        const suggestions = [];
+
+        if (tasksRes.success && tasksRes.tasks && tasksRes.tasks.length > 0) {
+          suggestions.push({
+            type: 'task',
+            title: `Você tem ${tasksRes.tasks.length} tarefas pendentes`,
+            description: `A tarefa "${tasksRes.tasks[0].title}" vence em breve.`,
+            priority: tasksRes.tasks[0].priority
+          });
+        }
+
+        if (leadsRes.success && leadsRes.leads && leadsRes.leads.length > 0) {
+          suggestions.push({
+            type: 'crm',
+            title: `${leadsRes.leads.length} novos leads aguardando`,
+            description: `O último lead é "${leadsRes.leads[0].name}".`,
+            priority: 'high'
+          });
+        }
+
+        // Sugestão fallback se não houver nada real
+        if (suggestions.length === 0) {
+          suggestions.push({
+            type: 'insight',
+            title: 'Resumo da análise diária pronto!',
+            description: 'Seu faturamento cresceu 15% em relação à semana passada.',
+            priority: 'medium'
+          });
+        }
+
+        data = suggestions;
+        break;
+      }
+
       case 'kpi':
         // Frontend (KPICard.tsx) expects: current_value, previous_value, change_percent, trend
         data = [

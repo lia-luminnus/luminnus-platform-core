@@ -1,0 +1,14 @@
+212:    tenantId: string | null;
+261:    const tenantIdRef = useRef<string | null>(null);
+369:        tenantIdRef.current = contextTenantId;
+441:        tenantIdRef.current = contextTenantId;
+1115:                    // O tenantId geralmente vem do perfil ou do próprio token se for JWT customizado
+1116:                    // No nosso caso, o handshake passa userId e tenantId (assumindo tenantId igual ao userId se não informado)
+1179:                tenantId: finalUserId,
+1187:                tenantId: finalUserId,
+1194:            tenantIdRef.current = finalUserId;
+1816:                    tenantId: tenantIdRef.current
+1945:            formData.append('tenantId', tenantIdRef.current || '');
+2200:                tenantId: tenantIdRef.current || undefined,
+2283:            formData.append('tenantId', tenantIdRef.current || '');
+2443:        tenantId: contextTenantId,
