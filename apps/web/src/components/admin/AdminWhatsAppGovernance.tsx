@@ -128,11 +128,25 @@ const AdminWhatsAppGovernance = () => {
                 body: JSON.stringify({ config: platformConfig })
             });
 
+            // v1.1: Robust error handling for non-JSON or empty responses
+            if (!response.ok) {
+                let errorMsg = `Erro ${response.status}: ${response.statusText}`;
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.error || errorMsg;
+                } catch (e) {
+                    // Not a JSON error, try to get text
+                    const text = await response.text();
+                    if (text && text.length < 100) errorMsg = text;
+                }
+                throw new Error(errorMsg);
+            }
+
             const result = await response.json();
             if (result.success) {
                 toast.success("Configuração da Plataforma salva com sucesso!");
             } else {
-                throw new Error(result.error || "Erro desconhecido");
+                throw new Error(result.error || "Erro inesperado do servidor");
             }
         } catch (error) {
             console.error('❌ Error saving config:', error);

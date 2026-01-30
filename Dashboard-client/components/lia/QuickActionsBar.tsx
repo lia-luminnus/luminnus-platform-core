@@ -40,7 +40,6 @@ function getIcon(iconName: string) {
         'send': <Send className="w-4 h-4" />,
         'list': <ClipboardList className="w-4 h-4" />,
         'download': <Download className="w-4 h-4" />,
-        'terminal': <Terminal className="w-4 h-4" />,
     };
     return iconMap[iconName] || <Zap className="w-4 h-4" />;
 }

@@ -219,16 +219,20 @@ import { loadImportantMemories } from './config/supabase.js';
 export const activeSessions = new Map<string, any>();
 
 export async function ensureSession(userId: string = '00000000-0000-0000-0000-000000000001', conversationId?: string) {
-  const finalConvId = conversationId || `session_${userId.split('-')[0]}_${Date.now()}`;
+  // v5.4: Garantir que userId seja um UUID válido mesmo se vier null/undefined do frontend
+  const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000001';
+  const finalUserId = (!userId || userId === "null" || userId === "undefined") ? DEFAULT_USER_ID : userId;
+
+  const finalConvId = conversationId || `session_${finalUserId.split('-')[0]}_${Date.now()}`;
 
   if (!activeSessions.has(finalConvId)) {
-    console.log(`✅ Nova sessão criada para user ${userId}: ${finalConvId}`);
+    console.log(`✅ Nova sessão criada para user ${finalUserId}: ${finalConvId}`);
     console.log(`🔍 Carregando memórias do Supabase...`);
 
     let memoriesFromDB = [];
 
     try {
-      const dbMemories = await loadImportantMemories(userId);
+      const dbMemories = await loadImportantMemories(finalUserId);
 
       // Convert Supabase format to session format
       memoriesFromDB = (dbMemories || []).map((mem: any) => ({
@@ -240,7 +244,7 @@ export async function ensureSession(userId: string = '00000000-0000-0000-0000-00
         value: mem.content || mem.value
       }));
 
-      console.log(`💾 ${memoriesFromDB.length} memórias carregadas do Supabase para user ${userId}`);
+      console.log(`💾 ${memoriesFromDB.length} memórias carregadas do Supabase para user ${finalUserId}`);
 
     } catch (err) {
       console.error('❌ Erro ao carregar memórias do Supabase:', err);
@@ -248,7 +252,7 @@ export async function ensureSession(userId: string = '00000000-0000-0000-0000-00
 
     const session = {
       conversationId: finalConvId,
-      userId,
+      userId: finalUserId,
       systemInstruction: 'Você é LIA, assistente inteligente da Luminnus.',
       messages: [],
       memories: memoriesFromDB,
@@ -314,6 +318,13 @@ async function startServer() {
   app.use('/api/admin', adminRoutes);
 
   console.log('✅ Core LIA Functions loaded');
+  
+  // v4.0.2: Diagnostic of critical env vars
+  console.log('🔍 [System] Checking critical env vars...');
+  const criticalVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'OPENAI_API_KEY'];
+  criticalVars.forEach(v => {
+    console.log(`   - ${v}: ${process.env[v] ? 'LOADED' : 'MISSING'}`);
+  });
 
   // ===========================================================
   // OAUTH CALLBACK REDIRECT (Port 3000 -> Frontend 8080)

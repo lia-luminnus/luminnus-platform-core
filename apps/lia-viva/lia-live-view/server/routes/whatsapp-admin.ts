@@ -68,23 +68,37 @@ router.post('/platform-config', adminGate, async (req: Request, res: Response) =
     const ctx = getAdminContext(req);
     const { config } = req.body;
 
-    if (!config) return res.status(400).json({ error: 'config is required' });
-
-    // Only allow verify_token and webhookUrl to be saved by admin
-    const allowedConfig = {
-        verifyToken: config.verifyToken || '',
-        webhookUrl: config.webhookUrl || 'https://api.luminnus.lia.ai/api/whatsapp/webhook'
-    };
+    if (!config) {
+        console.warn('⚠️ [AdminWhatsApp] POST falhou: config ausente no body');
+        return res.status(400).json({ error: 'config is required' });
+    }
 
     try {
         const platformId = '00000000-0000-0000-0000-000000000000';
 
-        // Check if platform config exists
-        const { data: existing } = await supabase
+        // 1. Check if platform config exists and get existing config_json
+        const { data: existing, error: fetchError } = await supabase
             .from('whatsapp_connections')
-            .select('id')
+            .select('id, config_json')
             .eq('tenant_id', platformId)
             .maybeSingle();
+
+        if (fetchError) {
+            console.error('❌ [AdminWhatsApp] Erro ao buscar config existente:', fetchError);
+            throw fetchError;
+        }
+
+        // 2. Prepare merged config
+        // BYO model: each tenant has their own WABA/Token, admin only manages webhook config
+        // However, we MUST preserve existing meta tokens if they exist in the platform config
+        const currentConfig = existing?.config_json || {};
+        const mergedConfig = {
+            ...currentConfig,
+            verifyToken: config.verifyToken !== undefined ? config.verifyToken : currentConfig.verifyToken,
+            webhookUrl: config.webhookUrl || currentConfig.webhookUrl || 'https://api.luminnus.lia.ai/api/whatsapp/webhook'
+        };
+
+        console.log(`📡 [AdminWhatsApp] Salvando config mesclada (trace: ${ctx?.traceId})`);
 
         let result;
         if (existing?.id) {
@@ -92,7 +106,7 @@ router.post('/platform-config', adminGate, async (req: Request, res: Response) =
             result = await supabase
                 .from('whatsapp_connections')
                 .update({
-                    config_json: allowedConfig,
+                    config_json: mergedConfig,
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', existing.id)
@@ -106,7 +120,7 @@ router.post('/platform-config', adminGate, async (req: Request, res: Response) =
                     tenant_id: platformId,
                     provider: 'meta',
                     phone_number: 'platform_main',
-                    config_json: allowedConfig,
+                    config_json: mergedConfig,
                     status: 'active',
                     updated_at: new Date().toISOString()
                 })
@@ -116,15 +130,17 @@ router.post('/platform-config', adminGate, async (req: Request, res: Response) =
 
         if (result.error) throw result.error;
 
+        console.log('✅ [AdminWhatsApp] Configuração salva com sucesso');
+
         res.json({
             success: true,
             config: result.data.config_json,
             trace_id: ctx?.traceId
         });
     } catch (error: any) {
-        console.error('❌ Error saving platform config:', error);
+        console.error('❌ [AdminWhatsApp] Erro ao salvar platform config:', error);
         const errorMessage = error?.message || JSON.stringify(error) || 'Unknown error';
-        res.status(500).json({ error: errorMessage });
+        res.status(500).json({ error: errorMessage, trace_id: ctx?.traceId });
     }
 });
 

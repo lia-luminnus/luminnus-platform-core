@@ -85,7 +85,8 @@ export const SubscriptionGate: React.FC<SubscriptionGateProps> = ({ children }) 
             }
 
             // BYPASS 3: Verificar se o contexto/JWT já diz que tem plano
-            const validPlanNames = ['Start', 'Plus', 'Pro', 'start', 'plus', 'pro', 'cliente'];
+            // REMOVIDO 'cliente' e 'free' - agora apenas planos pagos dão acesso
+            const validPlanNames = ['Start', 'Plus', 'Pro', 'start', 'plus', 'pro'];
 
             const contextPlanName = contextPlan?.name?.toLowerCase();
             const profilePlanType = profile?.plan_type?.toLowerCase();
@@ -185,6 +186,16 @@ export const SubscriptionGate: React.FC<SubscriptionGateProps> = ({ children }) 
                 ) {
                     console.log('[SubscriptionGate] ✅ Acesso liberado via DB profile');
                     setHasAccess(true);
+                    setChecking(false);
+                    return;
+                }
+
+                // 4. Verificar se é plano 'free' ou 'cliente' (sem acesso)
+                const noAccessPlans = ['free', 'cliente'];
+                if (dbProfile?.plan_type && noAccessPlans.includes(dbProfile.plan_type.toLowerCase())) {
+                    console.log('[SubscriptionGate] ❌ Acesso negado: usuário sem plano pago (', dbProfile.plan_type, ')');
+                    setHasAccess(false);
+                    setErrorMessage('Você precisa de um plano ativo para acessar o Dashboard. Escolha um plano em nosso site.');
                     setChecking(false);
                     return;
                 }

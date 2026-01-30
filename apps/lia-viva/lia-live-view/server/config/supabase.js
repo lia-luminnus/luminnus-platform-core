@@ -21,6 +21,11 @@ if (!supabaseUrl || !supabaseKey) {
     try {
         supabase = createClient(supabaseUrl, supabaseKey);
         const keyType = supabaseServiceKey ? "SERVICE_ROLE" : "ANON";
+        console.log(`✅ [Supabase] Cliente inicializado com sucesso usando chave: ${keyType}`);
+        
+        // Diagnóstico de URL (apenas host)
+        const host = new URL(supabaseUrl).hostname;
+        console.log(`📡 [Supabase] Host: ${host}`);
     } catch (err) {
         console.error("❌ Erro ao inicializar Supabase:", err);
         supabase = null;
@@ -287,6 +292,12 @@ export async function saveMemory(userId, key, value, isImportant = false) {
 export async function loadImportantMemories(userId) {
     if (!supabase) {
         console.warn("⚠️ [loadImportantMemories] Supabase não configurado — retornando [].");
+        return [];
+    }
+
+    // v5.3: Proteção contra userId inválido ou string "null" que quebra a query UUID no Postgres
+    if (!userId || userId === "null" || userId === "undefined") {
+        console.log(`ℹ️ [loadImportantMemories] Ignorando busca para userId inválido: ${userId}`);
         return [];
     }
 

@@ -193,11 +193,16 @@ export const AdminUsers = () => {
       start: "bg-blue-100 text-blue-800",
       plus: "bg-purple-100 text-purple-800",
       pro: "bg-amber-100 text-amber-800",
+      cliente: "bg-gray-100 text-gray-800", // Fallback para usuários antigos
     };
 
+    // Normalizar o nome do plano
+    const normalizedPlan = plan?.toLowerCase() || "free";
+    const displayName = normalizedPlan === "cliente" ? "FREE" : normalizedPlan.toUpperCase();
+
     return (
-      <Badge className={planColors[plan || "free"] || "bg-gray-100 text-gray-800"}>
-        {plan?.toUpperCase() || "FREE"}
+      <Badge className={planColors[normalizedPlan] || "bg-gray-100 text-gray-800"}>
+        {displayName}
       </Badge>
     );
   };

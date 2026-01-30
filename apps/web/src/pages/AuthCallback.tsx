@@ -79,9 +79,24 @@ const AuthCallback: React.FC = () => {
                 if (stripeData) {
                     console.log('[AuthCallback] Assinatura ativa encontrada:', stripeData.plan_name);
                     hasActivePlan = true;
+                    
+                    // AUTO-SYNC: Atualizar profiles.plan_type para o plano real da assinatura
+                    // Isso corrige a exibição no painel admin
+                    if (stripeData.plan_name) {
+                        const planNameLower = stripeData.plan_name.toLowerCase();
+                        await supabase
+                            .from('profiles')
+                            .update({ plan_type: planNameLower })
+                            .eq('id', user.id)
+                            .then(({ error }) => {
+                                if (!error) {
+                                    console.log('[AuthCallback] Plano sincronizado no perfil:', planNameLower);
+                                }
+                            });
+                    }
                 }
 
-                // 3. FALLBACK: Verificar profiles.plan_type
+                // 3. FALLBACK: Verificar profiles.plan_type (apenas planos pagos)
                 if (!hasActivePlan) {
                     const { data: profileRaw } = await supabase
                         .from('profiles')
@@ -90,7 +105,8 @@ const AuthCallback: React.FC = () => {
                         .maybeSingle();
 
                     const profile = profileRaw as { plan_type: string } | null;
-                    const validPlanTypes = ['start', 'plus', 'pro', 'cliente'];
+                    // REMOVIDO 'cliente' - agora apenas planos pagos dão acesso
+                    const validPlanTypes = ['start', 'plus', 'pro'];
 
                     if (profile?.plan_type && validPlanTypes.includes(profile.plan_type.toLowerCase())) {
                         console.log('[AuthCallback] Plano encontrado no perfil:', profile.plan_type);
@@ -102,8 +118,22 @@ const AuthCallback: React.FC = () => {
                     console.log('[AuthCallback] Plano ativo encontrado, redirecionando para Dashboard');
                     const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL || 'http://localhost:3001';
                     setMessage('Redirecionando para o seu Dashboard...');
+
+                    // v5.5: Sincronização de Sessão Cross-Origin (Local e Produção)
+                    // Passamos os tokens na URL para que o Dashboard possa herdar a sessão
+                    const { data: { session } } = await supabase.auth.getSession();
+                    let redirectFinalUrl = DASHBOARD_URL;
+
+                    if (session?.access_token) {
+                        const tokenParams = `access_token=${session.access_token}&refresh_token=${session.refresh_token || ''}`;
+                        // O Dashboard-client usa HashRouter, então os tokens devem vir após o #/
+                        redirectFinalUrl = DASHBOARD_URL.endsWith('/')
+                            ? `${DASHBOARD_URL}#/?${tokenParams}`
+                            : `${DASHBOARD_URL}/#/?${tokenParams}`;
+                    }
+
                     setTimeout(() => {
-                        window.location.href = DASHBOARD_URL;
+                        window.location.href = redirectFinalUrl;
                     }, 800);
                 } else {
                     console.log('[AuthCallback] Sem plano ativo, redirecionando para o site principal');
