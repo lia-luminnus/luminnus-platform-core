@@ -26,7 +26,8 @@ const Sidebar: React.FC = () => {
       console.error('Erro ao fazer logout:', err);
       toast.error('Erro ao sair. Redirecionando...', { id: 'logout' });
       // Fallback de emergência caso o signOut falhe
-      const landingPage = import.meta.env.VITE_LANDING_PAGE_URL || 'http://localhost:8080';
+      const isProd = import.meta.env.PROD;
+      const landingPage = import.meta.env.VITE_LANDING_PAGE_URL || (isProd ? 'https://luminnus.ai' : 'http://localhost:8080');
       window.location.href = landingPage;
     }
   };

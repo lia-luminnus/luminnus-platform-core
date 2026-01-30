@@ -14,7 +14,7 @@ export const ADMIN_EMAILS: string[] = (
 
 // URLs de redirecionamento
 export const AUTH_URLS = {
-    DASHBOARD: import.meta.env.VITE_DASHBOARD_URL || "http://localhost:3001",
+    DASHBOARD: import.meta.env.VITE_DASHBOARD_URL || (import.meta.env.PROD ? "" : "http://localhost:3001"),
     AUTH_CALLBACK: "/auth-callback",
     ADMIN_DASHBOARD: "/admin-dashboard",
     LOGIN: "/auth",

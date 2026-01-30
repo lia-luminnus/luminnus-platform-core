@@ -236,17 +236,21 @@ export const SubscriptionGate: React.FC<SubscriptionGateProps> = ({ children }) 
 
     // Sem usuário - redirecionar para login (somente se não há tokens na URL)
     if (!user && !hasTokensInUrl) {
-        const loginUrl = import.meta.env.VITE_LANDING_PAGE_URL || 'http://localhost:8080';
+        const isProd = import.meta.env.PROD;
+        const loginUrl = import.meta.env.VITE_LANDING_PAGE_URL || (isProd ? 'https://luminnus.ai' : 'http://localhost:8080');
         window.location.href = loginUrl;
         return null;
     }
 
     // Sem acesso - mostrar tela de bloqueio
     if (!hasAccess) {
-        const pricingUrl = (import.meta.env.VITE_LANDING_PAGE_URL || 'http://localhost:8080') + '/pricing';
+        const isProd = import.meta.env.PROD;
+        const landingBase = import.meta.env.VITE_LANDING_PAGE_URL || (isProd ? 'https://luminnus.ai' : 'http://localhost:8080');
+        const pricingUrl = landingBase + '/pricing';
+
         const signOut = async () => {
             await supabase.auth.signOut();
-            window.location.href = import.meta.env.VITE_LANDING_PAGE_URL || 'http://localhost:8080';
+            window.location.href = landingBase;
         };
 
         return (
