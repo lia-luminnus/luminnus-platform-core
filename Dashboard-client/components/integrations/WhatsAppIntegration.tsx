@@ -36,8 +36,33 @@ const WhatsAppIntegration: React.FC = () => {
 
     // Quick connection state
     const [quickPhone, setQuickPhone] = useState('');
+    const [quickConnecting, setQuickConnecting] = useState(false);
 
     const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || '00000000-0000-0000-0000-000000000001';
+
+    // Meta App ID - Should be configured in environment
+    const META_APP_ID = import.meta.env.VITE_META_APP_ID || '1234567890';
+
+    // Initialize Meta SDK on component mount
+    useEffect(() => {
+        // Load Facebook SDK
+        if (!window.FB) {
+            const script = document.createElement('script');
+            script.src = 'https://connect.facebook.net/en_US/sdk.js';
+            script.async = true;
+            script.defer = true;
+            script.crossOrigin = 'anonymous';
+            script.onload = () => {
+                window.FB?.init({
+                    appId: META_APP_ID,
+                    cookie: true,
+                    xfbml: true,
+                    version: 'v18.0'
+                });
+            };
+            document.body.appendChild(script);
+        }
+    }, []);
 
     // Fetch current status
     useEffect(() => {
@@ -56,6 +81,110 @@ const WhatsAppIntegration: React.FC = () => {
             console.error('❌ Error fetching status:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Quick connection using Meta Embedded Signup
+    const handleQuickConnect = async () => {
+        if (!quickPhone) {
+            toast.error('Por favor, insira o número de telefone');
+            return;
+        }
+
+        // Clean phone number to E.164 format
+        const cleanPhone = quickPhone.replace(/\D/g, '');
+        if (cleanPhone.length < 10) {
+            toast.error('Número de telefone inválido');
+            return;
+        }
+
+        setQuickConnecting(true);
+
+        try {
+            // Check if Facebook SDK is loaded
+            if (window.FB) {
+                // Use Facebook Login for Business with WhatsApp permissions
+                window.FB.login((response: any) => {
+                    if (response.authResponse) {
+                        const { accessToken, userID } = response.authResponse;
+                        console.log('✅ Meta login success:', { userID, hasToken: !!accessToken });
+
+                        // Save the connection with basic auth token
+                        // The full setup requires exchanging tokens server-side
+                        handleSaveQuickConnection(cleanPhone, accessToken);
+                    } else {
+                        console.log('❌ Meta login cancelled or failed');
+                        toast.error('Conexão cancelada pelo usuário');
+                        setQuickConnecting(false);
+                    }
+                }, {
+                    scope: 'whatsapp_business_management,whatsapp_business_messaging',
+                    extras: {
+                        setup: {
+                            // Pre-fill phone number
+                            phone_number: cleanPhone
+                        }
+                    }
+                });
+            } else {
+                // Fallback: Direct API connection without Meta SDK
+                console.log('📱 Meta SDK not available, using direct API mode');
+                toast.loading('Iniciando conexão...', { id: 'quick-connect' });
+
+                // Save as pending connection - requires manual token entry later
+                const response = await fetch('/api/integrations/whatsapp/quick-start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tenant_id: tenantId,
+                        phone_number: cleanPhone
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'ok') {
+                    toast.success('Número registrado! Complete a configuração no Meta Business Suite.', { id: 'quick-connect' });
+                    setActiveTab('manual');
+                    setFormData(prev => ({ ...prev, phone_e164: cleanPhone }));
+                } else {
+                    toast.error(data.reason || 'Erro ao iniciar conexão', { id: 'quick-connect' });
+                }
+
+                setQuickConnecting(false);
+            }
+        } catch (error) {
+            console.error('❌ Quick connect error:', error);
+            toast.error('Erro ao conectar. Tente o modo manual.');
+            setQuickConnecting(false);
+        }
+    };
+
+    const handleSaveQuickConnection = async (phone: string, token: string) => {
+        try {
+            const response = await fetch('/api/integrations/whatsapp/save-quick', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tenant_id: tenantId,
+                    phone_number: phone,
+                    access_token: token
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'ok') {
+                toast.success('WhatsApp conectado com sucesso!');
+                fetchStatus();
+            } else {
+                toast.error(data.reason || 'Erro ao salvar conexão');
+            }
+        } catch (error) {
+            console.error('❌ Error saving quick connection:', error);
+            toast.error('Erro ao salvar conexão');
+        } finally {
+            setQuickConnecting(false);
         }
     };
 
@@ -272,11 +401,21 @@ const WhatsAppIntegration: React.FC = () => {
                                                 />
                                             </div>
                                             <button
-                                                onClick={() => toast('🚧 Modo rápido em desenvolvimento. Use o modo manual por enquanto.')}
-                                                className="w-full px-6 py-3 rounded-xl bg-brand-primary text-white font-bold text-sm shadow-lg shadow-brand-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                                                onClick={handleQuickConnect}
+                                                disabled={quickConnecting}
+                                                className="w-full px-6 py-3 rounded-xl bg-brand-primary text-white font-bold text-sm shadow-lg shadow-brand-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
-                                                <span className="material-symbols-outlined">rocket_launch</span>
-                                                Iniciar Conexão
+                                                {quickConnecting ? (
+                                                    <>
+                                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                        Conectando...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <span className="material-symbols-outlined">rocket_launch</span>
+                                                        Iniciar Conexão
+                                                    </>
+                                                )}
                                             </button>
                                         </motion.div>
                                     ) : (

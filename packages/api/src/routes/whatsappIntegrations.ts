@@ -259,4 +259,144 @@ router.post('/disconnect', async (req: Request, res: Response) => {
     }
 });
 
+/**
+ * POST /api/integrations/whatsapp/quick-start
+ * Start quick connection flow - saves phone number and creates pending connection
+ */
+router.post('/quick-start', async (req: Request, res: Response) => {
+    try {
+        const { tenant_id, phone_number } = req.body;
+        if (!tenant_id || !phone_number) {
+            return res.status(400).json({ status: 'error', reason: 'tenant_id and phone_number are required' });
+        }
+
+        // Clean phone number
+        const cleanPhone = phone_number.replace(/\D/g, '');
+
+        // Check if connection exists
+        const { data: existing } = await supabase
+            .from('whatsapp_connections')
+            .select('id')
+            .eq('tenant_id', tenant_id)
+            .maybeSingle();
+
+        let result;
+        if (existing?.id) {
+            result = await supabase
+                .from('whatsapp_connections')
+                .update({
+                    phone_number: cleanPhone,
+                    status: 'pending',
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', existing.id)
+                .select()
+                .single();
+        } else {
+            result = await supabase
+                .from('whatsapp_connections')
+                .insert({
+                    tenant_id,
+                    phone_number: cleanPhone,
+                    provider: 'meta',
+                    status: 'pending',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                })
+                .select()
+                .single();
+        }
+
+        if (result.error) throw result.error;
+
+        console.log(`📱 [WhatsApp] Quick-start initiated for tenant: ${tenant_id}, phone: ${cleanPhone}`);
+
+        res.json({
+            status: 'ok',
+            data: {
+                phone_number: cleanPhone,
+                next_step: 'Complete setup in Meta Business Suite'
+            }
+        });
+    } catch (error) {
+        console.error('❌ [WhatsApp Quick-Start] Error:', error);
+        res.status(500).json({ status: 'error', reason: String(error) });
+    }
+});
+
+/**
+ * POST /api/integrations/whatsapp/save-quick
+ * Save connection from Meta OAuth flow
+ */
+router.post('/save-quick', async (req: Request, res: Response) => {
+    try {
+        const { tenant_id, phone_number, access_token, waba_id, phone_number_id } = req.body;
+        if (!tenant_id || !access_token) {
+            return res.status(400).json({ status: 'error', reason: 'tenant_id and access_token are required' });
+        }
+
+        const cleanPhone = phone_number?.replace(/\D/g, '') || '';
+
+        const config_json = {
+            waba_id: waba_id || null,
+            phone_number_id: phone_number_id || null,
+            access_token,
+            provider: 'meta_embedded_signup',
+            configured_at: new Date().toISOString()
+        };
+
+        // Check if connection exists
+        const { data: existing } = await supabase
+            .from('whatsapp_connections')
+            .select('id')
+            .eq('tenant_id', tenant_id)
+            .maybeSingle();
+
+        let result;
+        if (existing?.id) {
+            result = await supabase
+                .from('whatsapp_connections')
+                .update({
+                    phone_number: cleanPhone,
+                    config_json,
+                    status: 'connected',
+                    updated_at: new Date().toISOString(),
+                    last_error: null
+                })
+                .eq('id', existing.id)
+                .select()
+                .single();
+        } else {
+            result = await supabase
+                .from('whatsapp_connections')
+                .insert({
+                    tenant_id,
+                    phone_number: cleanPhone,
+                    provider: 'meta',
+                    config_json,
+                    status: 'connected',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                })
+                .select()
+                .single();
+        }
+
+        if (result.error) throw result.error;
+
+        console.log(`✅ [WhatsApp] Quick connection saved for tenant: ${tenant_id}`);
+
+        res.json({
+            status: 'ok',
+            data: {
+                connected: true,
+                phone_masked: maskPhoneNumber(cleanPhone)
+            }
+        });
+    } catch (error) {
+        console.error('❌ [WhatsApp Save-Quick] Error:', error);
+        res.status(500).json({ status: 'error', reason: String(error) });
+    }
+});
+
 export default router;
