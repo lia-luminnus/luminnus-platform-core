@@ -2194,6 +2194,9 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
             if (!activeId || activeId === 'default') {
                 const autoConv = await createConversation('live');
+                if (!autoConv?.id) {
+                    throw new Error('Falha ao criar conversa para o modo Live. Verifique a conexão com o servidor.');
+                }
                 activeId = autoConv.id;
             }
 
