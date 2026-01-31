@@ -13,8 +13,10 @@ export const ADMIN_EMAILS: string[] = (
     .filter(Boolean);
 
 // URLs de redirecionamento
+// IMPORTANTE: Em produção, VITE_DASHBOARD_URL DEVE estar configurado no Render.
+// Fallback para URL do Dashboard no Render se não estiver definido.
 export const AUTH_URLS = {
-    DASHBOARD: import.meta.env.VITE_DASHBOARD_URL || (import.meta.env.PROD ? "" : "http://localhost:3001"),
+    DASHBOARD: import.meta.env.VITE_DASHBOARD_URL || (import.meta.env.PROD ? "https://luminnus-dashboard.onrender.com" : "http://localhost:3001"),
     AUTH_CALLBACK: "/auth-callback",
     ADMIN_DASHBOARD: "/admin-dashboard",
     LOGIN: "/auth",
