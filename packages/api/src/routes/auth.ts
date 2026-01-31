@@ -88,10 +88,11 @@ router.get('/google', async (req, res) => {
         const host = req.get('host');
         const protocol = req.protocol;
 
-        let redirectBase = process.env.APP_URL || `${protocol}://${host}`;
-        if (redirectBase.includes('localhost:5000') || redirectBase.includes('127.0.0.1:5000')) {
-            console.log('[OAuth Google] Ambiente local detectado na porta 5000');
-            redirectBase = 'http://localhost:5000';
+        let redirectBase = process.env.APP_URL || process.env.FRONTEND_URL || `${protocol}://${host}`;
+        // v3.1: Evitar localhost:5000 em produção se possível
+        if (redirectBase.includes(':5000') && !process.env.NODE_ENV?.includes('dev')) {
+            console.warn('[OAuth Google] Alerta: APP_URL aponta para porta 5000 em produção. Ajustando origin.');
+            redirectBase = `${protocol}://${host.replace(':5000', '')}`;
         }
 
         const redirectUri = `${redirectBase}/api/auth/google/callback`;
@@ -151,7 +152,7 @@ router.post('/google/callback', async (req, res) => {
             }
         }
 
-        const redirectUri = clientRedirectUri || 'http://localhost:3000/api/auth/google/callback';
+        const redirectUri = clientRedirectUri || `${process.env.FRONTEND_URL || 'https://luminnus.ai'}/api/auth/google/callback`;
         console.log(`[OAuth Google][${rid}] 🔌 Trocando código por token. RedirectUri: ${redirectUri}`);
 
         // Trocar código por tokens
@@ -263,7 +264,7 @@ router.get('/google/callback', async (req, res) => {
 
         const clientId = process.env.GOOGLE_CLIENT_ID;
         const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-        const appUrl = process.env.APP_URL || 'http://localhost:3000';
+        const appUrl = process.env.APP_URL || process.env.FRONTEND_URL || 'https://luminnus.ai';
 
         if (!clientId || !clientSecret) {
             return res.status(500).send("Google OAuth não configurado no servidor");
@@ -272,10 +273,8 @@ router.get('/google/callback', async (req, res) => {
         // Determinar redirectUri
         const host = req.get('host');
         const protocol = req.protocol;
-        let redirectBase = process.env.APP_URL || `${protocol}://${host}`;
-        if (redirectBase.includes('localhost:3000') || redirectBase.includes('127.0.0.1:3000')) {
-            redirectBase = 'http://localhost:3000';
-        }
+        let redirectBase = process.env.APP_URL || process.env.FRONTEND_URL || `${protocol}://${host}`;
+        // v3.1: Suporte a redirecionamento dinâmico
         const redirectUri = `${redirectBase}/api/auth/google/callback`;
 
         // Decodificar state

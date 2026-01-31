@@ -82,53 +82,10 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('lia-system-update' as any, handleUpdate);
   }, []);
 
-  // 🔑 ADMIN ACCESS DETECTION - Runs on every location/hash change
-  useEffect(() => {
-    const hash = window.location.hash;
-    const search = window.location.search;
+  // 🔑 AUTHENTICATION & INITIALIZATION LOGIC
+  // (Lógica de admin retirada da URL por segurança, 
+  // agora usa apenas DashboardAuthProvider para permissões corretas)
 
-    const hasAdminAccess = hash.includes('admin_access=true') || search.includes('admin_access=true');
-
-    if (hasAdminAccess) {
-      console.log('[App] 🔐 Admin access detectado! Forçando onboarding...');
-
-      // Reset local store
-      resetOnboarding();
-
-      // Limpar o parâmetro da URL
-      const cleanHash = hash.replace(/[?&]admin_access=true/, '').replace('?&', '?').replace(/\?$/, '');
-      window.history.replaceState({}, document.title, window.location.pathname + cleanHash);
-
-      // Reset no banco de dados - MAS preservar dados pessoais do admin!
-      if (user?.id) {
-        import('./lib/supabase').then(({ supabase }) => {
-          if (supabase) {
-            supabase
-              .from('profiles')
-              .update({
-                onboarding_completed: false,
-                segment: null,
-                modules: [],
-                // Preservar nome de admin se não existir
-                full_name: 'Administrador Luminnus',
-                plan_type: 'Pro'
-              })
-              .eq('id', user.id)
-              .then(({ error }) => {
-                if (error) {
-                  console.warn('[App] Falha ao resetar onboarding:', error.code);
-                } else {
-                  console.log('[App] ✅ Onboarding resetado (dados admin preservados)!');
-                }
-              });
-          }
-        });
-      }
-
-      // Navegar para onboarding
-      navigate('/onboarding', { replace: true });
-    }
-  }, [location, user?.id, resetOnboarding, navigate]);
 
   if (!initialized || loading) {
     return (

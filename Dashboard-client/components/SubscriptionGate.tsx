@@ -60,21 +60,12 @@ export const SubscriptionGate: React.FC<SubscriptionGateProps> = ({ children }) 
                 return;
             }
 
-            const hasAdminFlag = hash.includes('admin_access=true') || search.includes('admin_access=true');
-
             console.log('[SubscriptionGate] Verificando acesso para:', user.email);
 
-            // BYPASS 1: Flag de acesso administrativo via URL
-            if (hasAdminFlag) {
-                console.log('[SubscriptionGate] ✅ Bypass por flag admin_access');
-                setHasAccess(true);
-                setChecking(false);
-                return;
-            }
-
-            // BYPASS 2: Administradores por Email ou Role
-            const adminEmails = ['luminnus.lia.ai@gmail.com'];
-            const isAdminEmail = adminEmails.some(e => e.toLowerCase() === user.email?.toLowerCase());
+            // BYPASS 1: Administradores por Email ou Role
+            const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
+            const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
+            const isAdminEmail = adminEmails.includes(user.email?.toLowerCase() || '');
             const isAdminRole = (profile as any)?.role === 'admin';
 
             if (isAdminEmail || isAdminRole) {

@@ -87,9 +87,10 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             const metadata = currentUser.app_metadata || {};
             const userPlanName = (metadata.plan || metadata.claims?.plan || "Start") as string;
 
-            // Forçar Pro se for admin/tester (luminnus.lia.ai@gmail.com) conforme requisito
-            // MAS respeitar o override se existir
-            const isAdmin = currentUser.email === "luminnus.lia.ai@gmail.com";
+            // Forçar Pro se for admin conforme requisito (VITE_ADMIN_EMAILS)
+            const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
+            const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
+            const isAdmin = adminEmails.includes(currentUser.email?.toLowerCase() || '');
 
             // Se já tiver um plano setado e for admin, mantemos o que está no estado (override)
             // Se não, inicializamos

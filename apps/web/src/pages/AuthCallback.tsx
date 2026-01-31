@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { isAdminEmail } from '@/config/auth';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -79,7 +80,7 @@ const AuthCallback: React.FC = () => {
                 if (stripeData) {
                     console.log('[AuthCallback] Assinatura ativa encontrada:', stripeData.plan_name);
                     hasActivePlan = true;
-                    
+
                     // AUTO-SYNC: Atualizar profiles.plan_type para o plano real da assinatura
                     // Isso corrige a exibição no painel admin
                     if (stripeData.plan_name) {
@@ -114,9 +115,16 @@ const AuthCallback: React.FC = () => {
                     }
                 }
 
+                // 4. ADMIN BYPASS: Administradores sempre têm acesso
+                const isAdmin = isAdminEmail(user.email) || (profile as any)?.role === 'admin';
+                if (isAdmin) {
+                    console.log('[AuthCallback] Admin detectado, liberando acesso total.');
+                    hasActivePlan = true;
+                }
+
                 if (hasActivePlan) {
                     console.log('[AuthCallback] Plano ativo encontrado, redirecionando para Dashboard');
-                    const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL || 'http://localhost:3001';
+                    const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL || (import.meta.env.PROD ? "" : "http://localhost:3001");
                     setMessage('Redirecionando para o seu Dashboard...');
 
                     // v5.5: Sincronização de Sessão Cross-Origin (Local e Produção)
