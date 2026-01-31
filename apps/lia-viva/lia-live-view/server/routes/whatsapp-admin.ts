@@ -48,7 +48,7 @@ router.get('/platform-config', adminGate, async (req: Request, res: Response) =>
                 wabaId: "",
                 accessToken: "",
                 verifyToken: "",
-                webhookUrl: "https://api.luminnus.lia.ai/api/whatsapp/webhook"
+                webhookUrl: "https://api.luminnus.ai/api/whatsapp/webhook"
             },
             trace_id: ctx?.traceId
         });
@@ -95,7 +95,7 @@ router.post('/platform-config', adminGate, async (req: Request, res: Response) =
         const mergedConfig = {
             ...currentConfig,
             verifyToken: config.verifyToken !== undefined ? config.verifyToken : currentConfig.verifyToken,
-            webhookUrl: config.webhookUrl || currentConfig.webhookUrl || 'https://api.luminnus.lia.ai/api/whatsapp/webhook'
+            webhookUrl: config.webhookUrl || currentConfig.webhookUrl || 'https://api.luminnus.ai/api/whatsapp/webhook'
         };
 
         console.log(`📡 [AdminWhatsApp] Salvando config mesclada (trace: ${ctx?.traceId})`);

@@ -32,7 +32,7 @@ const AdminWhatsAppGovernance = () => {
         wabaId: "",
         accessToken: "",
         verifyToken: "",
-        webhookUrl: "https://api.luminnus.lia.ai/api/whatsapp/webhook"
+        webhookUrl: "https://api.luminnus.ai/api/whatsapp/webhook"
     });
 
     const [overview, setOverview] = useState({

@@ -91,10 +91,27 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('lia-system-update' as any, handleUpdate);
   }, []);
 
-  // 🔑 AUTHENTICATION & INITIALIZATION LOGIC
-  // (Lógica de admin retirada da URL por segurança, 
-  // agora usa apenas DashboardAuthProvider para permissões corretas)
+  // 🔑 ADMIN ACCESS DETECTION - Runs on every location/hash change
+  useEffect(() => {
+    const hash = window.location.hash;
+    const search = window.location.search;
 
+    const hasAdminAccess = hash.includes('admin_access=true') || search.includes('admin_access=true');
+
+    if (hasAdminAccess) {
+      console.log('[App] 🔐 Admin access detectado! Forçando onboarding para testes...');
+
+      // Reset local store
+      resetOnboarding();
+
+      // Limpar o parâmetro da URL
+      const cleanHash = hash.replace(/[?&]admin_access=true/, '').replace('?&', '?').replace(/\?$/, '');
+      window.history.replaceState({}, document.title, window.location.pathname + cleanHash);
+
+      // Navegar para onboarding
+      navigate('/onboarding', { replace: true });
+    }
+  }, [location, resetOnboarding, navigate]);
 
   if (!initialized || loading) {
     return (

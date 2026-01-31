@@ -384,7 +384,7 @@ const WhatsAppIntegration: React.FC = () => {
                             <li>Vá em Configurações → WhatsApp → API Setup</li>
                             <li>Copie o Phone Number ID e WABA ID</li>
                             <li>Gere um Access Token permanente em Configurações → Tokens</li>
-                            <li>Configure o Webhook URL: <code className="bg-black/20 px-2 py-0.5 rounded">https://api.luminnus.lia.ai/api/whatsapp/webhook</code></li>
+                            <li>Configure o Webhook URL: <code className="bg-black/20 px-2 py-0.5 rounded">https://api.luminnus.ai/api/whatsapp/webhook</code></li>
                         </ol>
                     </div>
                 </div>
