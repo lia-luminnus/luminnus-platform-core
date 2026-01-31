@@ -122,9 +122,10 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 }
             }
 
-            // Buscar Plano (Fonte Única: app_metadata ou claims no JWT do Supabase)
+            // Buscar Plano (Fontes: 1. profile.plan_type do banco, 2. app_metadata, 3. default "Start")
             const metadata = currentUser.app_metadata || {};
-            const userPlanName = (metadata.plan || metadata.claims?.plan || "Start") as string;
+            const dbPlanType = userProfile?.plan_type || null;
+            const userPlanName = (dbPlanType || metadata.plan || metadata.claims?.plan || "Start") as string;
 
             // Forçar Pro se for admin conforme requisito (VITE_ADMIN_EMAILS)
             const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com,wendellcomercial2@gmail.com';

@@ -24,9 +24,9 @@ const WhatsAppAgentContent: React.FC = () => {
     // 🔒 SECURITY: Get tenant from user context
     const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
 
-    // 🔒 SECURITY: Admin uses default admin tenant (000000..01), clients require their own tenant
+    // 🔒 SECURITY: Admin uses admin tenant, clients use their own tenant_id OR user.id as fallback
     const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
-    const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
+    const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : user?.id || null);
 
     const API_URL = import.meta.env.VITE_API_URL || 'https://luminnus-platform-core.onrender.com';
 
