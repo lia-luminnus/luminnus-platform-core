@@ -52,25 +52,52 @@ const Automations: React.FC = () => {
                 fetch(`${API_URL}/api/automations/stats/summary?tenantId=${tenantId}`)
             ]);
 
-            // Verificar se as respostas são válidas antes de dar parse no JSON
+            // 🛡️ Verificar se as respostas são válidas antes de dar parse no JSON
+            // Nota: Algumas APIs retornam 200 com corpo vazio, precisamos verificar o texto primeiro
             if (!autoRes.ok || autoRes.status === 204) {
                 console.warn('⚠️ [Automations] Lista de automações vazia ou erro no servidor');
                 setAutomations([]);
             } else {
-                const autoData = await autoRes.json();
-                if (autoData.success) setAutomations(autoData.data || []);
+                const autoText = await autoRes.text();
+                if (!autoText || autoText.trim() === '') {
+                    console.warn('⚠️ [Automations] Resposta vazia da API de automações');
+                    setAutomations([]);
+                } else {
+                    try {
+                        const autoData = JSON.parse(autoText);
+                        if (autoData.success) setAutomations(autoData.data || []);
+                        else setAutomations([]);
+                    } catch (parseErr) {
+                        console.error('❌ [Automations] Erro ao parsear resposta:', parseErr);
+                        setAutomations([]);
+                    }
+                }
             }
 
             if (!statsRes.ok || statsRes.status === 204) {
                 console.warn('⚠️ [Automations] Estatísticas não disponíveis');
             } else {
-                const statsData = await statsRes.json();
-                if (statsData.success) setStats(statsData.data || { total: 0, active: 0, error: 0, paused: 0 });
+                const statsText = await statsRes.text();
+                if (!statsText || statsText.trim() === '') {
+                    console.warn('⚠️ [Automations] Resposta vazia da API de estatísticas');
+                } else {
+                    try {
+                        const statsData = JSON.parse(statsText);
+                        if (statsData.success) setStats(statsData.data || { total: 0, active: 0, error: 0, paused: 0 });
+                    } catch (parseErr) {
+                        console.error('❌ [Automations] Erro ao parsear estatísticas:', parseErr);
+                    }
+                }
             }
 
         } catch (err) {
             console.error('❌ [Automations] Erro fatal no fetch:', err);
-            toast.error('Erro de sincronização. Verifique se o servidor está online.');
+            // Não mostrar toast de erro se for apenas resposta vazia
+            if (err instanceof SyntaxError) {
+                console.warn('⚠️ [Automations] Servidor retornou resposta inválida');
+            } else {
+                toast.error('Erro de sincronização. Verifique se o servidor está online.');
+            }
         } finally {
             setLoading(false);
         }
