@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { isAdminEmail } from '@/config/auth';
+import { isAdminEmail, AUTH_URLS } from '@/config/auth';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { isAdminEmail, AUTH_URLS } from '@/config/auth';
 
 /**
  * AuthCallback - Página de callback após login OAuth (Google)
@@ -124,7 +123,7 @@ const AuthCallback: React.FC = () => {
 
                 if (hasActivePlan) {
                     console.log('[AuthCallback] Plano ativo encontrado, redirecionando para Dashboard');
-                    const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL || (import.meta.env.PROD ? "" : "http://localhost:3001");
+                    const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL || (import.meta.env.PROD ? "https://luminnus-dashboard.onrender.com" : "http://localhost:3001");
                     setMessage('Redirecionando para o seu Dashboard...');
 
                     // v5.5: Sincronização de Sessão Cross-Origin (Local e Produção)
