@@ -72,7 +72,11 @@ const AppContent: React.FC = () => {
   const { resetOnboarding, planType: storePlanType } = useAppStore();
   const [updateAvailable, setUpdateAvailable] = useState<{ version?: string, force?: boolean } | null>(null);
 
-  const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || '00000000-0000-0000-0000-000000000001';
+  // 🔒 SECURITY: Get tenant from user context, admin uses default admin tenant
+  const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
+  const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+  const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
+
   const userPlan = (authPlan?.name?.toLowerCase() as 'start' | 'plus' | 'pro') || (storePlanType?.toLowerCase() as 'start' | 'plus' | 'pro') || 'pro';
 
   // Centralização do Sistema de Updates
@@ -102,7 +106,7 @@ const AppContent: React.FC = () => {
     });
 
     window.addEventListener('lia-system-update' as any, handleUpdateEvent);
-    
+
     // Iniciar polling (2 minutos)
     UpdateService.startPolling(120000);
 
@@ -139,7 +143,7 @@ const AppContent: React.FC = () => {
 
       // Reset COMPLETO do estado local
       resetOnboarding();
-      
+
       // Limpar também o localStorage para garantir
       localStorage.removeItem('luminnus-storage');
       localStorage.removeItem('luminnus-onboarding');

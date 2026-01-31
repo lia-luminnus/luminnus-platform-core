@@ -85,7 +85,17 @@ const Onboarding: React.FC = () => {
     try {
       // Salvar no banco apenas se o usuário estiver autenticado
       if (user) {
-        const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || '00000000-0000-0000-0000-000000000001';
+        // 🔒 SECURITY: Get tenant from user context
+        const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
+
+        // 🔑 Admin detection (same logic as DashboardAuthContext)
+        const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
+        const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
+        const isAdmin = adminEmails.includes(user?.email?.toLowerCase() || '');
+
+        // 🔒 SECURITY: Admin uses default admin tenant, clients require their own tenant
+        const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+        const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
 
         await completeOnboardingDB(user.id, {
           segment: selectedCategory || 'custom_other',
@@ -93,14 +103,17 @@ const Onboarding: React.FC = () => {
         });
 
         // Instantiate modular dashboard
-        try {
-          await fetch(`/api/dashboard/tenant/${tenantId}/dashboard/instantiate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ segment_key: selectedCategory || 'custom_other' })
-          });
-        } catch (e) {
-          console.error('[Onboarding] Error instantiating dashboard:', e);
+        if (tenantId) {
+          try {
+            const API_URL = import.meta.env.VITE_API_URL || 'https://luminnus-platform-core.onrender.com';
+            await fetch(`${API_URL}/api/dashboard/tenant/${tenantId}/dashboard/instantiate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ segment_key: selectedCategory || 'custom_other' })
+            });
+          } catch (e) {
+            console.error('[Onboarding] Error instantiating dashboard:', e);
+          }
         }
 
         console.log('[Onboarding] Finalizando no banco e forçando refresh...');
@@ -256,7 +269,17 @@ const Onboarding: React.FC = () => {
                   try {
                     const setupPromise = (async () => {
                       if (user) {
-                        const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || '00000000-0000-0000-0000-000000000001';
+                        // 🔒 SECURITY: Get tenant from user context
+                        const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
+
+                        // 🔑 Admin detection (same logic as DashboardAuthContext)
+                        const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
+                        const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
+                        const isAdmin = adminEmails.includes(user?.email?.toLowerCase() || '');
+
+                        // 🔒 SECURITY: Admin uses default admin tenant, clients require their own tenant
+                        const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+                        const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
 
                         console.log('[Onboarding] Salvando perfil no banco...');
                         await completeOnboardingDB(user.id, {

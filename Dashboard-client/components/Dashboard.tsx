@@ -35,7 +35,18 @@ const Dashboard: React.FC = () => {
   const { planType: storePlanType } = useAppStore();
   const navigate = useNavigate();
 
-  const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || '00000000-0000-0000-0000-000000000001';
+  // 🔒 SECURITY: Get tenant from user context
+  const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
+
+  // 🔑 Admin detection (same logic as DashboardAuthContext)
+  const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
+  const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
+  const isAdmin = adminEmails.includes(user?.email?.toLowerCase() || '');
+
+  // 🔒 SECURITY: Admin uses default admin tenant, clients require their own tenant
+  const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+  const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
+
   // Use authPlan from backend if available, otherwise fallback to store plan (which defaults to 'Pro')
   const userPlan = (authPlan?.name?.toLowerCase() as 'start' | 'plus' | 'pro') || (storePlanType?.toLowerCase() as 'start' | 'plus' | 'pro') || 'pro';
 
