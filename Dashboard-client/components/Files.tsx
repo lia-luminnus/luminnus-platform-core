@@ -38,7 +38,7 @@ interface BreadcrumbItem {
 
 const Files: React.FC = () => {
    const { t } = useContext(LanguageContext);
-   const { user, profile } = useDashboardAuth();
+   const { user, isAdmin } = useDashboardAuth();
 
    // States
    const [folders, setFolders] = useState<FileFolder[]>([]);
@@ -52,7 +52,6 @@ const Files: React.FC = () => {
    const [isUploading, setIsUploading] = useState(false);
    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
    const [isDeletingBatch, setIsDeletingBatch] = useState(false);
-   const { user, isAdmin } = useDashboardAuth();
    const fileInputRef = useRef<HTMLInputElement>(null);
 
    // 🔒 SECURITY: Get tenant from user context
