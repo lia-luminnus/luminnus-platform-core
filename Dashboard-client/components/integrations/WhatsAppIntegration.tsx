@@ -38,11 +38,33 @@ const WhatsAppIntegration: React.FC = () => {
     const [quickPhone, setQuickPhone] = useState('');
     const [quickConnecting, setQuickConnecting] = useState(false);
 
-    const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || '00000000-0000-0000-0000-000000000001';
+    // 🔒 SECURITY: Get tenant from user context ONLY - never fallback to hardcoded ID
+    const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
     const API_URL = import.meta.env.VITE_API_URL || 'https://luminnus-platform-core.onrender.com';
 
-    // Fetch current status
+    // 🔒 SECURITY: Block if no tenant - prevents data leakage
+    if (!tenantId) {
+        console.warn('⚠️ [WhatsApp] No tenant_id found - blocking to prevent data leak');
+        return (
+            <div className="min-h-screen bg-gray-100 dark:bg-[#0a0a0a] text-gray-900 dark:text-white">
+                <Header />
+                <div className="max-w-4xl mx-auto py-8 px-4">
+                    <div className="p-8 rounded-2xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-center">
+                        <span className="material-symbols-outlined text-6xl text-red-500 mb-4">error</span>
+                        <h2 className="text-2xl font-bold mb-2">Tenant não identificado</h2>
+                        <p className="text-gray-500 dark:text-gray-400">
+                            Não foi possível identificar sua conta. Por favor, faça logout e login novamente.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Clear status when tenant changes to prevent cross-tenant data leakage
     useEffect(() => {
+        setStatus(null);
+        setLoading(true);
         fetchStatus();
     }, [tenantId]);
 
@@ -51,11 +73,22 @@ const WhatsAppIntegration: React.FC = () => {
         try {
             const response = await fetch(`${API_URL}/api/integrations/whatsapp/status?tenantId=${tenantId}`);
             const data = await response.json();
+
+            // 🔒 SECURITY: Validate response belongs to current tenant
             if (data.status === 'ok') {
+                if (data.data?.tenant_id && data.data.tenant_id !== tenantId) {
+                    console.error('🚨 [WhatsApp] TENANT MISMATCH! Expected:', tenantId, 'Got:', data.data.tenant_id);
+                    setStatus(null);
+                    return;
+                }
                 setStatus(data.data);
+            } else {
+                // No integration found - this is expected for new clients
+                setStatus(null);
             }
         } catch (error) {
             console.error('❌ Error fetching status:', error);
+            setStatus(null);
         } finally {
             setLoading(false);
         }

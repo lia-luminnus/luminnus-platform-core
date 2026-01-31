@@ -1,6 +1,7 @@
 import React, { useState, useContext, useEffect } from 'react';
 import Header from './Header';
 import { LanguageContext } from '../contexts/LanguageContext';
+import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import WhatsAppConfig from './whatsapp/WhatsAppConfig.tsx';
 import WhatsAppInbox from './whatsapp/WhatsAppInbox.tsx';
@@ -13,27 +14,56 @@ import { LIAProvider } from './lia/LIAContext';
 
 const WhatsAppAgentContent: React.FC = () => {
     const { t } = useContext(LanguageContext);
+    const { user } = useDashboardAuth();
     const [activeTab, setActiveTab] = useState<'config' | 'inbox' | 'summaries' | 'kanban' | 'audio' | 'briefings'>('config');
     const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
     const [notification, setNotification] = useState<{ message: string, type: 'success' | 'info' | 'error' } | null>(null);
     const [status, setStatus] = useState<any>(null);
     const [loadingStatus, setLoadingStatus] = useState(true);
 
+    // 🔒 SECURITY: Get tenant from user context ONLY - never fallback to hardcoded ID
+    const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
+    const API_URL = import.meta.env.VITE_API_URL || 'https://luminnus-platform-core.onrender.com';
+
     const fetchStatus = async () => {
+        // 🔒 SECURITY: Block fetch if no tenant
+        if (!tenantId) {
+            console.warn('⚠️ [WhatsAppAgent] No tenant_id - blocking status fetch');
+            setStatus(null);
+            setLoadingStatus(false);
+            return;
+        }
+
         try {
-            const response = await fetch('/api/integrations/whatsapp/status');
+            // 🔒 SECURITY: Always include tenantId in API calls
+            const response = await fetch(`${API_URL}/api/integrations/whatsapp/status?tenantId=${tenantId}`);
             const data = await response.json();
-            setStatus(data);
+
+            // 🔒 SECURITY: Validate response belongs to current tenant
+            if (data.status === 'ok' && data.data) {
+                if (data.data.tenant_id && data.data.tenant_id !== tenantId) {
+                    console.error('🚨 [WhatsAppAgent] TENANT MISMATCH! Blocking data leak.');
+                    setStatus(null);
+                    return;
+                }
+                setStatus(data.data);
+            } else {
+                setStatus(null);
+            }
         } catch (err) {
             console.error('Failed to fetch status:', err);
+            setStatus(null);
         } finally {
             setLoadingStatus(false);
         }
     };
 
     useEffect(() => {
+        // 🔒 SECURITY: Clear status when tenant changes
+        setStatus(null);
+        setLoadingStatus(true);
         fetchStatus();
-    }, []);
+    }, [tenantId]);
 
     const showNotify = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
         setNotification({ message, type });
@@ -46,11 +76,21 @@ const WhatsAppAgentContent: React.FC = () => {
             return;
         }
 
+        // 🔒 SECURITY: Block actions if no tenant
+        if (!tenantId) {
+            showNotify('Tenant não identificado.', 'error');
+            return;
+        }
+
         switch (action) {
             case 'reconnect':
                 showNotify(t('waReconnecting'), 'info');
                 try {
-                    const response = await fetch('/api/integrations/whatsapp/reconnect', { method: 'POST' });
+                    const response = await fetch(`${API_URL}/api/integrations/whatsapp/reconnect`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tenant_id: tenantId })
+                    });
                     if (response.ok) {
                         showNotify(t('waReconnected'), 'success');
                         fetchStatus();
@@ -64,7 +104,11 @@ const WhatsAppAgentContent: React.FC = () => {
             case 'webhook':
                 showNotify(t('waTestingWebhook'), 'info');
                 try {
-                    const response = await fetch('/api/integrations/whatsapp/test-webhook', { method: 'POST' });
+                    const response = await fetch(`${API_URL}/api/integrations/whatsapp/test-webhook`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tenant_id: tenantId })
+                    });
                     const data = await response.json();
                     if (data.success) {
                         showNotify('✅ Webhook funcionando!', 'success');
