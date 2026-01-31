@@ -137,8 +137,12 @@ const AppContent: React.FC = () => {
     if (hasAdminAccess) {
       console.log('[App] 🔐 Admin access detectado! Forçando onboarding para testes...');
 
-      // Reset local store
+      // Reset COMPLETO do estado local
       resetOnboarding();
+      
+      // Limpar também o localStorage para garantir
+      localStorage.removeItem('luminnus-storage');
+      localStorage.removeItem('luminnus-onboarding');
 
       // Limpar o parâmetro da URL
       const cleanHash = hash.replace(/[?&]admin_access=true/, '').replace('?&', '?').replace(/\?$/, '');

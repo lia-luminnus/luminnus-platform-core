@@ -16,13 +16,7 @@
         "outDir": "./dist",
         "rootDir": "./src",
         "resolveJsonModule": true,
-        "baseUrl": ".",
-        "composite": false,
-        "paths": {
-            "@luminnus/shared": [
-                "../shared/src/index.ts"
-            ]
-        }
+        "baseUrl": "."
     },
     "include": [
         "src/**/*"
@@ -30,10 +24,5 @@
     "exclude": [
         "node_modules",
         "dist"
-    ],
-    "references": [
-        {
-            "path": "../shared"
-        }
     ]
 }

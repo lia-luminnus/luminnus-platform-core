@@ -36,10 +36,12 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // Verificar onboarding também no estado local (permite funcionar sem autenticação)
     const localOnboardingCompleted = useAppStore((state) => state.onboarding_completed);
 
-    // 🔑 SSOT: Lógica de Onboarding
-    // - Clientes: Prioriza o banco de dados (profile). Se o banco diz que completou, NÃO repete.
-    // - Admins: Passam pelo onboarding se entrarem via link admin (admin_access=true)
-    const onboardingCompleted = profile?.onboarding_completed || localOnboardingCompleted || false;
+    // 🔑 SSOT: Lógica de Onboarding CORRIGIDA
+    // - Admin: SEMPRE passa pelo onboarding (para testar variantes) - retorna false
+    // - Cliente: Passa APENAS UMA VEZ - respeita o banco de dados (profile) ou localStorage
+    const onboardingCompleted = isAdmin 
+        ? false  // Admin sempre vê onboarding
+        : (profile?.onboarding_completed || localOnboardingCompleted || false);  // Cliente respeita DB
 
     const refreshProfile = async (initialUser?: User | null) => {
         console.log('[DashboardAuth] Iniciando refreshProfile...');
