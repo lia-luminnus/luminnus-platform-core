@@ -39,6 +39,7 @@ const WhatsAppIntegration: React.FC = () => {
     const [quickConnecting, setQuickConnecting] = useState(false);
 
     const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || '00000000-0000-0000-0000-000000000001';
+    const API_URL = import.meta.env.VITE_API_URL || 'https://luminnus-platform-core.onrender.com';
 
     // Fetch current status
     useEffect(() => {
@@ -48,7 +49,7 @@ const WhatsAppIntegration: React.FC = () => {
     const fetchStatus = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`/api/integrations/whatsapp/status?tenantId=${tenantId}`);
+            const response = await fetch(`${API_URL}/api/integrations/whatsapp/status?tenantId=${tenantId}`);
             const data = await response.json();
             if (data.status === 'ok') {
                 setStatus(data.data);
@@ -79,7 +80,7 @@ const WhatsAppIntegration: React.FC = () => {
 
         try {
             // Save phone number as pending connection
-            const response = await fetch('/api/integrations/whatsapp/quick-start', {
+            const response = await fetch(`${API_URL}/api/integrations/whatsapp/quick-start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -118,7 +119,7 @@ const WhatsAppIntegration: React.FC = () => {
 
     const handleSaveQuickConnection = async (phone: string, token: string) => {
         try {
-            const response = await fetch('/api/integrations/whatsapp/save-quick', {
+            const response = await fetch(`${API_URL}/api/integrations/whatsapp/save-quick`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -152,7 +153,7 @@ const WhatsAppIntegration: React.FC = () => {
 
         setSaving(true);
         try {
-            const response = await fetch('/api/integrations/whatsapp/save-manual', {
+            const response = await fetch(`${API_URL}/api/integrations/whatsapp/save-manual`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -181,7 +182,7 @@ const WhatsAppIntegration: React.FC = () => {
     const handleTestWebhook = async () => {
         setTesting(true);
         try {
-            const response = await fetch('/api/integrations/whatsapp/test-webhook', {
+            const response = await fetch(`${API_URL}/api/integrations/whatsapp/test-webhook`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tenant_id: tenantId })
@@ -203,7 +204,7 @@ const WhatsAppIntegration: React.FC = () => {
 
     const handleReconnect = async () => {
         try {
-            const response = await fetch('/api/integrations/whatsapp/reconnect', {
+            const response = await fetch(`${API_URL}/api/integrations/whatsapp/reconnect`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tenant_id: tenantId })
