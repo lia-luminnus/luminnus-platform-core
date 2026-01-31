@@ -38,13 +38,23 @@ const WhatsAppIntegration: React.FC = () => {
     const [quickPhone, setQuickPhone] = useState('');
     const [quickConnecting, setQuickConnecting] = useState(false);
 
-    // 🔒 SECURITY: Get tenant from user context ONLY - never fallback to hardcoded ID
-    const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
+    // 🔒 SECURITY: Get tenant from user context
+    const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
+
+    // 🔑 Admin detection (same logic as DashboardAuthContext)
+    const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
+    const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
+    const isAdmin = adminEmails.includes(user?.email?.toLowerCase() || '');
+
+    // 🔒 SECURITY: Admin uses default admin tenant, clients require their own tenant
+    const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+    const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
+
     const API_URL = import.meta.env.VITE_API_URL || 'https://luminnus-platform-core.onrender.com';
 
-    // 🔒 SECURITY: Block if no tenant - prevents data leakage
-    if (!tenantId) {
-        console.warn('⚠️ [WhatsApp] No tenant_id found - blocking to prevent data leak');
+    // 🔒 SECURITY: Block ONLY if not admin AND no tenant - prevents client data leakage
+    if (!tenantId && !isAdmin) {
+        console.warn('⚠️ [WhatsApp] No tenant_id found for non-admin user - blocking to prevent data leak');
         return (
             <div className="min-h-screen bg-gray-100 dark:bg-[#0a0a0a] text-gray-900 dark:text-white">
                 <Header />

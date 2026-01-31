@@ -21,14 +21,24 @@ const WhatsAppAgentContent: React.FC = () => {
     const [status, setStatus] = useState<any>(null);
     const [loadingStatus, setLoadingStatus] = useState(true);
 
-    // 🔒 SECURITY: Get tenant from user context ONLY - never fallback to hardcoded ID
-    const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
+    // 🔒 SECURITY: Get tenant from user context
+    const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
+
+    // 🔑 Admin detection (same logic as DashboardAuthContext)
+    const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
+    const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
+    const isAdmin = adminEmails.includes(user?.email?.toLowerCase() || '');
+
+    // 🔒 SECURITY: Admin uses default admin tenant, clients require their own tenant
+    const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+    const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
+
     const API_URL = import.meta.env.VITE_API_URL || 'https://luminnus-platform-core.onrender.com';
 
     const fetchStatus = async () => {
-        // 🔒 SECURITY: Block fetch if no tenant
+        // 🔒 SECURITY: Block fetch if no tenant (non-admin users only)
         if (!tenantId) {
-            console.warn('⚠️ [WhatsAppAgent] No tenant_id - blocking status fetch');
+            console.warn('⚠️ [WhatsAppAgent] No tenant_id for non-admin user - blocking status fetch');
             setStatus(null);
             setLoadingStatus(false);
             return;

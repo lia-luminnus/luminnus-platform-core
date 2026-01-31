@@ -106,7 +106,7 @@ async function sendWelcomeEmail(
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                from: "Luminnus <lia@luminnus.ai>",
+                from: "Luminnus <lia@luminus.ai>",
                 to: [email],
                 subject: "Bem-vindo à Luminnus — seu acesso à LIA está liberado",
                 html: htmlContent,
@@ -353,9 +353,8 @@ Deno.serve(async (req) => {
                 type: "magiclink",
                 email: userEmail,
                 options: {
-                    // Redirecionar para a área do cliente no site principal (com onboarding)
-                    // em vez de diretamente para o dashboard
-                    redirectTo: appBaseUrl + "/area-do-cliente",
+                    // Redirecionar direto para o dashboard
+                    redirectTo: appBaseUrl + "/dashboard",
                 },
             });
 

@@ -116,7 +116,8 @@ const Plans = () => {
           userEmail: user.email,
           planName: planName,
           billingType: paymentType,
-          successUrl: `${window.location.origin}/area-do-cliente?checkout=success`,
+          // v5.8: Redirecionar direto para o dashboard após sucesso
+          successUrl: `${window.location.origin}/dashboard?checkout=success`,
           cancelUrl: `${window.location.origin}/planos?checkout=canceled`,
         },
       });

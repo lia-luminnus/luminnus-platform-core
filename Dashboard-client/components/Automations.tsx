@@ -16,24 +16,42 @@ const Automations: React.FC = () => {
     const [automations, setAutomations] = useState<Automation[]>([]);
     const [stats, setStats] = useState<any>({ total: 0, active: 0, error: 0, paused: 0 });
     const [loading, setLoading] = useState(true);
-    
+
     const [isWizardOpen, setIsWizardOpen] = useState(false);
     const [selectedAutoId, setSelectedAutoId] = useState<string | null>(null);
 
     const { user } = useDashboardAuth();
-    const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || '00000000-0000-0000-0000-000000000001';
+
+    // 🔒 SECURITY: Get tenant from user context
+    const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
+
+    // 🔑 Admin detection (same logic as DashboardAuthContext)
+    const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
+    const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
+    const isAdmin = adminEmails.includes(user?.email?.toLowerCase() || '');
+
+    // 🔒 SECURITY: Admin uses default admin tenant, clients require their own tenant
+    const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+    const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
+
+    const API_URL = import.meta.env.VITE_API_URL || 'https://luminnus-platform-core.onrender.com';
 
     const fetchData = useCallback(async () => {
-        if (!tenantId) return;
+        // 🔒 SECURITY: Block fetch if no tenant (non-admin users only)
+        if (!tenantId) {
+            console.warn('⚠️ [Automations] No tenant_id for non-admin user - blocking fetch');
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         try {
             console.log(`📡 [Automations] Carregando dados para tenant: ${tenantId}`);
-            
+
             const [autoRes, statsRes] = await Promise.all([
-                fetch(`/api/automations?tenantId=${tenantId}`),
-                fetch(`/api/automations/stats/summary?tenantId=${tenantId}`)
+                fetch(`${API_URL}/api/automations?tenantId=${tenantId}`),
+                fetch(`${API_URL}/api/automations/stats/summary?tenantId=${tenantId}`)
             ]);
-            
+
             // Verificar se as respostas são válidas antes de dar parse no JSON
             if (!autoRes.ok || autoRes.status === 204) {
                 console.warn('⚠️ [Automations] Lista de automações vazia ou erro no servidor');
@@ -67,18 +85,18 @@ const Automations: React.FC = () => {
         try {
             let res;
             if (action === 'run') {
-                res = await fetch(`/api/automations/${id}/run?tenantId=${tenantId}`, { method: 'POST' });
+                res = await fetch(`${API_URL}/api/automations/${id}/run?tenantId=${tenantId}`, { method: 'POST' });
             } else if (action === 'delete') {
-                res = await fetch(`/api/automations/${id}?tenantId=${tenantId}`, { method: 'DELETE' });
+                res = await fetch(`${API_URL}/api/automations/${id}?tenantId=${tenantId}`, { method: 'DELETE' });
             } else if (action === 'activate') {
-                res = await fetch(`/api/automations/${id}?tenantId=${tenantId}`, { 
-                    method: 'PUT', 
+                res = await fetch(`${API_URL}/api/automations/${id}?tenantId=${tenantId}`, {
+                    method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: 'active', is_enabled: true })
                 });
             } else if (action === 'pause') {
-                res = await fetch(`/api/automations/${id}?tenantId=${tenantId}`, { 
-                    method: 'PUT', 
+                res = await fetch(`${API_URL}/api/automations/${id}?tenantId=${tenantId}`, {
+                    method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: 'paused', is_enabled: false })
                 });
@@ -119,7 +137,7 @@ const Automations: React.FC = () => {
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0A0F1A]">
             <Header title={t('automationsTitle')} />
-            
+
             <div className="flex-1 p-8 pt-4 overflow-y-auto no-scrollbar">
                 {/* Header Actions */}
                 <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
@@ -127,7 +145,7 @@ const Automations: React.FC = () => {
                         <h1 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Gerenciador de Automações</h1>
                         <p className="text-sm text-gray-500">Crie fluxos inteligentes orquestrados pela LIA</p>
                     </div>
-                    <button 
+                    <button
                         onClick={() => setIsWizardOpen(true)}
                         className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-brand-primary text-white hover:shadow-xl hover:shadow-brand-primary/20 transition-all font-black text-xs uppercase tracking-widest shadow-lg shadow-brand-primary/10"
                     >
@@ -144,8 +162,8 @@ const Automations: React.FC = () => {
                         { label: 'Pausadas', value: stats.paused, icon: <Pause size={24} />, color: 'text-yellow-400', bg: 'bg-yellow-400/10' },
                         { label: 'Erros', value: stats.error, icon: <AlertCircle size={24} />, color: 'text-red-400', bg: 'bg-red-400/10' },
                     ].map((stat, i) => (
-                        <motion.div 
-                            key={i} 
+                        <motion.div
+                            key={i}
                             whileHover={{ y: -4 }}
                             className="glass-panel bg-white dark:bg-white/5 p-6 rounded-3xl flex items-center gap-5 shadow-sm border border-gray-200 dark:border-white/5"
                         >
@@ -165,24 +183,24 @@ const Automations: React.FC = () => {
                     <div className="p-8 border-b border-gray-200 dark:border-white/10 flex flex-col xl:flex-row justify-between items-center gap-6">
                         <div className="relative w-full xl:w-96">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                            <input 
-                                type="text" 
-                                placeholder="Buscar por nome ou gatilho..." 
+                            <input
+                                type="text"
+                                placeholder="Buscar por nome ou gatilho..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl pl-12 pr-6 py-4 text-sm w-full focus:ring-2 focus:ring-brand-primary outline-none transition-all dark:text-white font-medium" 
+                                className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl pl-12 pr-6 py-4 text-sm w-full focus:ring-2 focus:ring-brand-primary outline-none transition-all dark:text-white font-medium"
                             />
                         </div>
-                        
+
                         <div className="flex items-center gap-2 bg-gray-100 dark:bg-white/5 p-1.5 rounded-2xl border border-gray-200 dark:border-white/10 overflow-x-auto no-scrollbar max-w-full">
                             {['all', 'active', 'paused', 'error', 'draft'].map(s => (
                                 <button
                                     key={s}
                                     onClick={() => setFilter(s)}
                                     className={`text-[10px] font-black uppercase tracking-widest px-5 py-2.5 rounded-xl transition-all whitespace-nowrap ${filter === s
-                                       ? 'bg-white dark:bg-brand-primary shadow-xl font-bold text-brand-primary dark:text-white'
-                                       : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                                    }`}
+                                        ? 'bg-white dark:bg-brand-primary shadow-xl font-bold text-brand-primary dark:text-white'
+                                        : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                                        }`}
                                 >
                                     {s === 'all' ? 'Ver Todos' : s}
                                 </button>
@@ -234,14 +252,14 @@ const Automations: React.FC = () => {
                                         </td>
                                         <td className="px-8 py-6">
                                             <div className="flex justify-center gap-3">
-                                                <button 
+                                                <button
                                                     onClick={() => handleAction(auto.id, 'run')}
                                                     title="Executar Agora"
                                                     className="p-3 rounded-xl bg-brand-primary/5 text-brand-primary hover:bg-brand-primary hover:text-white transition-all shadow-sm"
                                                 >
                                                     <Play size={16} fill="currentColor" />
                                                 </button>
-                                                <button 
+                                                <button
                                                     onClick={() => setSelectedAutoId(auto.id)}
                                                     title="Ver Logs"
                                                     className="p-3 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10 transition-all border border-transparent hover:border-gray-200 dark:hover:border-white/10"
@@ -265,17 +283,17 @@ const Automations: React.FC = () => {
             </div>
 
             {/* Modals & Drawers */}
-            <AutomationWizard 
-                isOpen={isWizardOpen} 
-                onClose={() => setIsWizardOpen(false)} 
-                onSuccess={fetchData} 
+            <AutomationWizard
+                isOpen={isWizardOpen}
+                onClose={() => setIsWizardOpen(false)}
+                onSuccess={fetchData}
             />
-            
+
             <AnimatePresence>
                 {selectedAutoId && (
-                    <AutomationDrawer 
-                        automationId={selectedAutoId} 
-                        onClose={() => setSelectedAutoId(null)} 
+                    <AutomationDrawer
+                        automationId={selectedAutoId}
+                        onClose={() => setSelectedAutoId(null)}
                     />
                 )}
             </AnimatePresence>
