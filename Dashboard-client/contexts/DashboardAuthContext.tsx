@@ -297,31 +297,7 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }, []);
 
     // v2.6: Sistema de Updates (Fase 8)
-    useEffect(() => {
-        console.log('🔄 [Dashboard-UpdateService] Iniciando monitoramento...');
-        UpdateService.initialize({
-            currentVersion: '4.0.0', // Versão do Dashboard sincronizada com LIA Unified
-            apiUrl: import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000',
-        });
-
-        const unbindUpdate = UpdateService.onUpdateAvailable((event: UpdateAvailableEvent) => {
-            console.log('✨ [Dashboard-Update] Nova versão detectada:', event.newVersion);
-            const alreadyDismissed = localStorage.getItem('luminnus_update_dismissed');
-            if (alreadyDismissed !== event.newVersion) {
-                setNewVersion(event.newVersion);
-                setShowUpdateBanner(true);
-            } else {
-                console.log('🔄 [Dashboard-Update] Versão já dispensada pelo usuário:', event.newVersion);
-            }
-        });
-
-        UpdateService.startPolling(120000);
-
-        return () => {
-            unbindUpdate();
-            UpdateService.stopPolling();
-        };
-    }, []);
+    // REMOVIDO: Lógica centralizada no App.tsx para evitar duplicidade de banners
 
     const signOut = async () => {
         console.log('[DashboardAuth] Executando logout...');

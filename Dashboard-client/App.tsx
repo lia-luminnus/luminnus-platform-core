@@ -29,6 +29,7 @@ import { useDashboardAuth } from './contexts/DashboardAuthContext';
 import { useAppStore } from './store/useAppStore';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import { UpdateService } from './components/lia/services/geminiLiveService';
 
 const PlaceholderModule: React.FC<{ title: string, icon: string }> = ({ title, icon }) => {
   const { t } = React.useContext(LanguageContext);
@@ -74,22 +75,57 @@ const AppContent: React.FC = () => {
   const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || '00000000-0000-0000-0000-000000000001';
   const userPlan = (authPlan?.name?.toLowerCase() as 'start' | 'plus' | 'pro') || (storePlanType?.toLowerCase() as 'start' | 'plus' | 'pro') || 'pro';
 
+  // Centralização do Sistema de Updates
   useEffect(() => {
-    const handleUpdate = (e: any) => {
-      const newVersion = e.detail?.version || 'unknown';
-      const dismissedVersion = localStorage.getItem('lia-dismissed-update-version');
+    // 1. Inicializar serviço
+    UpdateService.initialize({
+      currentVersion: '4.0.0', // Versão do Dashboard
+      apiUrl: import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000',
+    });
 
-      // Não mostrar o banner se esta versão já foi descartada
-      if (dismissedVersion === newVersion) {
-        console.log('[App] Update já foi descartado para versão:', newVersion);
+    // 2. Listener para eventos do Socket.io ou Polling
+    const handleUpdateEvent = (e: any) => {
+      const newVersion = e.detail?.version || 'unknown';
+      const processedVersion = localStorage.getItem('lia-processed-update-version');
+
+      if (processedVersion === newVersion) {
+        console.log('[App] Update já processado para versão:', newVersion);
         return;
       }
 
       setUpdateAvailable(e.detail);
     };
-    window.addEventListener('lia-system-update' as any, handleUpdate);
-    return () => window.removeEventListener('lia-system-update' as any, handleUpdate);
+
+    // 3. Listener do UpdateService (Polling)
+    const unbindUpdate = UpdateService.onUpdateAvailable((event) => {
+      handleUpdateEvent({ detail: { version: event.newVersion, force: event.isRequired } });
+    });
+
+    window.addEventListener('lia-system-update' as any, handleUpdateEvent);
+    
+    // Iniciar polling (2 minutos)
+    UpdateService.startPolling(120000);
+
+    return () => {
+      window.removeEventListener('lia-system-update' as any, handleUpdateEvent);
+      unbindUpdate();
+      UpdateService.stopPolling();
+    };
   }, []);
+
+  const handleApplyUpdate = () => {
+    if (updateAvailable?.version) {
+      localStorage.setItem('lia-processed-update-version', updateAvailable.version);
+    }
+    UpdateService.forceUpdate();
+  };
+
+  const handleDismissUpdate = () => {
+    if (updateAvailable?.version) {
+      localStorage.setItem('lia-processed-update-version', updateAvailable.version);
+    }
+    setUpdateAvailable(null);
+  };
 
   // 🔑 ADMIN ACCESS DETECTION - Runs on every location/hash change
   useEffect(() => {
@@ -158,18 +194,13 @@ const AppContent: React.FC = () => {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => {
-                  if (updateAvailable?.version) {
-                    localStorage.setItem('lia-dismissed-update-version', updateAvailable.version);
-                  }
-                  setUpdateAvailable(null);
-                }}
+                onClick={handleDismissUpdate}
                 className="px-3 py-1 hover:bg-white/10 rounded-md transition-colors"
               >
                 {t('later')}
               </button>
               <button
-                onClick={() => window.location.reload()}
+                onClick={handleApplyUpdate}
                 className="bg-white text-black px-3 py-1 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-1 font-bold"
               >
                 {t('updateNow')}

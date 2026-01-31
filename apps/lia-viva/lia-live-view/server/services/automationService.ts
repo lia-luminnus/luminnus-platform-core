@@ -43,16 +43,23 @@ export class AutomationService {
         return data;
     }
 
-    static async createAutomation(tenantId: string, userId: string, payload: Partial<Automation>) {
+    static async createAutomation(tenantId: string, userId: string | null, payload: Partial<Automation>) {
         // Validate limits
         await this.validateLimits(tenantId, 'max_automations');
+
+        // Sanitize payload to remove non-column fields
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { id, created_at, updated_at, userId: _ignoredUserId, ...cleanPayload } = payload as any;
+        
+        // Handle mock user for dev/test environment
+        const finalUserId = (userId === '00000000-0000-0000-0000-000000000001') ? null : userId;
 
         const { data, error } = await supabase
             .from('automations')
             .insert([{
-                ...payload,
+                ...cleanPayload,
                 tenant_id: tenantId,
-                user_id: userId,
+                user_id: finalUserId,
                 status: payload.status || 'draft',
                 version: 1
             }])

@@ -61,53 +61,53 @@ const WhatsAppIntegration: React.FC = () => {
         }
     };
 
-    // Quick connection - simplified flow without Meta popup
+    // Quick connection - Official Meta Embedded Signup flow
     const handleQuickConnect = async () => {
-        if (!quickPhone) {
-            toast.error('Por favor, insira o número de telefone');
-            return;
-        }
-
-        // Clean phone number to E.164 format
-        const cleanPhone = quickPhone.replace(/\D/g, '');
-        if (cleanPhone.length < 10) {
-            toast.error('Número de telefone inválido');
-            return;
-        }
-
         setQuickConnecting(true);
-        toast.loading('Registrando número...', { id: 'quick-connect' });
+        toast.loading('Iniciando conexão...', { id: 'quick-connect' });
 
         try {
-            // Save phone number as pending connection
-            const response = await fetch(`${API_URL}/api/integrations/whatsapp/quick-start`, {
+            // 1. Get the signup URL from backend
+            const response = await fetch(`${API_URL}/api/whatsapp/embedded/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    tenant_id: tenantId,
-                    phone_number: cleanPhone
-                })
+                body: JSON.stringify({ tenant_id: tenantId })
             });
 
             const data = await response.json();
 
-            if (data.status === 'ok') {
-                toast.success('Número registrado! Siga as instruções abaixo.', { id: 'quick-connect' });
+            if (data.status === 'ok' && data.data?.signupUrl) {
+                toast.success('Abrindo Meta Business Suite...', { id: 'quick-connect' });
 
-                // Open Meta Business Suite in new tab
-                window.open('https://business.facebook.com/latest/whatsapp_manager/phone_numbers', '_blank');
+                // 2. Open the Meta OAuth dialog in a popup
+                const popup = window.open(
+                    data.data.signupUrl,
+                    'meta-whatsapp-signup',
+                    'width=600,height=700,scrollbars=yes,resizable=yes,status=yes'
+                );
 
-                // Pre-fill phone in manual form and switch to it
-                setFormData(prev => ({ ...prev, phone_e164: cleanPhone }));
-                setActiveTab('manual');
-
-                // Show instructions toast
-                toast('📋 Abra o Meta Business Suite, copie as credenciais e cole na aba "Conexão Manual".', {
-                    duration: 10000,
-                    icon: '💡'
-                });
+                // 3. Monitor popup for close (callback will redirect back)
+                if (popup) {
+                    const checkPopup = setInterval(() => {
+                        if (popup.closed) {
+                            clearInterval(checkPopup);
+                            // Refresh status after popup closes
+                            setTimeout(() => {
+                                fetchStatus();
+                                toast.dismiss('quick-connect');
+                            }, 1000);
+                        }
+                    }, 500);
+                } else {
+                    // Popup blocked - open in same tab
+                    toast('O popup foi bloqueado. Redirecionando...', {
+                        icon: '⚠️',
+                        duration: 3000
+                    });
+                    window.location.href = data.data.signupUrl;
+                }
             } else {
-                toast.error(data.reason || 'Erro ao registrar número', { id: 'quick-connect' });
+                toast.error(data.reason || 'Erro ao iniciar conexão', { id: 'quick-connect' });
             }
         } catch (error) {
             console.error('❌ Quick connect error:', error);
@@ -340,37 +340,46 @@ const WhatsAppIntegration: React.FC = () => {
                                             exit={{ opacity: 0, y: -10 }}
                                             className="space-y-4"
                                         >
-                                            <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                                                <p className="text-sm text-blue-400">
-                                                    <strong>💡 Modo assistido:</strong> Insira seu número e siga as instruções para conectar automaticamente.
+                                            <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20">
+                                                <p className="text-sm text-green-400">
+                                                    <strong>🚀 Conexão em 1 clique:</strong> Você só precisa autorizar sua conta Meta e escolher o número.
+                                                    A parte técnica é configurada automaticamente.
                                                 </p>
                                             </div>
-                                            <div>
-                                                <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
-                                                    Número WhatsApp Business (E.164)
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={quickPhone}
-                                                    onChange={(e) => setQuickPhone(e.target.value)}
-                                                    placeholder="Ex: +55 11 99999-9999"
-                                                    className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-brand-primary/50"
-                                                />
+
+                                            <div className="space-y-3 text-sm text-gray-500 dark:text-gray-400">
+                                                <p className="flex items-start gap-2">
+                                                    <span className="mt-0.5 text-brand-primary">1.</span>
+                                                    Clique no botão abaixo para abrir o Meta Business Suite
+                                                </p>
+                                                <p className="flex items-start gap-2">
+                                                    <span className="mt-0.5 text-brand-primary">2.</span>
+                                                    Faça login com sua conta Facebook/Meta
+                                                </p>
+                                                <p className="flex items-start gap-2">
+                                                    <span className="mt-0.5 text-brand-primary">3.</span>
+                                                    Selecione ou crie sua conta WhatsApp Business
+                                                </p>
+                                                <p className="flex items-start gap-2">
+                                                    <span className="mt-0.5 text-brand-primary">4.</span>
+                                                    Pronto! A conexão será configurada automaticamente
+                                                </p>
                                             </div>
+
                                             <button
                                                 onClick={handleQuickConnect}
                                                 disabled={quickConnecting}
-                                                className="w-full px-6 py-3 rounded-xl bg-brand-primary text-white font-bold text-sm shadow-lg shadow-brand-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="w-full px-6 py-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold text-sm shadow-lg shadow-green-500/20 hover:shadow-green-500/40 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 {quickConnecting ? (
                                                     <>
-                                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                                                         Conectando...
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <span className="material-symbols-outlined">rocket_launch</span>
-                                                        Iniciar Conexão
+                                                        <span className="material-symbols-outlined text-xl">link</span>
+                                                        Conectar WhatsApp
                                                     </>
                                                 )}
                                             </button>
