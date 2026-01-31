@@ -40,30 +40,6 @@ const WhatsAppIntegration: React.FC = () => {
 
     const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || '00000000-0000-0000-0000-000000000001';
 
-    // Meta App ID - Should be configured in environment
-    const META_APP_ID = import.meta.env.VITE_META_APP_ID || '1234567890';
-
-    // Initialize Meta SDK on component mount
-    useEffect(() => {
-        // Load Facebook SDK
-        if (!window.FB) {
-            const script = document.createElement('script');
-            script.src = 'https://connect.facebook.net/en_US/sdk.js';
-            script.async = true;
-            script.defer = true;
-            script.crossOrigin = 'anonymous';
-            script.onload = () => {
-                window.FB?.init({
-                    appId: META_APP_ID,
-                    cookie: true,
-                    xfbml: true,
-                    version: 'v18.0'
-                });
-            };
-            document.body.appendChild(script);
-        }
-    }, []);
-
     // Fetch current status
     useEffect(() => {
         fetchStatus();
@@ -84,7 +60,7 @@ const WhatsAppIntegration: React.FC = () => {
         }
     };
 
-    // Quick connection using Meta Embedded Signup
+    // Quick connection - simplified flow without Meta popup
     const handleQuickConnect = async () => {
         if (!quickPhone) {
             toast.error('Por favor, insira o número de telefone');
@@ -99,63 +75,43 @@ const WhatsAppIntegration: React.FC = () => {
         }
 
         setQuickConnecting(true);
+        toast.loading('Registrando número...', { id: 'quick-connect' });
 
         try {
-            // Check if Facebook SDK is loaded
-            if (window.FB) {
-                // Use Facebook Login for Business with WhatsApp permissions
-                window.FB.login((response: any) => {
-                    if (response.authResponse) {
-                        const { accessToken, userID } = response.authResponse;
-                        console.log('✅ Meta login success:', { userID, hasToken: !!accessToken });
+            // Save phone number as pending connection
+            const response = await fetch('/api/integrations/whatsapp/quick-start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tenant_id: tenantId,
+                    phone_number: cleanPhone
+                })
+            });
 
-                        // Save the connection with basic auth token
-                        // The full setup requires exchanging tokens server-side
-                        handleSaveQuickConnection(cleanPhone, accessToken);
-                    } else {
-                        console.log('❌ Meta login cancelled or failed');
-                        toast.error('Conexão cancelada pelo usuário');
-                        setQuickConnecting(false);
-                    }
-                }, {
-                    scope: 'whatsapp_business_management,whatsapp_business_messaging',
-                    extras: {
-                        setup: {
-                            // Pre-fill phone number
-                            phone_number: cleanPhone
-                        }
-                    }
+            const data = await response.json();
+
+            if (data.status === 'ok') {
+                toast.success('Número registrado! Siga as instruções abaixo.', { id: 'quick-connect' });
+
+                // Open Meta Business Suite in new tab
+                window.open('https://business.facebook.com/latest/whatsapp_manager/phone_numbers', '_blank');
+
+                // Pre-fill phone in manual form and switch to it
+                setFormData(prev => ({ ...prev, phone_e164: cleanPhone }));
+                setActiveTab('manual');
+
+                // Show instructions toast
+                toast('📋 Abra o Meta Business Suite, copie as credenciais e cole na aba "Conexão Manual".', {
+                    duration: 10000,
+                    icon: '💡'
                 });
             } else {
-                // Fallback: Direct API connection without Meta SDK
-                console.log('📱 Meta SDK not available, using direct API mode');
-                toast.loading('Iniciando conexão...', { id: 'quick-connect' });
-
-                // Save as pending connection - requires manual token entry later
-                const response = await fetch('/api/integrations/whatsapp/quick-start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        tenant_id: tenantId,
-                        phone_number: cleanPhone
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.status === 'ok') {
-                    toast.success('Número registrado! Complete a configuração no Meta Business Suite.', { id: 'quick-connect' });
-                    setActiveTab('manual');
-                    setFormData(prev => ({ ...prev, phone_e164: cleanPhone }));
-                } else {
-                    toast.error(data.reason || 'Erro ao iniciar conexão', { id: 'quick-connect' });
-                }
-
-                setQuickConnecting(false);
+                toast.error(data.reason || 'Erro ao registrar número', { id: 'quick-connect' });
             }
         } catch (error) {
             console.error('❌ Quick connect error:', error);
-            toast.error('Erro ao conectar. Tente o modo manual.');
+            toast.error('Erro ao conectar. Tente novamente.', { id: 'quick-connect' });
+        } finally {
             setQuickConnecting(false);
         }
     };

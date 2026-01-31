@@ -5,6 +5,7 @@ import { LanguageContext } from '../contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Pause, Trash2, Copy, History, Plus, Search, AlertCircle, CheckCircle2, MoreVertical, Terminal } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 import AutomationWizard from './automations/AutomationWizard';
 import AutomationDrawer from './automations/AutomationDrawer';
 
@@ -19,25 +20,43 @@ const Automations: React.FC = () => {
     const [isWizardOpen, setIsWizardOpen] = useState(false);
     const [selectedAutoId, setSelectedAutoId] = useState<string | null>(null);
 
+    const { user } = useDashboardAuth();
+    const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || '00000000-0000-0000-0000-000000000001';
+
     const fetchData = useCallback(async () => {
+        if (!tenantId) return;
         setLoading(true);
         try {
+            console.log(`📡 [Automations] Carregando dados para tenant: ${tenantId}`);
+            
             const [autoRes, statsRes] = await Promise.all([
-                fetch('/api/automations'),
-                fetch('/api/automations/stats/summary')
+                fetch(`/api/automations?tenantId=${tenantId}`),
+                fetch(`/api/automations/stats/summary?tenantId=${tenantId}`)
             ]);
             
-            const autoData = await autoRes.json();
-            const statsData = await statsRes.json();
+            // Verificar se as respostas são válidas antes de dar parse no JSON
+            if (!autoRes.ok || autoRes.status === 204) {
+                console.warn('⚠️ [Automations] Lista de automações vazia ou erro no servidor');
+                setAutomations([]);
+            } else {
+                const autoData = await autoRes.json();
+                if (autoData.success) setAutomations(autoData.data || []);
+            }
 
-            if (autoData.success) setAutomations(autoData.data);
-            if (statsData.success) setStats(statsData.data);
+            if (!statsRes.ok || statsRes.status === 204) {
+                console.warn('⚠️ [Automations] Estatísticas não disponíveis');
+            } else {
+                const statsData = await statsRes.json();
+                if (statsData.success) setStats(statsData.data || { total: 0, active: 0, error: 0, paused: 0 });
+            }
+
         } catch (err) {
-            toast.error('Falha ao carregar automações');
+            console.error('❌ [Automations] Erro fatal no fetch:', err);
+            toast.error('Erro de sincronização. Verifique se o servidor está online.');
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [tenantId]);
 
     useEffect(() => {
         fetchData();
@@ -48,24 +67,28 @@ const Automations: React.FC = () => {
         try {
             let res;
             if (action === 'run') {
-                res = await fetch(`/api/automations/${id}/run`, { method: 'POST' });
+                res = await fetch(`/api/automations/${id}/run?tenantId=${tenantId}`, { method: 'POST' });
             } else if (action === 'delete') {
-                res = await fetch(`/api/automations/${id}`, { method: 'DELETE' });
+                res = await fetch(`/api/automations/${id}?tenantId=${tenantId}`, { method: 'DELETE' });
             } else if (action === 'activate') {
-                res = await fetch(`/api/automations/${id}`, { 
+                res = await fetch(`/api/automations/${id}?tenantId=${tenantId}`, { 
                     method: 'PUT', 
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: 'active', is_enabled: true })
                 });
             } else if (action === 'pause') {
-                res = await fetch(`/api/automations/${id}`, { 
+                res = await fetch(`/api/automations/${id}?tenantId=${tenantId}`, { 
                     method: 'PUT', 
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: 'paused', is_enabled: false })
                 });
             }
 
-            const data = await res?.json();
+            if (!res || !res.ok) {
+                throw new Error('Falha na resposta do servidor');
+            }
+
+            const data = await res.json();
             if (data?.success) {
                 toast.success('Operação concluída!', { id: loadingToast });
                 fetchData();
@@ -73,7 +96,8 @@ const Automations: React.FC = () => {
                 toast.error(data?.error || 'Falha na operação', { id: loadingToast });
             }
         } catch (err) {
-            toast.error('Erro de conexão', { id: loadingToast });
+            console.error('Action error:', err);
+            toast.error('Erro de conexão com o servidor', { id: loadingToast });
         }
     };
 

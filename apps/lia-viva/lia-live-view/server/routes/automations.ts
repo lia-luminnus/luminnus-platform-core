@@ -5,8 +5,12 @@ import { supabase } from '../config/supabase.js';
 
 const router = express.Router();
 
-// Middleware to extract tenantId from auth (mocked for now, assuming user.id = tenantId)
-const getTenantId = (req: any) => req.headers['x-tenant-id'] || req.query.tenantId || '00000000-0000-0000-0000-000000000001';
+// Middleware to extract tenantId from auth
+const getTenantId = (req: any) => {
+    const tId = req.headers['x-tenant-id'] || req.query.tenantId || '00000000-0000-0000-0000-000000000001';
+    console.log(`🔍 [AutomationRoute] Request: ${req.method} ${req.url} | Tenant: ${tId}`);
+    return tId;
+};
 
 // --- Automations CRUD ---
 
@@ -14,9 +18,10 @@ router.get('/', async (req, res) => {
     try {
         const tenantId = getTenantId(req);
         const data = await AutomationService.listAutomations(tenantId);
-        res.json({ success: true, data });
+        res.json({ success: true, data: data || [] });
     } catch (err: any) {
-        res.status(500).json({ success: false, error: err.message });
+        console.error('❌ [AutomationRoute] GET / Error:', err.message);
+        res.status(500).json({ success: false, error: err.message, data: [] });
     }
 });
 
@@ -112,9 +117,14 @@ router.get('/stats/summary', async (req, res) => {
     try {
         const tenantId = getTenantId(req);
         const data = await AutomationService.getStats(tenantId);
-        res.json({ success: true, data });
+        res.json({ success: true, data: data || { total: 0, active: 0, error: 0, paused: 0 } });
     } catch (err: any) {
-        res.status(500).json({ success: false, error: err.message });
+        console.error('❌ [AutomationRoute] GET /stats/summary Error:', err.message);
+        res.status(500).json({ 
+            success: false, 
+            error: err.message, 
+            data: { total: 0, active: 0, error: 0, paused: 0 } 
+        });
     }
 });
 
