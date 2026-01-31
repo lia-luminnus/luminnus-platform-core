@@ -137,11 +137,11 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // ===========================================================
-// HEALTH CHECK (READINESS PROBE)
+// API REQUEST LOGGER (Debug Helper for 404s)
 // ===========================================================
-
-app.get('/api/health', (_req, res) => {
-  res.status(200).json({ ok: true, timestamp: Date.now() });
+app.use('/api', (req, res, next) => {
+  console.log(`📥 [API] ${req.method} ${req.path} | Origin: ${req.headers.origin || 'N/A'}`);
+  next();
 });
 
 // v1.3.1: Profile Route - Returns user plan info
@@ -291,13 +291,22 @@ async function startServer() {
   // ROUTES SETUP
   // ===========================================================
 
-  // Health Check
+  // Health Check (Enhanced with env info)
   app.get('/api/health', (req, res) => {
     res.json({
       status: 'LIA Server Online',
-      version: '4.0.0',
-      port: 3000,
-      timestamp: new Date().toISOString()
+      version: '4.0.1',
+      port: Number(process.env.PORT || 3000),
+      env: process.env.NODE_ENV || 'development',
+      timestamp: new Date().toISOString(),
+      routes: [
+        'POST /api/conversations',
+        'POST /api/location',
+        'POST /api/chat',
+        'POST /api/vision/analyze',
+        'POST /api/multimodal/analyze',
+        'GET /api/health'
+      ]
     });
   });
 
@@ -306,18 +315,31 @@ async function startServer() {
 
   // API Routes
   setupSessionRoutes(app);
+  console.log('   ✅ Session routes (includes /api/location)');
+  
   setupChatRoutes(app, openai);
+  console.log('   ✅ Chat routes');
+  
   setupMemoryRoutes(app);
+  console.log('   ✅ Memory routes');
+  
   setupSearchRoutes(app);
   setupTranscribeRoutes(app);
   setupSpeechRoutes(app);  // Google Cloud Speech-to-Text
   setupMetricsRoutes(app);
   setupVisionRoutes(app);
+  console.log('   ✅ Vision routes (/api/vision/analyze)');
+  
   setupDocumentRoutes(app);
   setupMultimodalRoutes(app);
+  console.log('   ✅ Multimodal routes (/api/multimodal/analyze)');
+  
   setupToolRoutes(app);  // Weather, Places, Directions, Translate
   setupImageRoutes(app); // Image generation (Nano Banana + DALL-E)
+  
   setupConversationRoutes(app);
+  console.log('   ✅ Conversation routes (/api/conversations)');
+  
   setupWhatsAppRoutes(app); // Conversation history management
   setupWhatsAppWebhookRoutes(app);
   setupEmotionRoutes(app);       // Emotion decode for Avatar
@@ -329,6 +351,8 @@ async function startServer() {
   setupWhatsAppIntegrationRoutes(app); // WhatsApp Integration Management (for Hub)
   setupGoogleAuthRoutes(app); // Google OAuth Integration
   setupAutomationRoutes(app);
+
+  console.log('✅ [Server] Todas as rotas de API registradas com sucesso');
 
   console.log('🚀 [Server] Rotas básicas carregadas. Inicializando inteligência...');
 

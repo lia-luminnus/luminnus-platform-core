@@ -11,6 +11,7 @@ import { backendService, Memory } from './services/backendService';
 import { geminiLiveService, GeminiLiveSession, GeminiLiveEvent } from './services/geminiLiveService';
 import { dynamicContentManager, DynamicContainer } from './services/dynamicContentManager';
 import { useDashboardAuth } from '../../contexts/DashboardAuthContext';
+import { getApiUrl } from '../../config/api';
 // LIA Action Handler - Dashboard Control Integration (NEW)
 import { mapFunctionCallToLiaAction } from './services/liaDashboardPrompt';
 import { detectDashboardIntent } from './services/liaIntentDetector';
@@ -270,8 +271,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
         try {
             console.log('🧠 [LIAContext] Atualizando consciência operacional...');
             const [sugRes, alertRes] = await Promise.all([
-                fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/metrics/query?tenant_id=${contextTenantId}&type=suggestions`),
-                fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/metrics/query?tenant_id=${contextTenantId}&type=alerts`)
+                fetch(`${getApiUrl()}/api/metrics/query?tenant_id=${contextTenantId}&type=suggestions`),
+                fetch(`${getApiUrl()}/api/metrics/query?tenant_id=${contextTenantId}&type=alerts`)
             ]);
 
             if (sugRes.ok) {
@@ -592,7 +593,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
         const title = `Conversa ${new Date().toLocaleString('pt-BR')}`;
         try {
-            const resp = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/conversations`, {
+            const resp = await fetch(`${getApiUrl()}/api/conversations`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ mode: modeForConv, title, userId: userIdRef.current })
@@ -715,7 +716,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
         try {
             console.log('🆕 [CreateConv] Criando nova conversa para modo:', mode);
-            const resp = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/conversations`, {
+            const resp = await fetch(`${getApiUrl()}/api/conversations`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ mode, title, userId: effectiveUserId })
@@ -1162,7 +1163,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
             // v1.3.0: Buscar conexões do backend para plan awareness
             let connections: { gmail?: boolean; workspace?: boolean; calendar?: boolean } = {};
             try {
-                const integrationsResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/integrations`, {
+                const integrationsResponse = await fetch(`${getApiUrl()}/api/integrations`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (integrationsResponse.ok) {

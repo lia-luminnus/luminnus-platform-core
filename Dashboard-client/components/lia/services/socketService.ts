@@ -7,12 +7,13 @@
 // ===========================================================
 
 import { io, Socket } from 'socket.io-client';
+import { getApiUrl, getSocketUrl } from '../../../config/api';
 
 // URLs do backend via ENV
 // v2.0.0: Removido fallback silencioso para localhost em produção
 const isProd = import.meta.env.PROD;
-const apiUrl = import.meta.env.VITE_API_URL || (isProd ? '' : 'http://127.0.0.1:3000');
-const socketUrl = import.meta.env.VITE_SOCKET_URL || (isProd ? '' : 'http://127.0.0.1:3000');
+const apiUrl = getApiUrl();
+const socketUrl = getSocketUrl();
 
 class SocketService {
     private socket: Socket | null = null;
