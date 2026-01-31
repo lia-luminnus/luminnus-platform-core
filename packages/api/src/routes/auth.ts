@@ -85,7 +85,7 @@ router.get('/google', async (req, res) => {
         // Determinar base URL para o callback
         // CRITICAL: Para o Google Cloud de produção/homologação deste projeto, a URI autorizada é localhost:3000.
         // O backend (5000) deve usar a 3000 como redirect_uri para bater com o cadastro no Google Console.
-        const host = req.get('host');
+        const host = req.get('host') || 'localhost:5000';
         const protocol = req.protocol;
 
         let redirectBase = process.env.APP_URL || process.env.FRONTEND_URL || `${protocol}://${host}`;
