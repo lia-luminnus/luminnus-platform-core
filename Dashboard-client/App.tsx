@@ -65,7 +65,7 @@ const DashboardProvider = lazy(() =>
 
 const AppContent: React.FC = () => {
   const { t } = React.useContext(LanguageContext);
-  const { user, onboardingCompleted, loading, initialized, plan: authPlan } = useDashboardAuth();
+  const { user, onboardingCompleted, loading, initialized, plan: authPlan, isAdmin } = useDashboardAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { resetOnboarding, planType: storePlanType } = useAppStore();
@@ -107,8 +107,12 @@ const AppContent: React.FC = () => {
   }
 
 
-
+  // 🔑 SSOT (ARCHITECTURAL_ROUTING_MANIFEST.md linhas 28-29):
+  // - Cliente: Onboarding apenas UMA VEZ após compra
+  // - Admin: SEMPRE passa pelo onboarding (permite testar variantes)
+  // A flag onboardingCompleted já considera isAdmin no DashboardAuthContext
   if (!onboardingCompleted && location.pathname !== '/onboarding') {
+    console.log('[App] Redirecionando para onboarding', { isAdmin, onboardingCompleted });
     return <Navigate to="/onboarding" replace />;
   }
 

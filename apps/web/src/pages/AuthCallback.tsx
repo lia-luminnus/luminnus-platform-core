@@ -84,8 +84,8 @@ const AuthCallback: React.FC = () => {
                     // Isso corrige a exibição no painel admin
                     if (stripeData.plan_name) {
                         const planNameLower = stripeData.plan_name.toLowerCase();
-                        await supabase
-                            .from('profiles')
+                        await (supabase
+                            .from('profiles') as any)
                             .update({ plan_type: planNameLower })
                             .eq('id', user.id)
                             .then(({ error }) => {
@@ -96,26 +96,27 @@ const AuthCallback: React.FC = () => {
                     }
                 }
 
-                // 3. FALLBACK: Verificar profiles.plan_type (apenas planos pagos)
-                if (!hasActivePlan) {
-                    const { data: profileRaw } = await supabase
-                        .from('profiles')
-                        .select('plan_type')
-                        .eq('id', user.id)
-                        .maybeSingle();
+                // 3. FALLBACK: Verificar profiles.plan_type e role (para admin check)
+                const { data: profileRaw } = await supabase
+                    .from('profiles')
+                    .select('plan_type, role')
+                    .eq('id', user.id)
+                    .maybeSingle();
 
-                    const profile = profileRaw as { plan_type: string } | null;
+                const userProfile = profileRaw as { plan_type?: string; role?: string } | null;
+
+                if (!hasActivePlan) {
                     // REMOVIDO 'cliente' - agora apenas planos pagos dão acesso
                     const validPlanTypes = ['start', 'plus', 'pro'];
 
-                    if (profile?.plan_type && validPlanTypes.includes(profile.plan_type.toLowerCase())) {
-                        console.log('[AuthCallback] Plano encontrado no perfil:', profile.plan_type);
+                    if (userProfile?.plan_type && validPlanTypes.includes(userProfile.plan_type.toLowerCase())) {
+                        console.log('[AuthCallback] Plano encontrado no perfil:', userProfile.plan_type);
                         hasActivePlan = true;
                     }
                 }
 
                 // 4. ADMIN BYPASS: Administradores sempre têm acesso
-                const isAdmin = isAdminEmail(user.email) || (profile as any)?.role === 'admin';
+                const isAdmin = isAdminEmail(user.email) || userProfile?.role === 'admin';
                 if (isAdmin) {
                     console.log('[AuthCallback] Admin detectado, liberando acesso total.');
                     hasActivePlan = true;

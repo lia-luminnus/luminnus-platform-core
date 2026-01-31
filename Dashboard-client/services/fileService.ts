@@ -28,6 +28,7 @@ export interface FileEntry {
     size_bytes: number;
     storage_bucket: string;
     storage_path: string;
+    storage_url?: string; // Optional: public URL for quick access
     tags: string[];
     source: FileSource;
     source_ref: string | null;

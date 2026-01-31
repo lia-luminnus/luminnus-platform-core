@@ -102,6 +102,9 @@ const AdminWhatsAppGovernance = () => {
                     'Authorization': `Bearer ${token}`
                 }
             });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
             const data = await response.json();
             if (data.tenants) {
                 setTenants(data.tenants);
@@ -128,11 +131,13 @@ const AdminWhatsAppGovernance = () => {
                 body: JSON.stringify({ config: platformConfig })
             });
 
-            // v1.1: Robust error handling for non-JSON or empty responses
+            // v1.2: Use clone to avoid 'body stream already read' errors
+            const responseClone = response.clone();
+
             if (!response.ok) {
                 let errorMsg = `Erro ${response.status}: ${response.statusText}`;
                 try {
-                    const text = await response.text();
+                    const text = await responseClone.text();
                     try {
                         const errorData = JSON.parse(text);
                         errorMsg = errorData.error || errorMsg;

@@ -12,8 +12,9 @@ interface AuthContextType {
     loading: boolean;
     initialized: boolean;
     profile: UserProfile | null;
+    isAdmin: boolean; // SSOT: Admin sempre passa pelo onboarding, cliente só 1x
     onboardingCompleted: boolean;
-    refreshProfile: (initialUser?: User | null) => Promise<void>;
+    refreshProfile: (initialUser?: User | null, force?: boolean) => Promise<void>;
     signOut: () => Promise<void>;
     setPlanName: (name: 'Start' | 'Plus' | 'Pro') => void;
 }
@@ -29,15 +30,16 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [showUpdateBanner, setShowUpdateBanner] = useState(false);
     const [newVersion, setNewVersion] = useState('');
+    const [isAdmin, setIsAdmin] = useState(false);
 
     // Verificar onboarding também no estado local (permite funcionar sem autenticação)
     const localOnboardingCompleted = useAppStore((state) => state.onboarding_completed);
 
-    // Lógica de onboarding:
-    // 1. O estado local (localStorage via Zustand) é a fonte PRIMÁRIA
-    // 2. O perfil do banco é complementar
-    // 3. Se o usuário completou onboarding localmente, ele deve persistir entre refreshes
-    const onboardingCompleted = localOnboardingCompleted || profile?.onboarding_completed || false;
+    // 🔑 SSOT (ARCHITECTURAL_ROUTING_MANIFEST.md linhas 28-29):
+    // - Cliente: Onboarding apenas UMA VEZ
+    // - Admin: SEMPRE passa pelo onboarding (para testar variantes)
+    // Lógica: Admin ignora flag onboarding_completed, cliente respeita
+    const onboardingCompleted = isAdmin ? false : (localOnboardingCompleted || profile?.onboarding_completed || false);
 
     const refreshProfile = async (initialUser?: User | null) => {
         console.log('[DashboardAuth] Iniciando refreshProfile...');
@@ -90,13 +92,17 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             // Forçar Pro se for admin conforme requisito (VITE_ADMIN_EMAILS)
             const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
             const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
-            const isAdmin = adminEmails.includes(currentUser.email?.toLowerCase() || '');
+            const adminDetected = adminEmails.includes(currentUser.email?.toLowerCase() || '');
+
+            // 🔑 SSOT: Setar flag isAdmin para controlar fluxo de onboarding
+            setIsAdmin(adminDetected);
+            console.log('[DashboardAuth] Admin check:', { email: currentUser.email, isAdmin: adminDetected });
 
             // Se já tiver um plano setado e for admin, mantemos o que está no estado (override)
             // Se não, inicializamos
             setPlan((prev: any) => {
-                if (isAdmin && prev?.name) return prev;
-                const effectivePlan = isAdmin ? "Pro" : userPlanName;
+                if (adminDetected && prev?.name) return prev;
+                const effectivePlan = adminDetected ? "Pro" : userPlanName;
                 return {
                     name: effectivePlan,
                     id: effectivePlan.toLowerCase() + "-plan"
@@ -311,6 +317,7 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             loading,
             initialized,
             profile,
+            isAdmin,
             onboardingCompleted,
             refreshProfile,
             signOut,

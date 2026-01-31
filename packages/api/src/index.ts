@@ -11,6 +11,8 @@ import dashboardRouter from './routes/dashboardRoutes.js';
 import metricsRouter from './routes/metricsRoutes.js';
 import briefingRoutes from './routes/briefingRoutes.js';
 import hubRoutes from './routes/hubRoutes.js';
+import whatsappAdminRouter from './routes/whatsappAdmin.js';
+import adminRouter from './routes/admin.js';
 import { errorHandler } from './middleware/error.js';
 import { setupWebSocket } from './ws/gateway.js';
 import http from 'http';
@@ -42,6 +44,8 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/metrics', metricsRouter);
 app.use('/api/briefing', briefingRoutes);
 app.use('/api/integrations/hub', hubRoutes);
+app.use('/api/admin/whatsapp', whatsappAdminRouter);
+app.use('/api/admin', adminRouter);
 
 // Error handler
 app.use(errorHandler);
