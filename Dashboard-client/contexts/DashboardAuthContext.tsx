@@ -31,6 +31,7 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const [showUpdateBanner, setShowUpdateBanner] = useState(false);
     const [newVersion, setNewVersion] = useState('');
     const [isAdmin, setIsAdmin] = useState(false);
+    const [dismissedVersion, setDismissedVersion] = useState<string | null>(localStorage.getItem('luminnus_update_dismissed'));
 
     // Verificar onboarding também no estado local (permite funcionar sem autenticação)
     const localOnboardingCompleted = useAppStore((state) => state.onboarding_completed);
@@ -67,8 +68,10 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             );
 
             let userProfile;
+            let profileLoadedFromDb = false;
             try {
                 userProfile = await Promise.race([profilePromise, timeoutPromise]) as UserProfile;
+                profileLoadedFromDb = true;
                 console.log('[DashboardAuth] Perfil carregado com sucesso');
             } catch (pErr: any) {
                 // Usar warn em vez de error para reduzir ruído visual
@@ -83,6 +86,39 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
             setProfile(userProfile);
 
+            // 🔑 SSOT: Sincronizar estado completo do onboarding e perfil para o localStorage
+            if (profileLoadedFromDb) {
+                const store = useAppStore.getState();
+                let needsUpdate = false;
+                const updatePayload: any = {};
+
+                if (userProfile?.onboarding_completed && !store.onboarding_completed) {
+                    updatePayload.onboarding_completed = true;
+                    updatePayload.isFirstVisit = false;
+                    needsUpdate = true;
+                }
+
+                if (userProfile?.onboarding_integrations_done && !store.integrations_completed) {
+                    updatePayload.integrations_completed = true;
+                    needsUpdate = true;
+                }
+
+                if (userProfile?.segment && store.businessType !== userProfile.segment) {
+                    updatePayload.businessType = userProfile.segment;
+                    needsUpdate = true;
+                }
+
+                if (userProfile?.modules && JSON.stringify(store.activeModules) !== JSON.stringify(userProfile.modules)) {
+                    updatePayload.activeModules = userProfile.modules;
+                    needsUpdate = true;
+                }
+
+                if (needsUpdate) {
+                    console.log('[DashboardAuth] 🔄 Sincronizando Perfil (DB -> LocalStorage):', Object.keys(updatePayload));
+                    useAppStore.setState(updatePayload);
+                }
+            }
+
             // Buscar Plano (Fonte Única: app_metadata ou claims no JWT do Supabase)
             const metadata = currentUser.app_metadata || {};
             const userPlanName = (metadata.plan || metadata.claims?.plan || "Start") as string;
@@ -96,8 +132,8 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             setIsAdmin(adminDetected);
             console.log('[DashboardAuth] Admin check:', { email: currentUser.email, isAdmin: adminDetected });
 
-            // 🔄 ADMIN ONBOARDING: Admins passam pelo onboarding TODA sessão
-            // Isso permite testar o fluxo completo sempre que logarem
+            // 🔄 ADMIN ONBOARDING: Apenas admins passam pelo onboarding TODA sessão
+            // Clientes (não-admin) passam APENAS UMA VEZ - valor resgatado do banco ou localStorage
             if (adminDetected) {
                 const sessionKey = `admin_session_${currentUser.id}`;
                 const currentSession = sessionStorage.getItem(sessionKey);
@@ -269,8 +305,13 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         const unbindUpdate = UpdateService.onUpdateAvailable((event: UpdateAvailableEvent) => {
             console.log('✨ [Dashboard-Update] Nova versão detectada:', event.newVersion);
-            setNewVersion(event.newVersion);
-            setShowUpdateBanner(true);
+            const alreadyDismissed = localStorage.getItem('luminnus_update_dismissed');
+            if (alreadyDismissed !== event.newVersion) {
+                setNewVersion(event.newVersion);
+                setShowUpdateBanner(true);
+            } else {
+                console.log('🔄 [Dashboard-Update] Versão já dispensada pelo usuário:', event.newVersion);
+            }
         });
 
         UpdateService.startPolling(120000);
@@ -337,7 +378,10 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             {showUpdateBanner && (
                 <UpdateBanner
                     version={newVersion}
-                    onClose={() => setShowUpdateBanner(false)}
+                    onClose={() => {
+                        setShowUpdateBanner(false);
+                        localStorage.setItem('luminnus_update_dismissed', newVersion);
+                    }}
                     onUpdate={() => UpdateService.forceUpdate()}
                 />
             )}

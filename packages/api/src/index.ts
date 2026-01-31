@@ -13,6 +13,7 @@ import briefingRoutes from './routes/briefingRoutes.js';
 import hubRoutes from './routes/hubRoutes.js';
 import whatsappAdminRouter from './routes/whatsappAdmin.js';
 import whatsappWebhookRouter from './routes/whatsappWebhook.js';
+import assistantRouter from './routes/assistant.js';
 import adminRouter from './routes/admin.js';
 import { errorHandler } from './middleware/error.js';
 import { setupWebSocket } from './ws/gateway.js';
@@ -46,6 +47,8 @@ app.use('/api/metrics', metricsRouter);
 app.use('/api/briefing', briefingRoutes);
 app.use('/api/integrations/hub', hubRoutes);
 app.use('/api/whatsapp', whatsappWebhookRouter); // Meta Webhook verification
+app.use('/api/memory', assistantRouter);
+app.use('/api/location', assistantRouter);
 app.use('/api/admin/whatsapp', whatsappAdminRouter);
 app.use('/api/admin', adminRouter);
 

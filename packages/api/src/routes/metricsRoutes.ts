@@ -23,12 +23,17 @@ router.get('/query', async (req: Request, res: Response) => {
             group_by = 'day',
             dimension = 'category',
             limit = '10',
-            type = 'timeseries', // 'timeseries', 'breakdown', 'kpi', 'funnel', 'table'
+            type = 'timeseries', // 'timeseries', 'breakdown', 'kpi', 'funnel', 'table', 'alerts', 'suggestions'
             entity_type = 'transactions',
         } = req.query;
 
-        if (!tenant_id || !metric_key) {
-            return res.status(400).json({ error: 'tenant_id and metric_key are required' });
+        if (!tenant_id) {
+            return res.status(400).json({ error: 'tenant_id is required' });
+        }
+
+        // metric_key is required for timeseries and breakdown
+        if ((type === 'timeseries' || type === 'breakdown') && !metric_key) {
+            return res.status(400).json({ error: 'metric_key is required for this query type' });
         }
 
         // Default date range: last 30 days
@@ -75,6 +80,13 @@ router.get('/query', async (req: Request, res: Response) => {
 
             case 'alerts':
                 data = await metricsService.queryAlerts(
+                    tenant_id as string,
+                    parseInt(limit as string)
+                );
+                break;
+
+            case 'suggestions':
+                data = await metricsService.querySuggestions(
                     tenant_id as string,
                     parseInt(limit as string)
                 );

@@ -227,6 +227,42 @@ export class MetricsService {
         }
     }
 
+    /**
+     * Query actionable suggestions for the user
+     */
+    async querySuggestions(tenantId: string, limit: number = 5): Promise<any[]> {
+        try {
+            // In a real system, this could use AI or rule-based analysis
+            // For now, we return useful generic onboarding/optimization suggestions
+            return [
+                {
+                    id: 'connect_whatsapp',
+                    title: 'Conectar WhatsApp',
+                    description: 'Ative a LIA no seu WhatsApp para receber briefings diários.',
+                    action: '/integrations',
+                    icon: 'message-circle'
+                },
+                {
+                    id: 'set_goals',
+                    title: 'Definir Objetivos',
+                    description: 'Configure suas metas de faturamento para que a LIA acompanhe seu progresso.',
+                    action: '/settings',
+                    icon: 'target'
+                },
+                {
+                    id: 'analyze_last_month',
+                    title: 'Análise Mensal',
+                    description: 'Veja como foi seu desempenho no último mês comparado ao anterior.',
+                    action: '/dashboard',
+                    icon: 'trending-up'
+                }
+            ].slice(0, limit);
+        } catch (err) {
+            console.error('[MetricsService] Suggestions exception:', err);
+            return [];
+        }
+    }
+
     // ============================================
     // Fallback Data (Estado Zero / Demo)
     // ============================================

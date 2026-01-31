@@ -1,128 +1,262 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect, useCallback } from 'react';
 import Header from './Header';
 import { Automation } from '../types';
 import { LanguageContext } from '../contexts/LanguageContext';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Play, Pause, Trash2, Copy, History, Plus, Search, AlertCircle, CheckCircle2, MoreVertical, Terminal } from 'lucide-react';
+import toast from 'react-hot-toast';
+import AutomationWizard from './automations/AutomationWizard';
+import AutomationDrawer from './automations/AutomationDrawer';
 
 const Automations: React.FC = () => {
-   const { t } = useContext(LanguageContext);
-   const [filter, setFilter] = useState('all');
+    const { t } = useContext(LanguageContext);
+    const [filter, setFilter] = useState('all');
+    const [search, setSearch] = useState('');
+    const [automations, setAutomations] = useState<Automation[]>([]);
+    const [stats, setStats] = useState<any>({ total: 0, active: 0, error: 0, paused: 0 });
+    const [loading, setLoading] = useState(true);
+    
+    const [isWizardOpen, setIsWizardOpen] = useState(false);
+    const [selectedAutoId, setSelectedAutoId] = useState<string | null>(null);
 
-   const automations: Automation[] = [
-      { id: '1', name: 'Onboard New Client', trigger: 'New form submission', lastRun: '2 hours ago', status: 'active' },
-      { id: '2', name: 'Monthly Financial Report', trigger: 'Scheduled - 1st of month', lastRun: '1 day ago', status: 'active' },
-      { id: '3', name: 'Follow-up on Open Tickets', trigger: 'Ticket status changed', lastRun: '4 hours ago', status: 'error' },
-      { id: '4', name: 'Social Media Daily Post', trigger: 'Scheduled - Daily 9 AM', lastRun: '22 hours ago', status: 'paused' },
-      { id: '5', name: 'Assign Lead to Sales Team', trigger: 'New lead in CRM', lastRun: '30 minutes ago', status: 'active' },
-   ];
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [autoRes, statsRes] = await Promise.all([
+                fetch('/api/automations'),
+                fetch('/api/automations/stats/summary')
+            ]);
+            
+            const autoData = await autoRes.json();
+            const statsData = await statsRes.json();
 
-   const getStatusLabel = (status: string) => {
-      if (status === 'active') return t('active');
-      if (status === 'paused') return t('paused');
-      if (status === 'error') return t('error');
-      return status;
-   };
+            if (autoData.success) setAutomations(autoData.data);
+            if (statsData.success) setStats(statsData.data);
+        } catch (err) {
+            toast.error('Falha ao carregar automações');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
-   const handleAction = (action: string) => {
-      alert(`${t('featureComingSoon')} (${action})`);
-   }
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
-   return (
-      <div className="flex flex-col h-full">
-         <Header title={t('automationsTitle')} />
-         <div className="flex-1 p-8 pt-2 overflow-y-auto">
-            <div className="flex justify-end mb-6">
-               <button onClick={() => handleAction('New Automation')} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-primary text-white hover:opacity-90 transition-opacity font-medium text-sm shadow-lg shadow-brand-primary/30">
-                  <span className="material-symbols-outlined text-xl">add_circle</span>
-                  New Automation
-               </button>
+    const handleAction = async (id: string, action: 'activate' | 'pause' | 'run' | 'delete' | 'duplicate') => {
+        const loadingToast = toast.loading('Processando...');
+        try {
+            let res;
+            if (action === 'run') {
+                res = await fetch(`/api/automations/${id}/run`, { method: 'POST' });
+            } else if (action === 'delete') {
+                res = await fetch(`/api/automations/${id}`, { method: 'DELETE' });
+            } else if (action === 'activate') {
+                res = await fetch(`/api/automations/${id}`, { 
+                    method: 'PUT', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'active', is_enabled: true })
+                });
+            } else if (action === 'pause') {
+                res = await fetch(`/api/automations/${id}`, { 
+                    method: 'PUT', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'paused', is_enabled: false })
+                });
+            }
+
+            const data = await res?.json();
+            if (data?.success) {
+                toast.success('Operação concluída!', { id: loadingToast });
+                fetchData();
+            } else {
+                toast.error(data?.error || 'Falha na operação', { id: loadingToast });
+            }
+        } catch (err) {
+            toast.error('Erro de conexão', { id: loadingToast });
+        }
+    };
+
+    const filteredAutomations = automations.filter(a => {
+        const matchesSearch = a.name.toLowerCase().includes(search.toLowerCase());
+        const matchesFilter = filter === 'all' || a.status === filter;
+        return matchesSearch && matchesFilter;
+    });
+
+    const getStatusStyles = (status: string) => {
+        switch (status) {
+            case 'active': return 'bg-green-500/10 text-green-500 border-green-500/20';
+            case 'error': return 'bg-red-500/10 text-red-500 border-red-500/20';
+            case 'paused': return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
+            default: return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
+        }
+    };
+
+    return (
+        <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0A0F1A]">
+            <Header title={t('automationsTitle')} />
+            
+            <div className="flex-1 p-8 pt-4 overflow-y-auto no-scrollbar">
+                {/* Header Actions */}
+                <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
+                    <div>
+                        <h1 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Gerenciador de Automações</h1>
+                        <p className="text-sm text-gray-500">Crie fluxos inteligentes orquestrados pela LIA</p>
+                    </div>
+                    <button 
+                        onClick={() => setIsWizardOpen(true)}
+                        className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-brand-primary text-white hover:shadow-xl hover:shadow-brand-primary/20 transition-all font-black text-xs uppercase tracking-widest shadow-lg shadow-brand-primary/10"
+                    >
+                        <Plus size={18} />
+                        Nova Automação
+                    </button>
+                </div>
+
+                {/* KPI Section */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+                    {[
+                        { label: 'Total', value: stats.total, icon: <Terminal size={24} />, color: 'text-blue-400', bg: 'bg-blue-400/10' },
+                        { label: 'Ativas', value: stats.active, icon: <CheckCircle2 size={24} />, color: 'text-green-400', bg: 'bg-green-400/10' },
+                        { label: 'Pausadas', value: stats.paused, icon: <Pause size={24} />, color: 'text-yellow-400', bg: 'bg-yellow-400/10' },
+                        { label: 'Erros', value: stats.error, icon: <AlertCircle size={24} />, color: 'text-red-400', bg: 'bg-red-400/10' },
+                    ].map((stat, i) => (
+                        <motion.div 
+                            key={i} 
+                            whileHover={{ y: -4 }}
+                            className="glass-panel bg-white dark:bg-white/5 p-6 rounded-3xl flex items-center gap-5 shadow-sm border border-gray-200 dark:border-white/5"
+                        >
+                            <div className={`p-4 rounded-2xl ${stat.bg} ${stat.color} shadow-inner`}>
+                                {stat.icon}
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{stat.label}</p>
+                                <p className="text-3xl font-black dark:text-white tracking-tighter">{stat.value}</p>
+                            </div>
+                        </motion.div>
+                    ))}
+                </div>
+
+                {/* Filters & Table */}
+                <div className="glass-panel bg-white dark:bg-[#0D111C] rounded-3xl overflow-hidden shadow-2xl border border-gray-200 dark:border-white/10">
+                    <div className="p-8 border-b border-gray-200 dark:border-white/10 flex flex-col xl:flex-row justify-between items-center gap-6">
+                        <div className="relative w-full xl:w-96">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                            <input 
+                                type="text" 
+                                placeholder="Buscar por nome ou gatilho..." 
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl pl-12 pr-6 py-4 text-sm w-full focus:ring-2 focus:ring-brand-primary outline-none transition-all dark:text-white font-medium" 
+                            />
+                        </div>
+                        
+                        <div className="flex items-center gap-2 bg-gray-100 dark:bg-white/5 p-1.5 rounded-2xl border border-gray-200 dark:border-white/10 overflow-x-auto no-scrollbar max-w-full">
+                            {['all', 'active', 'paused', 'error', 'draft'].map(s => (
+                                <button
+                                    key={s}
+                                    onClick={() => setFilter(s)}
+                                    className={`text-[10px] font-black uppercase tracking-widest px-5 py-2.5 rounded-xl transition-all whitespace-nowrap ${filter === s
+                                       ? 'bg-white dark:bg-brand-primary shadow-xl font-bold text-brand-primary dark:text-white'
+                                       : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                                    }`}
+                                >
+                                    {s === 'all' ? 'Ver Todos' : s}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="bg-gray-50 dark:bg-white/2 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-200 dark:border-white/5">
+                                <tr>
+                                    <th className="px-8 py-5">Nome da Automação</th>
+                                    <th className="px-8 py-5">Gatilho (Trigger)</th>
+                                    <th className="px-8 py-5">Última Atividade</th>
+                                    <th className="px-8 py-5">Status</th>
+                                    <th className="px-8 py-5 text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200 dark:divide-white/5">
+                                {loading ? (
+                                    <tr><td colSpan={5} className="p-20 text-center text-gray-500 font-bold animate-pulse">Sincronizando com o Core...</td></tr>
+                                ) : filteredAutomations.length === 0 ? (
+                                    <tr><td colSpan={5} className="p-20 text-center text-gray-500 font-bold">Nenhuma automação encontrada.</td></tr>
+                                ) : filteredAutomations.map((auto) => (
+                                    <tr key={auto.id} className="hover:bg-gray-50/50 dark:hover:bg-white/2 transition-colors group">
+                                        <td className="px-8 py-6">
+                                            <div className="flex flex-col">
+                                                <span className="font-black text-gray-900 dark:text-white text-sm uppercase tracking-tighter">{auto.name}</span>
+                                                <span className="text-[10px] text-gray-400 font-mono mt-1">ID: {auto.id.split('-')[0]}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <div className="flex items-center gap-2">
+                                                <Zap size={14} className="text-brand-primary" />
+                                                <span className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-tighter">{auto.trigger_type || auto.trigger}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                                                <History size={14} />
+                                                <span className="text-xs font-medium">{auto.lastRun || 'Nunca executada'}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${getStatusStyles(auto.status)}`}>
+                                                <div className={`w-1.5 h-1.5 rounded-full ${auto.status === 'active' ? 'bg-green-500 animate-pulse' : auto.status === 'error' ? 'bg-red-500' : 'bg-yellow-500'}`} />
+                                                {auto.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <div className="flex justify-center gap-3">
+                                                <button 
+                                                    onClick={() => handleAction(auto.id, 'run')}
+                                                    title="Executar Agora"
+                                                    className="p-3 rounded-xl bg-brand-primary/5 text-brand-primary hover:bg-brand-primary hover:text-white transition-all shadow-sm"
+                                                >
+                                                    <Play size={16} fill="currentColor" />
+                                                </button>
+                                                <button 
+                                                    onClick={() => setSelectedAutoId(auto.id)}
+                                                    title="Ver Logs"
+                                                    className="p-3 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10 transition-all border border-transparent hover:border-gray-200 dark:hover:border-white/10"
+                                                >
+                                                    <History size={16} />
+                                                </button>
+                                                {auto.status === 'active' ? (
+                                                    <button onClick={() => handleAction(auto.id, 'pause')} className="p-3 rounded-xl bg-amber-500/5 text-amber-500 hover:bg-amber-500 hover:text-white transition-all"><Pause size={16} /></button>
+                                                ) : (
+                                                    <button onClick={() => handleAction(auto.id, 'activate')} className="p-3 rounded-xl bg-green-500/5 text-green-500 hover:bg-green-500 hover:text-white transition-all"><Play size={16} /></button>
+                                                )}
+                                                <button onClick={() => handleAction(auto.id, 'delete')} className="p-3 rounded-xl bg-red-500/5 text-red-500 hover:bg-red-500 hover:text-white transition-all"><Trash2 size={16} /></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-               {[
-                  { label: t('totalAutomations'), value: '12', icon: 'bolt', color: 'text-blue-400', bg: 'bg-blue-400/10' },
-                  { label: t('active'), value: '8', icon: 'check_circle', color: 'text-green-400', bg: 'bg-green-400/10' },
-                  { label: t('errors24h'), value: '2', icon: 'error', color: 'text-yellow-400', bg: 'bg-yellow-400/10' },
-               ].map((stat, i) => (
-                  <div key={i} className="glass-panel bg-white dark:bg-white/5 p-6 rounded-xl flex items-center gap-4 shadow-sm">
-                     <div className={`p-3 rounded-lg ${stat.bg}`}>
-                        <span className={`material-symbols-outlined text-3xl ${stat.color}`}>{stat.icon}</span>
-                     </div>
-                     <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">{stat.label}</p>
-                        <p className="text-2xl font-bold dark:text-white">{stat.value}</p>
-                     </div>
-                  </div>
-               ))}
-            </div>
-
-            <div className="glass-panel bg-white dark:bg-white/5 rounded-xl overflow-hidden shadow-sm">
-               <div className="p-6 border-b border-gray-200 dark:border-white/10 flex flex-col md:flex-row justify-between items-center gap-4">
-                  <h2 className="text-lg font-semibold dark:text-white">{t('workflowList')}</h2>
-                  <div className="flex items-center gap-4 w-full md:w-auto">
-                     <div className="relative flex-1 md:flex-initial">
-                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">search</span>
-                        <input type="text" placeholder={t('searchWorkflow')} className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg pl-9 pr-4 py-2 text-sm w-full md:w-64 focus:outline-none focus:ring-1 focus:ring-brand-primary text-gray-800 dark:text-white" />
-                     </div>
-                     <div className="flex items-center gap-1 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 p-1 rounded-lg">
-                        {['all', 'active', 'paused'].map(status => (
-                           <button
-                              key={status}
-                              onClick={() => setFilter(status)}
-                              className={`text-xs px-3 py-1 rounded capitalize transition-all ${filter === status
-                                 ? 'bg-white dark:bg-white/10 shadow-sm font-medium text-brand-primary dark:text-white'
-                                 : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                                 }`}
-                           >
-                              {status}
-                           </button>
-                        ))}
-                     </div>
-                  </div>
-               </div>
-               <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                     <thead className="bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-gray-400">
-                        <tr>
-                           <th className="px-6 py-4 font-medium">{t('workflowName')}</th>
-                           <th className="px-6 py-4 font-medium">{t('trigger')}</th>
-                           <th className="px-6 py-4 font-medium">{t('lastRun')}</th>
-                           <th className="px-6 py-4 font-medium">{t('status')}</th>
-                           <th className="px-6 py-4 font-medium text-center">{t('actions')}</th>
-                        </tr>
-                     </thead>
-                     <tbody className="divide-y divide-gray-200 dark:divide-white/5">
-                        {automations.map((auto) => (
-                           <tr key={auto.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
-                              <td className="px-6 py-4 font-semibold text-gray-800 dark:text-white">{auto.name}</td>
-                              <td className="px-6 py-4 text-gray-500 dark:text-gray-300">{auto.trigger}</td>
-                              <td className="px-6 py-4 text-gray-500 dark:text-gray-300">{auto.lastRun}</td>
-                              <td className="px-6 py-4">
-                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${auto.status === 'active' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
-                                    auto.status === 'error' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
-                                       'bg-gray-500/10 text-gray-500 border-gray-500/20'
-                                    }`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${auto.status === 'active' ? 'bg-green-500' :
-                                       auto.status === 'error' ? 'bg-red-500' :
-                                          'bg-gray-500'
-                                       }`}></span>
-                                    {getStatusLabel(auto.status)}
-                                 </span>
-                              </td>
-                              <td className="px-6 py-4">
-                                 <div className="flex justify-center gap-2">
-                                    <button onClick={() => handleAction(`Edit ${auto.name}`)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-gray-400 hover:text-brand-primary transition-colors"><span className="material-symbols-outlined text-lg">edit</span></button>
-                                    <button onClick={() => handleAction(`Monitor ${auto.name}`)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-gray-400 hover:text-brand-primary transition-colors"><span className="material-symbols-outlined text-lg">monitoring</span></button>
-                                 </div>
-                              </td>
-                           </tr>
-                        ))}
-                     </tbody>
-                  </table>
-               </div>
-            </div>
-         </div>
-      </div>
-   );
+            {/* Modals & Drawers */}
+            <AutomationWizard 
+                isOpen={isWizardOpen} 
+                onClose={() => setIsWizardOpen(false)} 
+                onSuccess={fetchData} 
+            />
+            
+            <AnimatePresence>
+                {selectedAutoId && (
+                    <AutomationDrawer 
+                        automationId={selectedAutoId} 
+                        onClose={() => setSelectedAutoId(null)} 
+                    />
+                )}
+            </AnimatePresence>
+        </div>
+    );
 };
 
 export default Automations;

@@ -75,8 +75,10 @@ import { setupWhatsAppWebhookRoutes } from './routes/whatsapp-webhook.js';
 import whatsappAdminRoutes from './routes/whatsapp-admin.js';
 import { setupDashboardRoutes } from './routes/dashboard.js';
 import { setupGoogleAuthRoutes } from './routes/google-auth.js';
+import { setupAutomationRoutes } from './routes/automations.js';
 import WhatsAppIntelligence from './services/whatsappIntelligence.js';
 import { setSocketIO } from './services/eventBusService.js';
+import { AutomationScheduler } from './services/scheduler.js';
 
 
 // Realtime
@@ -326,11 +328,15 @@ async function startServer() {
   setupIntegrationsRoutes(app); // Hub & Integrations
   setupWhatsAppIntegrationRoutes(app); // WhatsApp Integration Management (for Hub)
   setupGoogleAuthRoutes(app); // Google OAuth Integration
+  setupAutomationRoutes(app);
 
   console.log('🚀 [Server] Rotas básicas carregadas. Inicializando inteligência...');
 
   // WhatsApp Intelligence Initialization
   WhatsAppIntelligence.init();
+
+  // Initialize Automation Scheduler
+  AutomationScheduler.init();
 
   console.log('✅ [Server] WhatsApp Intelligence inicializado');
 

@@ -85,7 +85,18 @@ function useWidgetData(tenantId: string, widgetId: string, config: WidgetConfig,
             const response = await fetch(`/api/metrics/query?${params}`);
 
             if (response.ok) {
-                const result = await response.json();
+                // v5.7: Safe JSON parse to avoid crash on empty body (Render cold boot or timeout)
+                const text = await response.text();
+                let result = null;
+                try {
+                    result = text ? JSON.parse(text) : null;
+                } catch (e) {
+                    console.warn(`[WidgetData] Invalid JSON for ${widgetId}:`, text.substring(0, 100));
+                    return; // Stop if invalid JSON
+                }
+
+                if (!result) return;
+
                 let finalData = result.data !== undefined ? result.data : result;
 
                 // Handle double-wrapped data (e.g., { data: { data: [] } })
@@ -104,6 +115,8 @@ function useWidgetData(tenantId: string, widgetId: string, config: WidgetConfig,
                     finalData = finalData.find((m: any) => m.metric_key === metricKey) || null;
                 }
                 setData(finalData);
+            } else {
+                console.warn(`[WidgetData] Failed to fetch ${widgetId}: ${response.status}`);
             }
         } catch (err) {
             console.error(`[WidgetData] Error loading ${widgetId}:`, err);

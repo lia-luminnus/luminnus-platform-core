@@ -26,7 +26,11 @@ export interface Automation {
   name: string;
   trigger: string;
   lastRun: string;
-  status: 'active' | 'paused' | 'error';
+  status: 'active' | 'paused' | 'error' | 'draft' | 'archived';
+  trigger_type?: string;
+  trigger_config?: any;
+  flow_definition?: any;
+  updated_at?: string;
 }
 
 export interface Transaction {

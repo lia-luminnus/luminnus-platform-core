@@ -627,14 +627,23 @@ export function DashboardProvider({
                 const response = await fetch(`/api/dashboard/tenant/${tId}/dashboard/active`);
 
                 if (response.ok) {
-                    const data = await response.json();
-                    console.log('[DashboardContext] 📦 Resposta da API:', { hasConfig: !!data.config_json, widgetCount: data.config_json?.widgets ? Object.keys(data.config_json.widgets).length : 0 });
-                    if (data.config_json && Object.keys(data.config_json.widgets || {}).length > 0) {
-                        console.log('✅ [DashboardContext] Loaded dashboard from API');
-                        dispatch({ type: 'SET_CONFIG', payload: data.config_json });
-                        return;
+                    const text = await response.text();
+                    if (text && text.trim().length > 0) {
+                        try {
+                            const data = JSON.parse(text);
+                            console.log('[DashboardContext] 📦 Resposta da API:', { hasConfig: !!data.config_json, widgetCount: data.config_json?.widgets ? Object.keys(data.config_json.widgets).length : 0 });
+                            if (data.config_json && Object.keys(data.config_json.widgets || {}).length > 0) {
+                                console.log('✅ [DashboardContext] Loaded dashboard from API');
+                                dispatch({ type: 'SET_CONFIG', payload: data.config_json });
+                                return;
+                            } else {
+                                console.warn('[DashboardContext] ⚠️ API retornou config vazio ou sem widgets');
+                            }
+                        } catch (parseErr) {
+                            console.error('[DashboardContext] ❌ Erro ao parsear JSON da API:', parseErr, 'Texto recebido:', text.substring(0, 100));
+                        }
                     } else {
-                        console.warn('[DashboardContext] ⚠️ API retornou config vazio ou sem widgets');
+                        console.warn('[DashboardContext] ⚠️ API retornou corpo vazio (200 OK mas sem conteúdo)');
                     }
                 } else {
                     console.warn('[DashboardContext] ⚠️ API não retornou dashboard:', response.status);
