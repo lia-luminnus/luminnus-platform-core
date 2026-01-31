@@ -623,15 +623,21 @@ export function DashboardProvider({
 
             if (!forceTemplate) {
                 // Use relative path for environment independence (proxied to 5000)
+                console.log('[DashboardContext] 🔍 Tentando carregar dashboard do API para tenant:', tId);
                 const response = await fetch(`/api/dashboard/tenant/${tId}/dashboard/active`);
 
                 if (response.ok) {
                     const data = await response.json();
-                    if (data.config_json) {
+                    console.log('[DashboardContext] 📦 Resposta da API:', { hasConfig: !!data.config_json, widgetCount: data.config_json?.widgets ? Object.keys(data.config_json.widgets).length : 0 });
+                    if (data.config_json && Object.keys(data.config_json.widgets || {}).length > 0) {
                         console.log('✅ [DashboardContext] Loaded dashboard from API');
                         dispatch({ type: 'SET_CONFIG', payload: data.config_json });
                         return;
+                    } else {
+                        console.warn('[DashboardContext] ⚠️ API retornou config vazio ou sem widgets');
                     }
+                } else {
+                    console.warn('[DashboardContext] ⚠️ API não retornou dashboard:', response.status);
                 }
             }
 

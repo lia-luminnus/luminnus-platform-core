@@ -10,8 +10,9 @@ import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 
-// Feature flag for Dashboard Engine V2
-const DASHBOARD_ENGINE_V2 = import.meta.env.VITE_DASHBOARD_ENGINE_V2 === 'true';
+// Dashboard Engine V2 is now the ONLY dashboard - no legacy fallback
+// Feature flag preserved for documentation only
+const DASHBOARD_ENGINE_V2 = true; // Forçado para true - apenas um dashboard existe
 
 // Lazy load Dashboard Engine components
 const DashboardProvider = lazy(() =>

@@ -35,11 +35,9 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // Verificar onboarding também no estado local (permite funcionar sem autenticação)
     const localOnboardingCompleted = useAppStore((state) => state.onboarding_completed);
 
-    // 🔑 SSOT (ARCHITECTURAL_ROUTING_MANIFEST.md linhas 28-29):
-    // - Cliente: Onboarding apenas UMA VEZ
-    // - Admin: SEMPRE passa pelo onboarding (para testar variantes)
-    // Lógica: Admin ignora flag onboarding_completed, cliente respeita
-    const onboardingCompleted = isAdmin ? false : (localOnboardingCompleted || profile?.onboarding_completed || false);
+    // 🔑 SSOT: Todos os usuários (incluindo admins) completam onboarding apenas UMA VEZ
+    // Para repassar pelo onboarding, o admin deve manualmente resetar a flag no localStorage
+    const onboardingCompleted = localOnboardingCompleted || profile?.onboarding_completed || false;
 
     const refreshProfile = async (initialUser?: User | null) => {
         console.log('[DashboardAuth] Iniciando refreshProfile...');
@@ -97,6 +95,18 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             // 🔑 SSOT: Setar flag isAdmin para controlar fluxo de onboarding
             setIsAdmin(adminDetected);
             console.log('[DashboardAuth] Admin check:', { email: currentUser.email, isAdmin: adminDetected });
+
+            // 🔄 ADMIN ONBOARDING: Admins passam pelo onboarding TODA sessão
+            // Isso permite testar o fluxo completo sempre que logarem
+            if (adminDetected) {
+                const sessionKey = `admin_session_${currentUser.id}`;
+                const currentSession = sessionStorage.getItem(sessionKey);
+                if (!currentSession) {
+                    console.log('[DashboardAuth] 🔄 Admin - Resetando onboarding para esta sessão');
+                    useAppStore.getState().resetOnboarding();
+                    sessionStorage.setItem(sessionKey, 'active');
+                }
+            }
 
             // Se já tiver um plano setado e for admin, mantemos o que está no estado (override)
             // Se não, inicializamos

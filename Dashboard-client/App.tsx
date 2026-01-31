@@ -76,6 +76,15 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     const handleUpdate = (e: any) => {
+      const newVersion = e.detail?.version || 'unknown';
+      const dismissedVersion = localStorage.getItem('lia-dismissed-update-version');
+
+      // Não mostrar o banner se esta versão já foi descartada
+      if (dismissedVersion === newVersion) {
+        console.log('[App] Update já foi descartado para versão:', newVersion);
+        return;
+      }
+
       setUpdateAvailable(e.detail);
     };
     window.addEventListener('lia-system-update' as any, handleUpdate);
@@ -132,7 +141,12 @@ const AppContent: React.FC = () => {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setUpdateAvailable(null)}
+                onClick={() => {
+                  if (updateAvailable?.version) {
+                    localStorage.setItem('lia-dismissed-update-version', updateAvailable.version);
+                  }
+                  setUpdateAvailable(null);
+                }}
                 className="px-3 py-1 hover:bg-white/10 rounded-md transition-colors"
               >
                 {t('later')}

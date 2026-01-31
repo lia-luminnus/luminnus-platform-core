@@ -347,6 +347,16 @@ export function LIAProvider({ children }: LIAProviderProps) {
               }
             }
 
+            // v4.0: FALLBACK CRÍTICO - Verificar se é admin por email (VITE_ADMIN_EMAILS)
+            // Mesmo que app_metadata e backend não tenham o role, se o email está na lista de admins, deve ser admin
+            const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
+            const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
+            const userEmail = authData.user?.email?.toLowerCase() || '';
+            if (adminEmails.includes(userEmail) && userRole !== 'admin') {
+              console.log('🔑 [LIAContext] Admin detectado por email:', userEmail);
+              userRole = 'admin';
+            }
+
             setPlan(userPlan);
             setRole(userRole);
             console.log('👤 [LIAContext] Usuário sincronizado:', uId, 'Role:', userRole, 'Plano:', userPlan);

@@ -101,16 +101,18 @@ const getUserRole = async (user: User | null): Promise<UserRole> => {
       .maybeSingle();
 
     const roleData = data as { role: string } | null;
+    console.log('[AuthContext] getUserRole - DB result:', roleData);
     if (roleData?.role === 'admin') return 'admin';
     if (roleData?.role === 'cliente') return 'cliente';
 
     // Fallback: verifica se o email está na lista de admins
     if (user.email && ADMIN_EMAILS.includes(user.email)) {
-      console.log('[AuthContext] Admin por email:', user.email);
+      console.log('[AuthContext] Admin detectado por email:', user.email, 'Lista de admins:', ADMIN_EMAILS);
       return 'admin';
     }
 
     // Se não tiver role e não for admin por email, retorna cliente
+    console.log('[AuthContext] Nenhum role encontrado, defaultando para cliente. Email:', user.email);
     return 'cliente';
   } catch (error) {
     console.error('Erro ao buscar role:', error);
