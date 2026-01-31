@@ -103,7 +103,7 @@ const CATEGORIES = [
 ];
 
 const Integrations: React.FC = () => {
-    const { user, session, profile, loading: authLoading, initialized, plan: authPlan, setPlanName } = useDashboardAuth();
+    const { user, session, profile, loading: authLoading, initialized, plan: authPlan, setPlanName, isAdmin } = useDashboardAuth();
     const { completeIntegrations, planType } = useAppStore();
     const navigate = useNavigate();
 
@@ -363,10 +363,14 @@ const Integrations: React.FC = () => {
         try {
             // v2.3: Redirecionamento unificado (porta 3000 via proxy) sem prefixo /lia
             const callbackUrl = window.location.origin + '/#/integrations';
-            const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || userId;
+
+            // 🔒 SECURITY: Get tenant from user context
+            const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
+            const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+            const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
 
             // Passamos redirect_to no state para o unificado (3000) saber para onde voltar
-            const apiUrl = `/api/auth/google?services=${selectedGoogleServices.join(',')}&user_id=${userId}&tenant_id=${tenantId}&redirect_to=${encodeURIComponent(callbackUrl)}&redirect_uri=${encodeURIComponent('http://localhost:3000/api/auth/google/callback')}`;
+            const apiUrl = `/api/auth/google?services=${selectedGoogleServices.join(',')}&user_id=${userId}&tenant_id=${tenantId || 'undefined'}&redirect_to=${encodeURIComponent(callbackUrl)}&redirect_uri=${encodeURIComponent('https://luminnus-platform-core.onrender.com/api/auth/google/callback')}`;
             console.log('[Integrations] Iniciando OAuth:', apiUrl);
 
             const response = await fetch(apiUrl);

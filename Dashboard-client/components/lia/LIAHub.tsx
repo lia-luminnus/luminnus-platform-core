@@ -68,13 +68,12 @@ function LIAHubContent() {
     const { t } = useContext(LanguageContext);
     const lia = useLIA();
 
-    const [activeMode, setActiveMode] = useState<LIAMode>('chat');
+    const [activeMode, setActiveMode] = useState<'chat' | 'multimodal' | 'live'>('chat');
     const [searchQuery, setSearchQuery] = useState('');
     const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
     const [editingTitle, setEditingTitle] = useState('');
 
-    const adminEmails = ['luminnus.lia.ai@gmail.com', 'wendell@luminnus.com.br'];
-    const isAdmin = adminEmails.includes(user?.email || '');
+    const { isAdmin } = useDashboardAuth();
     const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
     const userPlanName = (plan?.name || 'Start').toLowerCase();

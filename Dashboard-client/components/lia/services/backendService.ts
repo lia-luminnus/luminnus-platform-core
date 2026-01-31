@@ -55,8 +55,9 @@ class BackendService {
 
     private getUserId(): string {
         const uId = this.getAuthContext().userId;
+        const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
         if (!uId || uId === 'null') {
-            return '00000000-0000-0000-0000-000000000001';
+            return isDev ? '00000000-0000-0000-0000-000000000001' : 'guest';
         }
         return uId;
     }

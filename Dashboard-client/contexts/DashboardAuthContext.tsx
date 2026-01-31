@@ -39,7 +39,7 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // 🔑 SSOT: Lógica de Onboarding CORRIGIDA
     // - Admin: SEMPRE passa pelo onboarding (para testar variantes) - retorna false
     // - Cliente: Passa APENAS UMA VEZ - respeita o banco de dados (profile) ou localStorage
-    const onboardingCompleted = isAdmin 
+    const onboardingCompleted = isAdmin
         ? false  // Admin sempre vê onboarding
         : (profile?.onboarding_completed || localOnboardingCompleted || false);  // Cliente respeita DB
 
@@ -127,7 +127,7 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             const userPlanName = (metadata.plan || metadata.claims?.plan || "Start") as string;
 
             // Forçar Pro se for admin conforme requisito (VITE_ADMIN_EMAILS)
-            const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
+            const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com,wendellcomercial2@gmail.com';
             const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
             const adminDetected = adminEmails.includes(currentUser.email?.toLowerCase() || '');
 

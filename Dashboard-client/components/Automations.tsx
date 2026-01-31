@@ -3,7 +3,7 @@ import Header from './Header';
 import { Automation } from '../types';
 import { LanguageContext } from '../contexts/LanguageContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Pause, Trash2, Copy, History, Plus, Search, AlertCircle, CheckCircle2, MoreVertical, Terminal } from 'lucide-react';
+import { Play, Pause, Trash2, Copy, History, Plus, Search, AlertCircle, CheckCircle2, MoreVertical, Terminal, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 import AutomationWizard from './automations/AutomationWizard';
@@ -20,17 +20,12 @@ const Automations: React.FC = () => {
     const [isWizardOpen, setIsWizardOpen] = useState(false);
     const [selectedAutoId, setSelectedAutoId] = useState<string | null>(null);
 
-    const { user } = useDashboardAuth();
+    const { user, isAdmin } = useDashboardAuth();
 
     // 🔒 SECURITY: Get tenant from user context
     const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
 
-    // 🔑 Admin detection (same logic as DashboardAuthContext)
-    const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
-    const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
-    const isAdmin = adminEmails.includes(user?.email?.toLowerCase() || '');
-
-    // 🔒 SECURITY: Admin uses default admin tenant, clients require their own tenant
+    // 🔒 SECURITY: Admin uses default admin tenant (000000..01), clients require their own tenant
     const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
     const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
 

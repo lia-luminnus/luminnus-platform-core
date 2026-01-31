@@ -252,7 +252,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
     const [liaStatus, setLiaStatus] = useState<string | null>(null);
 
     // Estado do Usuário (MOVIDO PARA O TOPO PARA EVITAR TDZ)
-    const { user: authUser, initialized: authInitialized, plan: authPlan, profile: authProfile } = useDashboardAuth();
+    const { user: authUser, isAdmin, initialized: authInitialized, plan: authPlan, profile: authProfile } = useDashboardAuth();
     const [userId, setUserId] = useState<string | null>(null);
     const [contextTenantId, setContextTenantId] = useState<string | null>(null);
     const [plan, setPlanState] = useState<string | null>(null);
@@ -489,7 +489,9 @@ export function LIAProvider({ children }: LIAProviderProps) {
             }
 
             const updated = { ...prev, [scopeKey]: [...scopeMessages, message] };
-            try { localStorage.setItem(`lia_scope_${scopeKey}`, JSON.stringify(updated[scopeKey])); } catch (e) { }
+            // 🔒 SECURITY: Prefix with tenantId
+            const curTenantId = (authUser as any)?.user_metadata?.tenant_id || (authUser as any)?.tenant_id || (isAdmin ? '00000000-0000-0000-0000-000000000001' : 'guest');
+            try { localStorage.setItem(`lia_scope_${curTenantId}_${scopeKey}`, JSON.stringify(updated[scopeKey])); } catch (e) { }
             return updated;
         });
     }, []);
@@ -522,7 +524,9 @@ export function LIAProvider({ children }: LIAProviderProps) {
         specificConvId?: string
     ) => {
         try {
-            localStorage.setItem('lia_conversations_v4', JSON.stringify({ conversations: convs, currentId: currentId, activeIdsByMode: activeIds }));
+            // 🔒 SECURITY: Prefix with tenantId
+            const curTenantId = (authUser as any)?.user_metadata?.tenant_id || (authUser as any)?.tenant_id || (isAdmin ? '00000000-0000-0000-0000-000000000001' : 'guest');
+            localStorage.setItem(`lia_conversations_v4_${curTenantId}`, JSON.stringify({ conversations: convs, currentId: currentId, activeIdsByMode: activeIds }));
             const targetId = specificConvId || currentId;
             const uId = userIdRef.current;
             if (targetId && convs[targetId] && uId && uId !== 'null') {
@@ -569,8 +573,10 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 return;
             }
 
+            // 🔒 SECURITY: Prefix with tenantId
+            const curTenantId = (authUser as any)?.user_metadata?.tenant_id || (authUser as any)?.tenant_id || (isAdmin ? '00000000-0000-0000-0000-000000000001' : 'guest');
             try {
-                const stored = localStorage.getItem(`lia_scope_${scopeKey}`);
+                const stored = localStorage.getItem(`lia_scope_${curTenantId}_${scopeKey}`);
                 if (stored) {
                     const msgs = JSON.parse(stored);
                     setMessagesByScope(prev => ({ ...prev, [scopeKey]: msgs }));
@@ -1112,11 +1118,11 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 try {
                     const authData = JSON.parse(storedAuth);
                     const uid = authData.user?.id || null;
-                    // O tenantId geralmente vem do perfil ou do próprio token se for JWT customizado
-                    // No nosso caso, o handshake passa userId e tenantId (assumindo tenantId igual ao userId se não informado)
+                    // 🔒 SECURITY: Use actual metadata, NO localStorage fallback for tenant_id itself
+                    const tid = authData.user?.user_metadata?.tenant_id || uid;
                     setUserId(uid);
-                    setContextTenantId(uid); // Fallback inicial
-                    console.log('🔑 LIAContext: Auth sync - User:', uid);
+                    setContextTenantId(tid);
+                    console.log('🔑 LIAContext: Auth sync - User:', uid, 'Tenant:', tid);
                 } catch (e) {
                     console.error('Erro ao parsear auth token:', e);
                 }

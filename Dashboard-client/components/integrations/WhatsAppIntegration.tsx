@@ -18,7 +18,7 @@ interface IntegrationStatus {
 const WhatsAppIntegration: React.FC = () => {
     const navigate = useNavigate();
     const { t } = useContext(LanguageContext);
-    const { user } = useDashboardAuth();
+    const { user, isAdmin } = useDashboardAuth();
 
     const [activeTab, setActiveTab] = useState<'quick' | 'manual'>('quick');
     const [loading, setLoading] = useState(true);
@@ -41,18 +41,13 @@ const WhatsAppIntegration: React.FC = () => {
     // 🔒 SECURITY: Get tenant from user context
     const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
 
-    // 🔑 Admin detection (same logic as DashboardAuthContext)
-    const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
-    const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
-    const isAdmin = adminEmails.includes(user?.email?.toLowerCase() || '');
-
-    // 🔒 SECURITY: Admin uses default admin tenant, clients require their own tenant
+    // 🔒 SECURITY: Admin uses default admin tenant (000000..01), clients require their own tenant
     const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
     const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
 
     const API_URL = import.meta.env.VITE_API_URL || 'https://luminnus-platform-core.onrender.com';
 
-    // 🔒 SECURITY: Block ONLY if not admin AND no tenant - prevents client data leakage
+    // 🛡️ SECURITY: Block ONLY if not admin AND no tenant - ensures no client data leakage
     if (!tenantId && !isAdmin) {
         console.warn('⚠️ [WhatsApp] No tenant_id found for non-admin user - blocking to prevent data leak');
         return (

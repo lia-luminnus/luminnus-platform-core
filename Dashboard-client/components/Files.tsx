@@ -52,9 +52,13 @@ const Files: React.FC = () => {
    const [isUploading, setIsUploading] = useState(false);
    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
    const [isDeletingBatch, setIsDeletingBatch] = useState(false);
+   const { user, isAdmin } = useDashboardAuth();
    const fileInputRef = useRef<HTMLInputElement>(null);
 
-   const tenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.app_metadata?.tenant_id || (user as any)?.tenant_id || localStorage.getItem('tenant_id') || user?.id;
+   // 🔒 SECURITY: Get tenant from user context
+   const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
+   const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+   const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
 
    // Selection Handlers
    const toggleSelect = (id: string) => {
@@ -407,74 +411,75 @@ const Files: React.FC = () => {
                   {filteredItems.files.map((file) => {
                      const isImage = file.mime_type?.startsWith('image/');
                      const isSelected = selectedIds.has(file.id);
-                     
-                     return (
-                     <motion.div
-                        key={file.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        onClick={() => toggleSelect(file.id)}
-                        className={`bg-[#1A1A28]/50 border rounded-3xl flex flex-col overflow-hidden cursor-pointer hover:bg-white/5 transition-all group relative ${isSelected ? 'border-brand-primary shadow-lg shadow-brand-primary/10' : 'border-white/10 hover:border-pink-500/30'}`}
-                     >
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-pink-500/5 blur-3xl rounded-full -mr-12 -mt-12" />
-                        
-                        {/* Selection Badge */}
-                        <div className={`absolute top-4 left-4 z-20 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-brand-primary border-brand-primary' : 'bg-black/20 border-white/20 opacity-0 group-hover:opacity-100'}`}>
-                           {isSelected && <Check className="w-4 h-4 text-white" />}
-                        </div>
 
-                        {isImage && file.storage_url ? (
-                           <div className="w-full h-32 overflow-hidden relative">
-                              <img 
-                                 src={file.storage_url} 
-                                 alt={file.name}
-                                 className="w-full h-full object-cover"
-                                 onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                 }}
-                              />
-                              <div className="hidden w-full h-full flex items-center justify-center bg-white/5">
-                                 <ImageIcon className="w-8 h-8 text-white/20" />
-                              </div>
+                     return (
+                        <motion.div
+                           key={file.id}
+                           initial={{ opacity: 0, y: 10 }}
+                           animate={{ opacity: 1, y: 0 }}
+                           onClick={() => toggleSelect(file.id)}
+                           className={`bg-[#1A1A28]/50 border rounded-3xl flex flex-col overflow-hidden cursor-pointer hover:bg-white/5 transition-all group relative ${isSelected ? 'border-brand-primary shadow-lg shadow-brand-primary/10' : 'border-white/10 hover:border-pink-500/30'}`}
+                        >
+                           <div className="absolute top-0 right-0 w-24 h-24 bg-pink-500/5 blur-3xl rounded-full -mr-12 -mt-12" />
+
+                           {/* Selection Badge */}
+                           <div className={`absolute top-4 left-4 z-20 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-brand-primary border-brand-primary' : 'bg-black/20 border-white/20 opacity-0 group-hover:opacity-100'}`}>
+                              {isSelected && <Check className="w-4 h-4 text-white" />}
                            </div>
-                        ) : (
-                           <div className="w-full h-32 flex items-center justify-center bg-white/5">
-                              <div className="p-4 bg-white/10 rounded-2xl">
-                                 {getFileIcon(file.mime_type)}
-                              </div>
-                           </div>
-                        )}
-                        
-                        <div className="p-4 flex flex-col justify-between flex-1 relative z-10">
-                           <div>
-                              <div className="flex justify-between items-start mb-2">
-                                 <h4 className="font-black text-xs truncate pr-2">{file.name}</h4>
-                                 <div className="flex gap-1 flex-shrink-0">
-                                    <button
-                                       onClick={(e) => { e.stopPropagation(); handleDownload(file); }}
-                                       className="p-1.5 text-white/20 hover:text-green-400 transition-colors"
-                                    >
-                                       <Download className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                       onClick={(e) => { e.stopPropagation(); handleDelete(file.id, 'file'); }}
-                                       className="p-1.5 text-white/20 hover:text-red-500 transition-colors"
-                                    >
-                                       <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+
+                           {isImage && file.storage_url ? (
+                              <div className="w-full h-32 overflow-hidden relative">
+                                 <img
+                                    src={file.storage_url}
+                                    alt={file.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                       e.currentTarget.style.display = 'none';
+                                       e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                    }}
+                                 />
+                                 <div className="hidden w-full h-full flex items-center justify-center bg-white/5">
+                                    <ImageIcon className="w-8 h-8 text-white/20" />
                                  </div>
                               </div>
+                           ) : (
+                              <div className="w-full h-32 flex items-center justify-center bg-white/5">
+                                 <div className="p-4 bg-white/10 rounded-2xl">
+                                    {getFileIcon(file.mime_type)}
+                                 </div>
+                              </div>
+                           )}
+
+                           <div className="p-4 flex flex-col justify-between flex-1 relative z-10">
+                              <div>
+                                 <div className="flex justify-between items-start mb-2">
+                                    <h4 className="font-black text-xs truncate pr-2">{file.name}</h4>
+                                    <div className="flex gap-1 flex-shrink-0">
+                                       <button
+                                          onClick={(e) => { e.stopPropagation(); handleDownload(file); }}
+                                          className="p-1.5 text-white/20 hover:text-green-400 transition-colors"
+                                       >
+                                          <Download className="w-3.5 h-3.5" />
+                                       </button>
+                                       <button
+                                          onClick={(e) => { e.stopPropagation(); handleDelete(file.id, 'file'); }}
+                                          className="p-1.5 text-white/20 hover:text-red-500 transition-colors"
+                                       >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                       </button>
+                                    </div>
+                                 </div>
+                              </div>
+                              <div className="flex justify-between items-end">
+                                 <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest">
+                                    {(file.size_bytes / 1024 / 1024).toFixed(1)} MB
+                                 </p>
+                                 <p className="text-[8px] text-white/20">{new Date(file.created_at).toLocaleDateString()}</p>
+                              </div>
                            </div>
-                           <div className="flex justify-between items-end">
-                              <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest">
-                                 {(file.size_bytes / 1024 / 1024).toFixed(1)} MB
-                              </p>
-                              <p className="text-[8px] text-white/20">{new Date(file.created_at).toLocaleDateString()}</p>
-                           </div>
-                        </div>
-                     </motion.div>
-                  )})}
+                        </motion.div>
+                     )
+                  })}
 
                </div>
             )}
