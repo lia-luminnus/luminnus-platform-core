@@ -110,4 +110,149 @@ router.post('/webhook', async (req: Request, res: Response) => {
     }
 });
 
+/**
+ * GET /api/whatsapp/settings
+ * Get WhatsApp agent settings for a tenant
+ */
+router.get('/settings', async (req: Request, res: Response) => {
+    try {
+        const tenantId = req.query.tenantId as string;
+        if (!tenantId) {
+            return res.status(400).json({ ok: false, error: 'tenantId is required' });
+        }
+
+        const { data, error } = await supabase
+            .from('whatsapp_agent_settings')
+            .select('*')
+            .eq('tenant_id', tenantId)
+            .maybeSingle();
+
+        if (error && error.code !== 'PGRST116') throw error;
+
+        // Default settings if none exist
+        const defaultSettings = {
+            objective: 'vendas',
+            toneOfVoice: 'consultivo',
+            sensitiveWords: false,
+            irritatedClient: true,
+            legalRequest: true,
+            playbooks: []
+        };
+
+        res.json({
+            ok: true,
+            settings: data?.settings || defaultSettings
+        });
+    } catch (error) {
+        console.error('❌ [WhatsApp Settings] Error fetching:', error);
+        res.status(500).json({ ok: false, error: String(error) });
+    }
+});
+
+/**
+ * POST /api/whatsapp/settings
+ * Save WhatsApp agent settings for a tenant
+ */
+router.post('/settings', async (req: Request, res: Response) => {
+    try {
+        const { tenant_id, ...settings } = req.body;
+        if (!tenant_id) {
+            return res.status(400).json({ ok: false, error: 'tenant_id is required' });
+        }
+
+        const { data: existing } = await supabase
+            .from('whatsapp_agent_settings')
+            .select('id')
+            .eq('tenant_id', tenant_id)
+            .maybeSingle();
+
+        let result;
+        if (existing?.id) {
+            result = await supabase
+                .from('whatsapp_agent_settings')
+                .update({
+                    settings,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', existing.id)
+                .select()
+                .single();
+        } else {
+            result = await supabase
+                .from('whatsapp_agent_settings')
+                .insert({
+                    tenant_id,
+                    settings,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                })
+                .select()
+                .single();
+        }
+
+        if (result.error) throw result.error;
+
+        res.json({ ok: true, settings: result.data.settings });
+    } catch (error) {
+        console.error('❌ [WhatsApp Settings] Error saving:', error);
+        res.status(500).json({ ok: false, error: String(error) });
+    }
+});
+
+/**
+ * POST /api/whatsapp/config
+ * Save Meta Cloud API credentials for a tenant's phone number
+ */
+router.post('/config', async (req: Request, res: Response) => {
+    try {
+        const { tenant_id, phone_number, config_json } = req.body;
+        if (!tenant_id || !phone_number) {
+            return res.status(400).json({ ok: false, error: 'tenant_id and phone_number are required' });
+        }
+
+        // Check if connection exists
+        const { data: existing } = await supabase
+            .from('whatsapp_connections')
+            .select('id')
+            .eq('tenant_id', tenant_id)
+            .eq('phone_number', phone_number)
+            .maybeSingle();
+
+        let result;
+        if (existing?.id) {
+            result = await supabase
+                .from('whatsapp_connections')
+                .update({
+                    config_json,
+                    status: 'pending',
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', existing.id)
+                .select()
+                .single();
+        } else {
+            result = await supabase
+                .from('whatsapp_connections')
+                .insert({
+                    tenant_id,
+                    phone_number,
+                    provider: 'meta',
+                    config_json,
+                    status: 'pending',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                })
+                .select()
+                .single();
+        }
+
+        if (result.error) throw result.error;
+
+        res.json({ ok: true, connection: result.data });
+    } catch (error) {
+        console.error('❌ [WhatsApp Config] Error saving:', error);
+        res.status(500).json({ ok: false, error: String(error) });
+    }
+});
+
 export default router;
