@@ -245,12 +245,8 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const signOut = async () => {
         console.log('[DashboardAuth] Signing out...');
-        const isAdminAccess = sessionStorage.getItem('admin_access') === 'true' || profile?.role === 'admin';
 
         try {
-            // Limpar sessionStorage ao sair
-            sessionStorage.removeItem('admin_access');
-
             if (supabase) {
                 // Timeout para evitar travar se o Supabase demorar
                 await Promise.race([
@@ -266,14 +262,9 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             setUser(null);
             setSession(null);
 
-            console.log('[DashboardAuth] Redirecting to:', isAdminAccess ? 'admin-dashboard' : 'home');
-
-            // Redirecionar
-            if (isAdminAccess) {
-                window.location.href = 'http://localhost:8080/admin-dashboard';
-            } else {
-                window.location.href = 'http://localhost:8080';
-            }
+            const landingPage = import.meta.env.VITE_LANDING_PAGE_URL || (import.meta.env.PROD ? "/" : "http://localhost:8080");
+            console.log('[DashboardAuth] Redirecting to:', landingPage);
+            window.location.href = landingPage;
         }
     };
 

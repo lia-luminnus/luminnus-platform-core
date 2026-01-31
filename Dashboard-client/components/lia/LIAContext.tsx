@@ -270,8 +270,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
         try {
             console.log('🧠 [LIAContext] Atualizando consciência operacional...');
             const [sugRes, alertRes] = await Promise.all([
-                fetch(`/api/metrics/query?tenant_id=${contextTenantId}&type=suggestions`),
-                fetch(`/api/metrics/query?tenant_id=${contextTenantId}&type=alerts`)
+                fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/metrics/query?tenant_id=${contextTenantId}&type=suggestions`),
+                fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/metrics/query?tenant_id=${contextTenantId}&type=alerts`)
             ]);
 
             if (sugRes.ok) {
@@ -1156,7 +1156,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
             // v1.3.0: Buscar conexões do backend para plan awareness
             let connections: { gmail?: boolean; workspace?: boolean; calendar?: boolean } = {};
             try {
-                const integrationsResponse = await fetch('/api/integrations', {
+                const integrationsResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/integrations`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (integrationsResponse.ok) {

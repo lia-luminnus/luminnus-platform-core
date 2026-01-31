@@ -1,4 +1,4 @@
-import { Linkedin, Youtube } from "lucide-react";
+import { Linkedin, Instagram } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
@@ -56,7 +56,6 @@ const Footer = () => {
             <h4 className="font-semibold text-foreground">{t('footer_contact')}</h4>
             <div className="space-y-2 text-muted-foreground">
               <p>Email: contato@luminnus.com</p>
-              <p>WhatsApp: +351 911548-676</p>
             </div>
           </div>
 
@@ -64,11 +63,11 @@ const Footer = () => {
           <div className="space-y-4">
             <h4 className="font-semibold text-foreground">{t('footer_social')}</h4>
             <div className="flex space-x-4">
-              <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center hover:bg-primary/20 hover:shadow-[0_0_20px_rgba(106,0,255,0.4)] transition-all">
+              <a href="https://www.linkedin.com/company/luminnus-intelig%C3%AAncia-e-solu%C3%A7%C3%B5es/" target="_blank" rel="noopener noreferrer" className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center hover:bg-primary/20 hover:shadow-[0_0_20px_rgba(106,0,255,0.4)] transition-all">
                 <Linkedin className="w-6 h-6 text-primary" />
               </a>
-              <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" className="w-12 h-12 bg-secondary/10 rounded-lg flex items-center justify-center hover:bg-secondary/20 hover:shadow-[0_0_20px_rgba(0,194,255,0.4)] transition-all">
-                <Youtube className="w-6 h-6 text-secondary" />
+              <a href="https://www.instagram.com/luminnus.lia.ai?igsh=MWxpc3R5NDVzNnE4ZQ%3D%3D&utm_source=qr" target="_blank" rel="noopener noreferrer" className="w-12 h-12 bg-secondary/10 rounded-lg flex items-center justify-center hover:bg-secondary/20 hover:shadow-[0_0_20px_rgba(0,194,255,0.4)] transition-all">
+                <Instagram className="w-6 h-6 text-secondary" />
               </a>
             </div>
           </div>

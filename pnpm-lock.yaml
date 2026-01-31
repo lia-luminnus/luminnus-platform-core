@@ -568,6 +568,9 @@ importers:
       openai:
         specifier: ^4.20.1
         version: 4.104.0(ws@8.18.3)(zod@3.25.76)
+      socket.io:
+        specifier: ^4.8.1
+        version: 4.8.3
       ws:
         specifier: ^8.14.2
         version: 8.18.3

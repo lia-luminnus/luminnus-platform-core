@@ -64,7 +64,7 @@ const OAuthCallback: React.FC = () => {
                         code,
                         state,
                         // Este redirect_uri deve ser EXATAMENTE igual ao configurado no Google Cloud Console
-                        redirect_uri: 'http://localhost:3000/api/auth/google/callback'
+                        redirect_uri: `${window.location.origin}/api/auth/google/callback`
                     })
                 });
 

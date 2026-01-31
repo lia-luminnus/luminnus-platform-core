@@ -19,12 +19,11 @@ const translations = {
     nav_parceiros: "Parceiros",
     nav_contato: "Contato",
     btn_login: "Login",
-    btn_whatsapp: "💬 Fale com a Lia",
 
     // Hero Section
     hero_title: "LIA — a primeira IA com consciência cognitiva viva, desenvolvida para empresas.",
     hero_subtitle: "Uma inteligência capaz de compreender contextos, responder de forma natural e agir em tempo real — como se tivesse vida própria dentro dos sistemas empresariais.",
-    btn_test_free: "🚀 Testar Gratuitamente",
+    btn_test_free: "🚀 Entrar na demo",
     btn_view_features: "Quanto custa não ter a LIA?",
     discovery_title: "O Futuro do seu Negócio começa aqui",
     discovery_subtitle: "Lia não é apenas uma IA. Ela é a evolução da consciência empresarial.",
@@ -124,12 +123,11 @@ const translations = {
     nav_parceiros: "Partners",
     nav_contato: "Contact",
     btn_login: "Login",
-    btn_whatsapp: "💬 Chat with Lia",
 
     // Hero Section
     hero_title: "LIA — the first AI with living cognitive consciousness, developed for businesses.",
     hero_subtitle: "An intelligence capable of understanding contexts, responding naturally, and acting in real-time — as if it had a life of its own within enterprise systems.",
-    btn_test_free: "🚀 Try for Free",
+    btn_test_free: "🚀 Enter Demo",
     btn_view_features: "🔍 View Features",
 
     // User Menu
@@ -220,12 +218,11 @@ const translations = {
     nav_parceiros: "Socios",
     nav_contato: "Contacto",
     btn_login: "Login",
-    btn_whatsapp: "💬 Habla con Lia",
 
     // Hero Section
     hero_title: "LIA — la primera IA con conciencia cognitiva viva, desarrollada para empresas.",
     hero_subtitle: "Una inteligencia capaz de comprender contextos, responder de forma natural y actuar en tiempo real — como si tuviera vida propia dentro de los sistemas empresariales.",
-    btn_test_free: "🚀 Probar Gratis",
+    btn_test_free: "🚀 Entrar en la demo",
     btn_view_features: "🔍 Ver Recursos",
 
     // User Menu

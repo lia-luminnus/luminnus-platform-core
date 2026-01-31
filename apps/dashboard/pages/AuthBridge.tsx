@@ -67,17 +67,10 @@ const AuthBridge: React.FC = () => {
                 return { access: null, refresh: null, adminAccess: false };
             };
 
-            const { access: accessToken, refresh: refreshToken, adminAccess } = extractTokens();
+            const { access: accessToken, refresh: refreshToken } = extractTokens();
 
             console.log('[AuthBridge] Access Token:', accessToken ? 'SIM' : 'NÃO');
             console.log('[AuthBridge] Refresh Token:', refreshToken ? 'SIM' : 'NÃO');
-            console.log('[AuthBridge] Admin Access:', adminAccess ? 'SIM' : 'NÃO');
-
-            // Salvar flag de acesso admin no sessionStorage
-            if (adminAccess) {
-                sessionStorage.setItem('admin_access', 'true');
-                console.log('[AuthBridge] Flag admin_access salva no sessionStorage');
-            }
 
             if (!accessToken) {
                 console.error('[AuthBridge] ERRO: access_token ausente na URL');
@@ -152,7 +145,7 @@ const AuthBridge: React.FC = () => {
                 <p className="text-gray-400 mb-8 max-w-md">{error}</p>
 
                 <button
-                    onClick={() => window.location.href = 'http://localhost:8080/auth'}
+                    onClick={() => window.location.href = import.meta.env.VITE_LANDING_PAGE_URL || (import.meta.env.PROD ? "/" : "http://localhost:8080/auth")}
                     className="flex items-center gap-3 px-8 py-3 bg-brand-primary hover:bg-brand-primary/80 text-white rounded-xl font-bold transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-brand-primary/20"
                 >
                     <ArrowLeft className="h-5 w-5" />

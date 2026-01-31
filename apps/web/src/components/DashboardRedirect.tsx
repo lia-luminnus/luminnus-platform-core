@@ -27,21 +27,17 @@ const DashboardRedirect = () => {
                 searchParams.set("access_token", session.access_token);
                 searchParams.set("refresh_token", session.refresh_token);
                 searchParams.set("source", "auth_bridge");
-
-                // Se for admin, adiciona flag de bypass
-                if (isAdminEmail(session.user?.email)) {
-                    searchParams.set("admin_access", "true");
-                    console.log("[DashboardRedirect] Usuário admin detectado, adicionando flag de bypass");
-                }
             } else {
                 console.warn("[DashboardRedirect] Alerta: Redirecionando sem sessão.");
             }
 
             const finalQuery = searchParams.toString();
-            // Para HashRouter, os parâmetros devem vir APÓS o #/ para serem detectados pelo Hub
-            const finalUrl = finalQuery ? `${targetUrl}/#/?${finalQuery}` : targetUrl;
 
-            console.log("[DashboardRedirect] Redirecionando com tokens no fragmento hash...");
+            // Se targetUrl for vazio (produção sem VITE_DASHBOARD_URL), fallback para root
+            const baseRedirect = targetUrl || "/";
+            const finalUrl = finalQuery ? `${baseRedirect}${baseRedirect.endsWith('/') ? '' : '/'}#/?${finalQuery}` : targetUrl;
+
+            console.log("[DashboardRedirect] Redirecionando para:", finalUrl);
             window.location.href = finalUrl;
         };
 

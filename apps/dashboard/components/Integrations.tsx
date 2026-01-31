@@ -296,8 +296,8 @@ const Integrations: React.FC = () => {
         );
     };
 
-    // Verificar se está acessando via painel admin (sessionStorage) ou é admin por role
-    const isAdminAccess = sessionStorage.getItem('admin_access') === 'true' || profile?.role === 'admin';
+    // Verificar se é admin por role
+    const isAdminAccess = profile?.role === 'admin';
 
     // Plano atual (em produção virá do contexto)
     const currentPlan = (plan?.name?.toLowerCase() || 'start') as 'start' | 'plus' | 'pro';
