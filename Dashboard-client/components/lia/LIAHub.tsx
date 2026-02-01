@@ -64,7 +64,7 @@ function cn(...classes: any[]) {
 // ============================================================
 
 function LIAHubContent() {
-    const { user, plan } = useDashboardAuth();
+    const { user, plan, profile, isAdmin } = useDashboardAuth();
     const { t } = useContext(LanguageContext);
     const lia = useLIA();
 
@@ -72,14 +72,61 @@ function LIAHubContent() {
     const [searchQuery, setSearchQuery] = useState('');
     const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
     const [editingTitle, setEditingTitle] = useState('');
+    const [planLoading, setPlanLoading] = useState(true);
 
-    const { isAdmin } = useDashboardAuth();
     const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-    const userPlanName = (plan?.name || 'Start').toLowerCase();
-    const userPlanLevel = PLAN_LEVELS[userPlanName] || 1;
+    const getUserPlanLevel = (): number => {
+        if (isAdmin || isDev) {
+            console.log('[LIAHub] 🔓 Admin/Dev bypass - acesso total');
+            return 999;
+        }
+
+        const contextPlanName = plan?.name?.toLowerCase();
+        if (contextPlanName && PLAN_LEVELS[contextPlanName]) {
+            console.log('[LIAHub] ✅ Plano do contexto:', contextPlanName, '→ Nível:', PLAN_LEVELS[contextPlanName]);
+            return PLAN_LEVELS[contextPlanName];
+        }
+
+        const profilePlanType = (profile as any)?.plan_type?.toLowerCase();
+        if (profilePlanType && PLAN_LEVELS[profilePlanType]) {
+            console.log('[LIAHub] ✅ Plano do perfil:', profilePlanType, '→ Nível:', PLAN_LEVELS[profilePlanType]);
+            return PLAN_LEVELS[profilePlanType];
+        }
+
+        const jwtPlan = (user?.app_metadata?.plan || user?.user_metadata?.plan)?.toLowerCase();
+        if (jwtPlan && PLAN_LEVELS[jwtPlan]) {
+            console.log('[LIAHub] ✅ Plano do JWT:', jwtPlan, '→ Nível:', PLAN_LEVELS[jwtPlan]);
+            return PLAN_LEVELS[jwtPlan];
+        }
+
+        console.warn('[LIAHub] ⚠️ Nenhum plano detectado → Fallback: Start (nível 1)');
+        console.warn('[LIAHub] Context:', { plan, profile, userEmail: user?.email });
+        return 1;
+    };
+
+    const userPlanLevel = getUserPlanLevel();
 
     const lastRefreshedUserId = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (!user) {
+            setPlanLoading(true);
+            return;
+        }
+
+        const hasPlan = !!(plan?.name || (profile as any)?.plan_type || user?.app_metadata?.plan);
+        
+        if (!hasPlan) {
+            const timer = setTimeout(() => {
+                console.warn('[LIAHub] ⏱️ Timeout ao aguardar plano → Assumindo Start');
+                setPlanLoading(false);
+            }, 3000);
+            return () => clearTimeout(timer);
+        } else {
+            setPlanLoading(false);
+        }
+    }, [user, plan, profile]);
 
     // Refresh conversas
     useEffect(() => {
@@ -110,9 +157,28 @@ function LIAHubContent() {
 
     const canAccessMode = (mode: LIAMode): boolean => {
         if (isAdmin || isDev) return true;
+        
+        if (planLoading) {
+            console.log('[LIAHub] ⏳ Aguardando carregamento do plano...');
+            return true;
+        }
+        
         const tab = TABS.find(t => t.id === mode);
         if (!tab) return false;
-        return userPlanLevel >= PLAN_LEVELS[tab.requiredPlan];
+        
+        const hasAccess = userPlanLevel >= PLAN_LEVELS[tab.requiredPlan];
+        
+        if (!hasAccess) {
+            console.warn('[LIAHub] 🔒 Acesso negado:', {
+                mode,
+                userPlanLevel,
+                requiredLevel: PLAN_LEVELS[tab.requiredPlan],
+                plan: plan?.name,
+                profile: (profile as any)?.plan_type
+            });
+        }
+        
+        return hasAccess;
     };
 
     const conversationsForMode = useMemo(() => {

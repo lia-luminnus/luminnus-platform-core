@@ -598,6 +598,18 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ mode: modeForConv, title, userId: userIdRef.current })
             });
+            
+            if (!resp.ok) {
+                if (resp.status === 404) {
+                    console.error('❌ [LIAContext] Rota /api/conversations não encontrada (404)');
+                    console.error('💡 [LIAContext] Solução: O backend precisa ser atualizado no Render');
+                    toast.error('Servidor desatualizado. Aguarde alguns minutos e tente novamente.');
+                    return null;
+                }
+                console.error('❌ [LIAContext] Erro HTTP:', resp.status);
+                return null;
+            }
+            
             const data = await resp.json();
             const newId = data.conversation?.id || `conv_${Date.now()}`;
             const newConv: Conversation = { id: newId, mode: modeForConv, title, messages: [], createdAt: Date.now(), updatedAt: Date.now() };
@@ -613,7 +625,16 @@ export function LIAProvider({ children }: LIAProviderProps) {
             setActiveScope(newId);
             saveToStorage(updated, currentIdRef.current, activeIdsByModeRef.current);
             return newId;
-        } catch (e) { return null; }
+        } catch (e: any) {
+            if (e.name === 'AbortError') {
+                console.error('⏱️ [LIAContext] Timeout ao criar conversa');
+                toast.error('Tempo limite excedido. Verifique sua conexão.');
+            } else {
+                console.error('❌ [LIAContext] Erro ao criar conversa:', e);
+                toast.error('Erro ao conectar com o servidor. Tente novamente.');
+            }
+            return null;
+        }
     }, [setActiveScope, saveToStorage]);
 
     const refreshConversations = useCallback(async () => {
@@ -723,7 +744,15 @@ export function LIAProvider({ children }: LIAProviderProps) {
             });
 
             if (!resp.ok) {
+                if (resp.status === 404) {
+                    console.error('❌ [CreateConv] Rota /api/conversations não encontrada (404)');
+                    console.error('💡 [CreateConv] Solução: O backend precisa ser atualizado no Render');
+                    toast.error('Servidor desatualizado. Aguarde alguns minutos e tente novamente.');
+                    creatingRef.current[mode] = false;
+                    return undefined;
+                }
                 console.error('❌ [CreateConv] Falha ao criar conversa:', resp.status);
+                toast.error('Erro ao criar conversa. Tente novamente.');
                 creatingRef.current[mode] = false;
                 return undefined;
             }
@@ -749,8 +778,14 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
             creatingRef.current[mode] = false;
             return newConv;
-        } catch (e) {
-            console.error('❌ [CreateConv] Erro:', e);
+        } catch (e: any) {
+            if (e.name === 'AbortError') {
+                console.error('⏱️ [CreateConv] Timeout ao criar conversa');
+                toast.error('Tempo limite excedido. Verifique sua conexão.');
+            } else {
+                console.error('❌ [CreateConv] Erro:', e);
+                toast.error('Erro ao conectar com o servidor. Tente novamente.');
+            }
             creatingRef.current[mode] = false;
             return undefined;
         }
