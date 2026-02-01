@@ -811,11 +811,22 @@ _Gerado automaticamente pela LIA_`;
 // ==========================================================
 
 export function setupWhatsAppIntegrationRoutes(app: Express) {
+    // Cache em memória para status do WhatsApp (TTL: 30s)
+    const whatsappStatusCache = new Map<string, { data: any, timestamp: number }>();
+    const WHATSAPP_STATUS_CACHE_TTL = 30000;
+
     // GET /api/integrations/whatsapp/status - Retorna status da integração do tenant
     app.get('/api/integrations/whatsapp/status', async (req, res) => {
         try {
             const tenantId = (req.query.tenantId || req.headers['x-tenant-id']) as string;
             if (!tenantId) return res.status(400).json({ status: 'error', reason: 'tenantId é obrigatório' });
+
+            // Verificar cache primeiro
+            const cached = whatsappStatusCache.get(tenantId);
+            if (cached && (Date.now() - cached.timestamp) < WHATSAPP_STATUS_CACHE_TTL) {
+                console.log(`[WhatsApp Status] Cache hit for tenant ${tenantId}`);
+                return res.json(cached.data);
+            }
 
             const { data, error } = await supabase
                 .from('whatsapp_connections')
@@ -827,16 +838,19 @@ export function setupWhatsAppIntegrationRoutes(app: Express) {
             if (error && error.code !== 'PGRST116') throw error;
 
             if (!data) {
-                return res.json({
+                const responseData = {
                     status: 'ok',
                     data: {
+                        tenant_id: tenantId,
                         connected: false,
                         status: 'disconnected',
                         phone_masked: null,
                         last_webhook_at: null,
                         last_error: null
                     }
-                });
+                };
+                whatsappStatusCache.set(tenantId, { data: responseData, timestamp: Date.now() });
+                return res.json(responseData);
             }
 
             // Mask phone number for security
@@ -844,9 +858,10 @@ export function setupWhatsAppIntegrationRoutes(app: Express) {
                 ? data.phone_number.replace(/(\d{2})(\d{2})(\d{5})(\d{4})/, '+$1 $2 *****-$4')
                 : null;
 
-            res.json({
+            const responseData = {
                 status: 'ok',
                 data: {
+                    tenant_id: tenantId,
                     connected: data.status === 'active' || data.status === 'connected',
                     status: data.status || 'disconnected',
                     phone_masked: phoneMasked,
@@ -854,7 +869,10 @@ export function setupWhatsAppIntegrationRoutes(app: Express) {
                     last_webhook_at: data.updated_at,
                     last_error: data.last_error || null
                 }
-            });
+            };
+
+            whatsappStatusCache.set(tenantId, { data: responseData, timestamp: Date.now() });
+            res.json(responseData);
         } catch (error) {
             console.error('❌ [Integration Status] Erro:', error);
             res.status(500).json({ status: 'error', reason: String(error) });

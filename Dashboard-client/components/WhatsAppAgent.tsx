@@ -162,7 +162,12 @@ const WhatsAppAgentContent: React.FC = () => {
                             </span>
                         </div>
                     )}
-                    <p className="text-[10px] font-bold text-gray-400 font-mono">{status?.phone || 'Número não definido'}</p>
+                    <p className="text-[10px] font-bold text-gray-400 font-mono">
+                        {status && (!status.tenant_id || status.tenant_id === tenantId) 
+                            ? (status.phone || 'Número não definido')
+                            : 'Número não definido'
+                        }
+                    </p>
                 </div>
                 <div className="flex gap-2">
                     <button

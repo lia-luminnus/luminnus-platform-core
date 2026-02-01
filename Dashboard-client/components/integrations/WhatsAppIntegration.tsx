@@ -76,25 +76,47 @@ const WhatsAppIntegration: React.FC = () => {
     const fetchStatus = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`${API_URL}/api/integrations/whatsapp/status?tenantId=${tenantId}`);
+            // ✅ CORREÇÃO: Adicionar timeout de 10s na requisição
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+            const response = await fetch(
+                `${API_URL}/api/integrations/whatsapp/status?tenantId=${tenantId}`,
+                { signal: controller.signal }
+            );
+            clearTimeout(timeoutId);
+
             const data = await response.json();
 
             // 🔒 SECURITY: Validate response belongs to current tenant
             if (data.status === 'ok') {
-                if (data.data?.tenant_id && data.data.tenant_id !== tenantId) {
-                    console.error('🚨 [WhatsApp] TENANT MISMATCH! Expected:', tenantId, 'Got:', data.data.tenant_id);
-                    setStatus(null);
-                    return;
+                // ✅ CORREÇÃO: Validação mais rigorosa
+                if (data.data?.tenant_id) {
+                    if (data.data.tenant_id !== tenantId) {
+                        console.error('🚨 [WhatsApp] TENANT MISMATCH! Expected:', tenantId, 'Got:', data.data.tenant_id);
+                        console.error('🚨 [WhatsApp] BLOCKING DATA TO PREVENT LEAK');
+                        setStatus(null);
+                        return;
+                    }
+                } else {
+                    // ✅ NOVO: Se não vier tenant_id, logar warning mas aceitar (para compatibilidade)
+                    console.warn('⚠️ [WhatsApp] API não retornou tenant_id. Validação de segurança ignorada.');
                 }
                 setStatus(data.data);
             } else {
                 // No integration found - this is expected for new clients
                 setStatus(null);
             }
-        } catch (error) {
-            console.error('❌ Error fetching status:', error);
+        } catch (error: any) {
+            if (error.name === 'AbortError') {
+                console.error('⏱️ [WhatsApp] Status fetch timeout after 10s');
+                toast.error('Tempo limite excedido ao carregar status do WhatsApp');
+            } else {
+                console.error('❌ Error fetching status:', error);
+            }
             setStatus(null);
         } finally {
+            // ✅ GARANTIR QUE SEMPRE EXECUTA
             setLoading(false);
         }
     };
@@ -265,8 +287,18 @@ const WhatsAppIntegration: React.FC = () => {
         return (
             <div className="flex flex-col h-full bg-[#f1f5f9] dark:bg-[#06080f]">
                 <Header title="WhatsApp Business" />
-                <div className="flex-1 flex items-center justify-center">
+                <div className="flex-1 flex flex-col items-center justify-center gap-4">
                     <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-sm text-gray-500">Carregando status da integração...</p>
+                    <button
+                        onClick={() => {
+                            setLoading(false);
+                            setTimeout(() => fetchStatus(), 100);
+                        }}
+                        className="mt-4 px-4 py-2 text-xs font-bold text-brand-primary border border-brand-primary/20 rounded-xl hover:bg-brand-primary/10 transition-all"
+                    >
+                        Tentar Novamente
+                    </button>
                 </div>
             </div>
         );
@@ -382,6 +414,22 @@ const WhatsAppIntegration: React.FC = () => {
                                                 <p className="text-sm text-green-400">
                                                     <strong>🚀 Conexão em 1 clique:</strong> Você só precisa autorizar sua conta Meta e escolher o número.
                                                     A parte técnica é configurada automaticamente.
+                                                </p>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
+                                                    Número do WhatsApp Business (Opcional)
+                                                </label>
+                                                <input
+                                                    type="tel"
+                                                    value={quickPhone}
+                                                    onChange={(e) => setQuickPhone(e.target.value)}
+                                                    placeholder="Ex: +55 11 99999-9999"
+                                                    className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-brand-primary/50"
+                                                />
+                                                <p className="text-[9px] text-gray-500 mt-1">
+                                                    Informe o número que você usará ou deixe em branco para escolher no Meta Business Suite.
                                                 </p>
                                             </div>
 
