@@ -63,7 +63,7 @@ export function setupWebSocket(server: HTTPServer): IOServer {
         });
 
         // Saudações
-        socket.emit('system:update', {
+        socket.emit('system:info', {
             type: 'connected',
             clientId,
             timestamp: new Date().toISOString(),

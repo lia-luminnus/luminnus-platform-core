@@ -1,6 +1,6 @@
 {
   "name": "luminnus-platform-core",
-  "version": "0.1.0",
+  "version": "4.0.0",
   "private": true,
   "packageManager": "pnpm@9.0.0",
   "scripts": {

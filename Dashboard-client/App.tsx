@@ -30,6 +30,7 @@ import { useAppStore } from './store/useAppStore';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UpdateService } from './components/lia/services/geminiLiveService';
+import { getApiUrl } from './config/api';
 
 const PlaceholderModule: React.FC<{ title: string, icon: string }> = ({ title, icon }) => {
   const { t } = React.useContext(LanguageContext);
@@ -84,12 +85,19 @@ const AppContent: React.FC = () => {
     // 1. Inicializar serviço
     UpdateService.initialize({
       currentVersion: '4.0.0', // Versão do Dashboard
-      apiUrl: import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000',
+      apiUrl: getApiUrl(),
     });
 
     // 2. Listener para eventos do Socket.io ou Polling
     const handleUpdateEvent = (e: any) => {
-      const newVersion = e.detail?.version || 'unknown';
+      const newVersion = e.detail?.version;
+
+      // v1.1.2: Ignorar se não houver versão (evita avisos falsos em conexões socket)
+      if (!newVersion) {
+        console.log('[App] Ignorando evento de sistema sem versão');
+        return;
+      }
+
       const processedVersion = localStorage.getItem('lia-processed-update-version');
 
       if (processedVersion === newVersion) {
