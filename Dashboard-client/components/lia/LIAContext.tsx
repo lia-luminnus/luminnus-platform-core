@@ -255,7 +255,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
     const [liaStatus, setLiaStatus] = useState<string | null>(null);
 
     // Estado do Usuário (MOVIDO PARA O TOPO PARA EVITAR TDZ)
-    const { user: authUser, isAdmin, initialized: authInitialized, plan: authPlan, profile: authProfile } = useDashboardAuth();
+    const { user: authUser, session: authSession, isAdmin, initialized: authInitialized, plan: authPlan, profile: authProfile } = useDashboardAuth();
     const [userId, setUserId] = useState<string | null>(null);
     const [contextTenantId, setContextTenantId] = useState<string | null>(null);
     const [plan, setPlanState] = useState<string | null>(null);
@@ -263,6 +263,13 @@ export function LIAProvider({ children }: LIAProviderProps) {
     const userIdRef = useRef<string | null>(null);
     const tenantIdRef = useRef<string | null>(null);
     const userRoleRef = useRef<string | null>(null);
+    // FIX: Ref for session to access inside callbacks
+    const sessionRef = useRef<any>(null);
+
+    // Sync session ref
+    useEffect(() => {
+        sessionRef.current = authSession;
+    }, [authSession]);
 
     // Consciência Operacional
     const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -594,7 +601,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
         if (activeIds[modeForConv]) return activeIds[modeForConv];
 
         const title = `Conversa ${new Date().toLocaleString('pt-BR')}`;
-        const { session: authSession } = useDashboardAuth(); // access session for token
+        // FIX: Use ref instead of hook inside callback
+        const authSession = sessionRef.current; // access session for token
 
         try {
             console.log('🆕 [LIAContext] Criando conversa automática:', modeForConv);
@@ -740,7 +748,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
         const title = `Conversa ${new Date().toLocaleString('pt-BR')}`;
         const effectiveUserId = userId || backendService.getAuthContext().userId;
-        const { session: authSession } = useDashboardAuth();
+        // FIX: Use ref instead of hook inside callback
+        const authSession = sessionRef.current;
 
         try {
             console.log('🆕 [LIAContext] Criando nova conversa:', mode);

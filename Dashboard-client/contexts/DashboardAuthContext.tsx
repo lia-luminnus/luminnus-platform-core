@@ -102,11 +102,13 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                     if (attempts >= MAX_ATTEMPTS) {
                         console.error('[DashboardAuth] Máximo de tentativas atingido. Usando fallback de resiliência.');
                         // Fallback: Se o banco falhar, usamos o que temos no estado local (Zustand/LocalStorage)
-                        // IMPORTANTE: Não forçamos onboarding = false se já tivermos um estado local positivo
+                        // IMPORTANTE: Respeitar o estado local se ele já indicar onboarding completo
+                        const isCompletedLocally = localOnboardingCompleted || false;
+
                         userProfile = {
                             id: currentUser.id,
                             email: currentUser.email || '',
-                            onboarding_completed: localOnboardingCompleted, // Confia no LocalStorage
+                            onboarding_completed: isCompletedLocally, // Confia no LocalStorage
                             role: 'client' // Assume client em caso de erro crítico de rede
                         } as any;
                     } else {
