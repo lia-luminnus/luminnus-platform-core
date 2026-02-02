@@ -52,6 +52,22 @@ router.get('/load', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/location
+ * Retorna dados de localização/timezone para bootstrap do dashboard
+ */
+router.get('/', async (req: Request, res: Response) => {
+    try {
+        return res.json({
+            ok: true,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            now: new Date().toISOString()
+        });
+    } catch (err) {
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
  * POST /api/location
  * Salva localização do usuário (mock persistente por enquanto)
  */

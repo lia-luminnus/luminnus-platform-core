@@ -21,21 +21,35 @@ import { errorHandler } from './middleware/error.js';
 import { setupWebSocket } from './ws/gateway.js';
 import http from 'http';
 
+import { conversationRouter } from './routes/conversation.js';
+
 const app: express.Express = express();
 const PORT = process.env.PORT || 5000;
 
-// Logs de debug no boot
-console.log('[ENV] PORT:', PORT);
-console.log('[ENV] APP_URL:', process.env.APP_URL);
-console.log('[ENV] GOOGLE_CLIENT_ID loaded:', !!process.env.GOOGLE_CLIENT_ID);
-console.log('[ENV] SUPABASE_URL loaded:', !!process.env.SUPABASE_URL);
+// Configuração de CORS robusta (Hardened)
+const allowedOrigins = [
+  'https://luminnus-dashboard.onrender.com',
+  'https://luminnus.ai',
+  'http://localhost:3000',
+  'http://localhost:5173'
+];
 
-// Security middleware
-app.use(helmet());
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-  credentials: true
+  origin: (origin, callback) => {
+    // Permitir requisições sem origin (como mobile apps ou curl)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.CORS_ORIGIN === origin) {
+      callback(null, true);
+    } else {
+      console.warn(`[CORS] Blocked origin: ${origin}`);
+      callback(null, false);
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-id']
 }));
+
 app.use(express.json());
 
 // Routes
@@ -43,6 +57,7 @@ app.use('/api/health', healthRouter);
 app.use('/api/version', versionRouter);
 app.use('/api/me', meRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/conversations', conversationRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/metrics', metricsRouter);

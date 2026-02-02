@@ -1,6 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 export const versionRouter: Router = Router();
 
@@ -9,11 +14,20 @@ const BUILD_TIMESTAMP = new Date().toISOString();
 
 function getVersion(): string {
     try {
-        const pkgPath = join(__dirname, '../../package.json');
-        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-        return pkg.version || '0.0.0';
+        // Tentar encontrar package.json subindo até 3 níveis
+        let currentPath = __dirname;
+        for (let i = 0; i < 3; i++) {
+            try {
+                const pkgPath = join(currentPath, 'package.json');
+                const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+                if (pkg.version) return pkg.version;
+            } catch {
+                currentPath = join(currentPath, '..');
+            }
+        }
+        return process.env.APP_VERSION || '4.0.0';
     } catch {
-        return process.env.APP_VERSION || '0.0.0';
+        return '4.0.0';
     }
 }
 

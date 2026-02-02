@@ -91,7 +91,8 @@ const Onboarding: React.FC = () => {
         // 🔑 Admin detection (same logic as DashboardAuthContext)
         const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
         const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
-        const isAdmin = adminEmails.includes(user?.email?.toLowerCase() || '');
+        const { profile: authProfile } = useDashboardAuth();
+        const isAdmin = adminEmails.includes(user?.email?.toLowerCase() || '') || authProfile?.role === 'admin';
 
         // 🔒 SECURITY: Admin uses default admin tenant, clients require their own tenant
         const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
@@ -275,7 +276,8 @@ const Onboarding: React.FC = () => {
                         // 🔑 Admin detection (same logic as DashboardAuthContext)
                         const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
                         const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
-                        const isAdmin = adminEmails.includes(user?.email?.toLowerCase() || '');
+                        const { profile: authProfile } = useDashboardAuth();
+                        const isAdmin = adminEmails.includes(user?.email?.toLowerCase() || '') || authProfile?.role === 'admin';
 
                         // 🔒 SECURITY: Admin uses default admin tenant, clients require their own tenant
                         const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';

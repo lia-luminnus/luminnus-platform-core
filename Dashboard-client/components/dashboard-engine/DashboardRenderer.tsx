@@ -21,6 +21,7 @@ import LiaFloatingChat from '../lia/LiaFloatingChat';
 import toast from 'react-hot-toast';
 import { Bot, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getApiUrl } from '../../config/api';
 
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -82,7 +83,8 @@ function useWidgetData(tenantId: string, widgetId: string, config: WidgetConfig,
                 limit: (config.type === 'heatmap_calendar' ? '400' : (config.config?.limit?.toString() || '10'))
             });
 
-            const response = await fetch(`/api/metrics/query?${params}`);
+            // v5.8: Usar getApiUrl() para garantir URLs absolutas em produção (Render)
+            const response = await fetch(`${getApiUrl()}/api/metrics/query?${params}`);
 
             if (response.ok) {
                 // v5.7: Safe JSON parse to avoid crash on empty body (Render cold boot or timeout)

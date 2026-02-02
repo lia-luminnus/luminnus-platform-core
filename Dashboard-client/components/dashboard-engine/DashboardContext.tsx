@@ -27,6 +27,7 @@ import { supabase } from '../../lib/supabase';
 import { useAppStore } from '../../store/useAppStore';
 import toast from 'react-hot-toast';
 import { normalizeWidgetType, isValidWidgetType, getAvailableWidgetsMessage, suggestClosestWidget, WIDGET_METRIC_DEFAULTS } from './widgetTypes';
+import { getApiUrl } from '../../config/api';
 
 // ============================================
 // Initial State
@@ -596,8 +597,8 @@ export function DashboardProvider({
             dispatch({ type: 'SET_LOADING', payload: true });
 
             // POST /api/dashboard/tenant/:tenantId/dashboard/save-version
-            // Use relative path to leverage Vite proxy consistently
-            const response = await fetch(`/api/dashboard/tenant/${tenantId}/dashboard/save-version`, {
+            // v5.8: Usar getApiUrl() para garantir URLs absolutas em produção (Render)
+            const response = await fetch(`${getApiUrl()}/api/dashboard/tenant/${tenantId}/dashboard/save-version`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ config_json: state.config }),
@@ -622,9 +623,9 @@ export function DashboardProvider({
             dispatch({ type: 'SET_LOADING', payload: true });
 
             if (!forceTemplate) {
-                // Use relative path for environment independence (proxied to 5000)
+                // v5.8: Usar getApiUrl() para garantir URLs absolutas em produção (Render)
                 console.log('[DashboardContext] 🔍 Tentando carregar dashboard do API para tenant:', tId);
-                const response = await fetch(`/api/dashboard/tenant/${tId}/dashboard/active`);
+                const response = await fetch(`${getApiUrl()}/api/dashboard/tenant/${tId}/dashboard/active`);
 
                 if (response.ok) {
                     const text = await response.text();

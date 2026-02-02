@@ -41,15 +41,15 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const localOnboardingCompleted = useAppStore((state) => state.onboarding_completed);
 
     // 🔑 SSOT: Lógica de Onboarding CORRIGIDA
-    // - Admin: SEMPRE passa pelo onboarding (para testar variantes) - retorna false
-    // - Cliente: Passa APENAS UMA VEZ - respeita o banco de dados (profile) ou localStorage
+    // - Admin: Passa pelo onboarding UMA vez por sessão (resetado no refreshProfile)
+    // - Cliente: Passa APENAS UMA VEZ na vida - respeita o banco de dados (profile) ou localStorage
     const onboardingCompleted = isAdmin
-        ? false  // Admin sempre vê onboarding
+        ? localOnboardingCompleted  // Admin respeita apenas o estado local (que resetamos por sessão)
         : (profile?.onboarding_completed || localOnboardingCompleted || false);  // Cliente respeita DB
 
     const refreshProfile = async (initialUser?: User | null) => {
         console.log('[DashboardAuth] Iniciando refreshProfile...');
-        
+
         // Evitar refresh concorrente
         if (refreshInProgressRef.current) {
             console.log('[DashboardAuth] ⏭️ Refresh já em andamento, ignorando chamada duplicada');
@@ -78,27 +78,40 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
             console.log('[DashboardAuth] Carregando perfil do banco...');
 
-            // Timeout de segurança para a busca de perfil (tolerância aumentada para 15s)
-            const profilePromise = getOrCreateProfile(currentUser.id, currentUser.email || '');
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), 15000)
-            );
-
             let userProfile;
             let profileLoadedFromDb = false;
-            try {
-                userProfile = await Promise.race([profilePromise, timeoutPromise]) as UserProfile;
-                profileLoadedFromDb = true;
-                console.log('[DashboardAuth] Perfil carregado com sucesso');
-            } catch (pErr: any) {
-                // Usar warn em vez de error para reduzir ruído visual
-                console.warn('[DashboardAuth] Timeout/erro no perfil (usando fallback):', pErr.message);
-                // Fallback para permitir que o dashboard carregue mesmo sem perfil do banco
-                userProfile = {
-                    id: currentUser.id,
-                    email: currentUser.email || '',
-                    onboarding_completed: localOnboardingCompleted
-                } as any;
+            let attempts = 0;
+            const MAX_ATTEMPTS = 3;
+
+            while (attempts < MAX_ATTEMPTS && !profileLoadedFromDb) {
+                attempts++;
+                try {
+                    console.log(`[DashboardAuth] Tentativa ${attempts}/${MAX_ATTEMPTS}...`);
+
+                    // Timeout de segurança para a busca de perfil
+                    const profilePromise = getOrCreateProfile(currentUser.id, currentUser.email || '');
+                    const timeoutPromise = new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), 10000)
+                    );
+
+                    userProfile = await Promise.race([profilePromise, timeoutPromise]) as UserProfile;
+                    profileLoadedFromDb = true;
+                    console.log('[DashboardAuth] Perfil carregado com sucesso');
+                } catch (pErr: any) {
+                    console.warn(`[DashboardAuth] Falha na tentativa ${attempts}:`, pErr.message);
+                    if (attempts >= MAX_ATTEMPTS) {
+                        console.error('[DashboardAuth] Máximo de tentativas atingido. Usando fallback.');
+                        // Fallback para permitir que o dashboard carregue mesmo sem perfil do banco
+                        userProfile = {
+                            id: currentUser.id,
+                            email: currentUser.email || '',
+                            onboarding_completed: localOnboardingCompleted
+                        } as any;
+                    } else {
+                        // Backoff exponencial simples (1s, 2s)
+                        await new Promise(resolve => setTimeout(resolve, attempts * 1000));
+                    }
+                }
             }
 
             setProfile(userProfile);
@@ -139,15 +152,17 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             // Buscar Plano (Fontes: 1. profile.plan_type do banco, 2. app_metadata, 3. plano atual no estado)
             const metadata = currentUser.app_metadata || {};
             const dbPlanType = userProfile?.plan_type || null;
-            
+
             // Forçar Pro se for admin conforme requisito (VITE_ADMIN_EMAILS)
-            const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com,wendellcomercial2@gmail.com';
+            const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
             const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
-            const adminDetected = adminEmails.includes(currentUser.email?.toLowerCase() || '');
+            const isAdminByEmail = adminEmails.includes(currentUser.email?.toLowerCase() || '');
+            const isAdminByRole = userProfile?.role === 'admin';
+            const adminDetected = isAdminByEmail || isAdminByRole;
 
             // 🔑 SSOT: Setar flag isAdmin para controlar fluxo de onboarding
             setIsAdmin(adminDetected);
-            console.log('[DashboardAuth] Admin check:', { email: currentUser.email, isAdmin: adminDetected });
+            console.log('[DashboardAuth] Admin check:', { email: currentUser.email, isAdmin: adminDetected, role: userProfile?.role });
 
             // 🔄 ADMIN ONBOARDING: Apenas admins passam pelo onboarding TODA sessão
             // Clientes (não-admin) passam APENAS UMA VEZ - valor resgatado do banco ou localStorage
@@ -220,6 +235,19 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             return;
         }
 
+        // 🏠 Função utilitária para limpar tokens da URL e restaurar a rota correta
+        const cleanUrlAfterSync = () => {
+            const hash = window.location.hash;
+            const search = window.location.search;
+            const params = new URLSearchParams(hash.includes('?') ? hash.split('?')[1] : (hash.substring(1) || search));
+            const redirectTo = params.get('redirect_to');
+            const routePath = redirectTo ? `/${redirectTo.replace(/^\//, '')}` : (hash.split('?')[0] || '/');
+            const finalHash = routePath.startsWith('#') ? routePath : `#${routePath}`;
+
+            console.log('[DashboardAuth] 🏠 Limpando URL e aplicando hash final:', finalHash);
+            window.history.replaceState({}, document.title, window.location.pathname + finalHash);
+        };
+
         // 🔑 EXTRAÇÃO DE TOKENS DA URL (para receber sessão do DashboardRedirect)
         const extractAndSyncTokensFromUrl = async () => {
             const hash = window.location.hash;
@@ -257,19 +285,29 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             if (accessToken && accessToken.length > 100) {
                 console.log('[DashboardAuth] 🔐 Sincronizando sessão via tokens da URL...');
                 try {
-                    const { data, error } = await supabase.auth.setSession({
+                    // v4.5: timeout de 10s para evitar travamento infinito no SubscriptionGate
+                    const syncPromise = supabase.auth.setSession({
                         access_token: accessToken,
                         refresh_token: refreshToken || ''
                     });
+
+                    const timeoutPromise = new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('SYNC_TIMEOUT')), 10000)
+                    );
+
+                    const { data, error } = await Promise.race([syncPromise, timeoutPromise]) as any;
 
                     if (!error && data.session) {
                         console.log('[DashboardAuth] ✅ Sessão sincronizada, aguardando aplicação no estado...');
                         return data.session;
                     } else if (error) {
                         console.error('[DashboardAuth] ❌ Erro ao sincronizar sessão:', error.message);
+                        if (error.status === 403) {
+                            console.error('[DashboardAuth] 🚨 Erro 403 detectado. Verifique se o VITE_SUPABASE_URL no cliente corresponde ao projeto que gerou este token.');
+                        }
                     }
-                } catch (err) {
-                    console.error('[DashboardAuth] ❌ Exceção ao sincronizar sessão:', err);
+                } catch (err: any) {
+                    console.error('[DashboardAuth] ❌ Exceção ao sincronizar sessão:', err.message || err);
                 }
             } else {
                 console.warn('[DashboardAuth] ⚠️ Token inválido ou muito curto');
@@ -305,6 +343,14 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                     setUser(initialSession.user);
                     await refreshProfile(initialSession.user);
                 }
+
+                // Se tinha tokens na URL mas o sync falhou (urlSession null), limpamos mesmo assim
+                const hash = window.location.hash;
+                const search = window.location.search;
+                if (hash.includes('access_token=') || search.includes('access_token=')) {
+                    console.warn('[DashboardAuth] 🧼 Falha na sincronização, limpando tokens da URL para evitar hang...');
+                    cleanUrlAfterSync();
+                }
             } else if (urlSession) {
                 // Garantir que o estado local seja atualizado com a sessão da URL
                 setSession(urlSession);
@@ -312,16 +358,7 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 await refreshProfile(urlSession.user);
 
                 // 🏠 Limpar tokens da URL APÓS o estado estar garantido
-                // Isso evita que o SubscriptionGate veja !user && !tokens
-                const hash = window.location.hash;
-                const search = window.location.search;
-                const params = new URLSearchParams(hash.includes('?') ? hash.split('?')[1] : (hash.substring(1) || search));
-                const redirectTo = params.get('redirect_to');
-                const routePath = redirectTo ? `/${redirectTo.replace(/^\//, '')}` : (hash.split('?')[0] || '/');
-                const finalHash = routePath.startsWith('#') ? routePath : `#${routePath}`;
-
-                console.log('[DashboardAuth] 🏠 Limpando URL e aplicando hash final:', finalHash);
-                window.history.replaceState({}, document.title, window.location.pathname + finalHash);
+                cleanUrlAfterSync();
             }
 
             setLoading(false);

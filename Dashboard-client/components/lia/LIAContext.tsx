@@ -594,26 +594,37 @@ export function LIAProvider({ children }: LIAProviderProps) {
         if (activeIds[modeForConv]) return activeIds[modeForConv];
 
         const title = `Conversa ${new Date().toLocaleString('pt-BR')}`;
+        const { session: authSession } = useDashboardAuth(); // access session for token
+
         try {
+            console.log('🆕 [LIAContext] Criando conversa automática:', modeForConv);
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (authSession?.access_token) {
+                headers['Authorization'] = `Bearer ${authSession.access_token}`;
+            }
+
             const resp = await fetch(`${getApiUrl()}/api/conversations`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({ mode: modeForConv, title, userId: userIdRef.current })
             });
-            
+
             if (!resp.ok) {
                 if (resp.status === 404) {
-                    console.error('❌ [LIAContext] Rota /api/conversations não encontrada (404)');
-                    console.error('💡 [LIAContext] Solução: O backend precisa ser atualizado no Render');
-                    toast.error('Servidor desatualizado. Aguarde alguns minutos e tente novamente.');
+                    console.error('❌ [LIAContext] Endpoint /api/conversations não encontrado (404)');
+                    toast.error('Servidor desatualizado (rota não encontrada). Por favor, aguarde o deploy terminar.');
                     return null;
                 }
-                console.error('❌ [LIAContext] Erro HTTP:', resp.status);
+
+                // Erros 5xx ou outros: ser menos intrusivo
+                console.warn('⚠️ [LIAContext] Falha ao criar conversa (HTTP):', resp.status);
+                toast.error('Erro temporário ao conectar com a LIA. Retentando...', { duration: 2000 });
                 return null;
             }
-            
+
             const data = await resp.json();
-            const newId = data.conversation?.id || `conv_${Date.now()}`;
+            // Suporte para ambos os formatos (conversationId ou data.conversation.id)
+            const newId = data.conversationId || data.conversation?.id || `conv_${Date.now()}`;
             const newConv: Conversation = { id: newId, mode: modeForConv, title, messages: [], createdAt: Date.now(), updatedAt: Date.now() };
             const updated = { ...conversationsRef.current, [newId]: newConv };
             setConversations(updated);
@@ -628,13 +639,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
             saveToStorage(updated, currentIdRef.current, activeIdsByModeRef.current);
             return newId;
         } catch (e: any) {
-            if (e.name === 'AbortError') {
-                console.error('⏱️ [LIAContext] Timeout ao criar conversa');
-                toast.error('Tempo limite excedido. Verifique sua conexão.');
-            } else {
-                console.error('❌ [LIAContext] Erro ao criar conversa:', e);
-                toast.error('Erro ao conectar com o servidor. Tente novamente.');
-            }
+            console.error('❌ [LIAContext] Erro ao criar conversa:', e);
+            toast.error('Erro de conexão com o servidor. Verifique sua internet.');
             return null;
         }
     }, [setActiveScope, saveToStorage]);
@@ -730,37 +736,41 @@ export function LIAProvider({ children }: LIAProviderProps) {
         if (creatingRef.current[mode]) return;
         creatingRef.current[mode] = true;
 
-        // Salvar conversa atual antes de criar nova
         saveCurrentConversation(mode);
 
-        // v4.4: FORÇAR criação de nova conversa (não reutilizar existente)
         const title = `Conversa ${new Date().toLocaleString('pt-BR')}`;
         const effectiveUserId = userId || backendService.getAuthContext().userId;
+        const { session: authSession } = useDashboardAuth();
 
         try {
-            console.log('🆕 [CreateConv] Criando nova conversa para modo:', mode);
+            console.log('🆕 [LIAContext] Criando nova conversa:', mode);
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (authSession?.access_token) {
+                headers['Authorization'] = `Bearer ${authSession.access_token}`;
+            }
+
             const resp = await fetch(`${getApiUrl()}/api/conversations`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({ mode, title, userId: effectiveUserId })
             });
 
             if (!resp.ok) {
                 if (resp.status === 404) {
-                    console.error('❌ [CreateConv] Rota /api/conversations não encontrada (404)');
-                    console.error('💡 [CreateConv] Solução: O backend precisa ser atualizado no Render');
-                    toast.error('Servidor desatualizado. Aguarde alguns minutos e tente novamente.');
+                    console.error('❌ [LIAContext] Endpoint /api/conversations não encontrado (404)');
+                    toast.error('Servidor desatualizado (rota não encontrada). Por favor, aguarde o deploy terminar.');
                     creatingRef.current[mode] = false;
                     return undefined;
                 }
-                console.error('❌ [CreateConv] Falha ao criar conversa:', resp.status);
-                toast.error('Erro ao criar conversa. Tente novamente.');
+                console.warn('⚠️ [LIAContext] Falha ao criar conversa (HTTP):', resp.status);
+                toast.error('Erro temporário ao conectar com a LIA. Retentando...', { duration: 2000 });
                 creatingRef.current[mode] = false;
                 return undefined;
             }
 
             const data = await resp.json();
-            const newId = data.conversation?.id || `conv_${Date.now()}`;
+            // Suporte para ambos os formatos
+            const newId = data.conversationId || data.conversation?.id || `conv_${Date.now()}`;
             console.log('✅ [CreateConv] Conversa criada com ID:', newId);
 
             const newConv: Conversation = { id: newId, mode, title, messages: [], createdAt: Date.now(), updatedAt: Date.now() };
@@ -781,13 +791,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
             creatingRef.current[mode] = false;
             return newConv;
         } catch (e: any) {
-            if (e.name === 'AbortError') {
-                console.error('⏱️ [CreateConv] Timeout ao criar conversa');
-                toast.error('Tempo limite excedido. Verifique sua conexão.');
-            } else {
-                console.error('❌ [CreateConv] Erro:', e);
-                toast.error('Erro ao conectar com o servidor. Tente novamente.');
-            }
+            console.error('❌ [LIAContext] Erro ao criar conversa via UI:', e);
+            toast.error('Erro de conexão. Verifique sua internet.');
             creatingRef.current[mode] = false;
             return undefined;
         }

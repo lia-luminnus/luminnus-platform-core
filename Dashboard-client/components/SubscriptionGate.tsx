@@ -206,19 +206,38 @@ export const SubscriptionGate: React.FC<SubscriptionGateProps> = ({ children }) 
         checkSubscription();
     }, [user, authLoading, initialized, contextPlan, profile]);
 
+    const [syncTimeout, setSyncTimeout] = useState(false);
+
+    // v4.5: Safety timeout para evitar hang infinito em Sincronizando Sessão
+    useEffect(() => {
+        const hash = window.location.hash;
+        const search = window.location.search;
+        const hasTokens = hash.includes('access_token=') || search.includes('access_token=');
+
+        if (hasTokens && !user) {
+            const timer = setTimeout(() => {
+                console.warn('[SubscriptionGate] ⚠️ Timeout de sincronização atingido (8s). Liberando interface.');
+                setSyncTimeout(true);
+            }, 8000);
+            return () => clearTimeout(timer);
+        } else {
+            setSyncTimeout(false);
+        }
+    }, [user]);
+
     // Detectar tokens na URL para evitar redirecionamento prematuro
     const hash = window.location.hash;
     const search = window.location.search;
     const hasTokensInUrl = hash.includes('access_token=') || search.includes('access_token=');
 
-    // Loading state - também espera se há tokens na URL esperando sincronização
-    if (authLoading || !initialized || checking || (hasTokensInUrl && !user)) {
+    // Loading state - também espera se há tokens na URL esperando sincronização (até o timeout)
+    if (authLoading || !initialized || checking || (hasTokensInUrl && !user && !syncTimeout)) {
         return (
             <div className="min-h-screen bg-[#0A0A10] flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                     <p className="text-white/60">
-                        {hasTokensInUrl ? 'Sincronizando sessão...' : 'Verificando acesso...'}
+                        {hasTokensInUrl && !syncTimeout ? 'Sincronizando sessão...' : 'Verificando acesso...'}
                     </p>
                 </div>
             </div>
