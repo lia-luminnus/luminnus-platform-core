@@ -230,3 +230,55 @@ conversationRouter.get('/:id', async (req: Request, res: Response) => {
         return res.status(500).json({ ok: false, error: 'Internal server error' });
     }
 });
+
+/**
+ * PATCH /api/conversations/:id
+ * Atualiza uma conversa existente (título, metadata, etc.)
+ */
+conversationRouter.patch('/:id', async (req: Request, res: Response) => {
+    try {
+        const conversationId = req.params.id;
+        const userId = await getUserIdFromRequest(req);
+        const { title, metadata, mode, summary } = req.body;
+
+        if (!userId) {
+            return res.status(401).json({ ok: false, error: 'Unauthorized' });
+        }
+
+        console.log(`[Conversations] PATCH ${conversationId} for user ${userId}`);
+
+        // Construir objeto de atualização dinâmico
+        const updates: Record<string, any> = {
+            updated_at: new Date().toISOString()
+        };
+
+        if (title !== undefined) updates.title = title;
+        if (metadata !== undefined) updates.metadata = metadata;
+        if (mode !== undefined) updates.mode = mode;
+        if (summary !== undefined) updates.summary = summary;
+
+        const { data, error } = await supabase
+            .from('conversations')
+            .update(updates)
+            .eq('id', conversationId)
+            .eq('user_id', userId)
+            .select()
+            .single();
+
+        if (error) {
+            if (error.code === 'PGRST116') {
+                return res.status(404).json({ ok: false, error: 'Conversation not found' });
+            }
+            console.error('[Conversations] PATCH error:', error);
+            return res.status(500).json({ ok: false, error: error.message });
+        }
+
+        return res.json({
+            ok: true,
+            conversation: data
+        });
+    } catch (err) {
+        console.error('[Conversations] PATCH exception:', err);
+        return res.status(500).json({ ok: false, error: 'Internal server error' });
+    }
+});

@@ -144,26 +144,38 @@ const AppContent: React.FC = () => {
     const hash = window.location.hash;
     const search = window.location.search;
 
-    const hasAdminAccess = hash.includes('admin_access=true') || search.includes('admin_access=true');
+    // Detectar admin_access em qualquer formato de URL
+    const hashParams = hash.includes('?') ? new URLSearchParams(hash.split('?')[1]) : null;
+    const hasAdminAccess =
+      hash.includes('admin_access=true') ||
+      search.includes('admin_access=true') ||
+      hashParams?.get('admin_access') === 'true';
 
-    if (hasAdminAccess) {
+    if (hasAdminAccess && user) {
       console.log('[App] 🔐 Admin access detectado! Forçando onboarding para testes...');
 
       // Reset COMPLETO do estado local
       resetOnboarding();
 
-      // Limpar também o localStorage para garantir
+      // Limpar localStorage
       localStorage.removeItem('luminnus-storage');
       localStorage.removeItem('luminnus-onboarding');
 
-      // Limpar o parâmetro da URL
-      const cleanHash = hash.replace(/[?&]admin_access=true/, '').replace('?&', '?').replace(/\?$/, '');
+      // CRÍTICO: Limpar a sessão do admin para forçar o reset do onboarding
+      const userId = (user as any)?.id || 'unknown';
+      sessionStorage.removeItem(`admin_session_${userId}`);
+
+      // Limpar o parâmetro da URL (suporta ?admin_access e &admin_access)
+      const cleanHash = hash
+        .replace(/[?&]admin_access=true/g, '')
+        .replace('?&', '?')
+        .replace(/\?$/, '');
       window.history.replaceState({}, document.title, window.location.pathname + cleanHash);
 
       // Navegar para onboarding
       navigate('/onboarding', { replace: true });
     }
-  }, [location, resetOnboarding, navigate]);
+  }, [location, resetOnboarding, navigate, user]);
 
   if (!initialized || loading) {
     return (

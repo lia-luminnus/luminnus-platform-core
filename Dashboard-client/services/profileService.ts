@@ -95,9 +95,10 @@ export async function createProfile(userId: string, email: string): Promise<User
     console.log(`[ProfileService] Criando perfil para: ${email} (${userId})...`);
     if (!supabase) throw new Error('Supabase not initialized');
 
+    // Usar upsert para evitar conflitos 409 quando perfil já existe
     const { data, error } = await supabase
         .from('profiles')
-        .insert({
+        .upsert({
             id: userId,
             email: email,
             full_name: email.split('@')[0],
@@ -106,6 +107,9 @@ export async function createProfile(userId: string, email: string): Promise<User
             onboarding_integrations_done: false,
             modules: [],
             updated_at: new Date().toISOString()
+        }, {
+            onConflict: 'id',
+            ignoreDuplicates: false // Atualiza se existir
         })
         .select()
         .single();

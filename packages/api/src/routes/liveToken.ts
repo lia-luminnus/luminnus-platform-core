@@ -39,26 +39,31 @@ liveTokenRouter.get('/', async (req: Request, res: Response) => {
 
         console.log(`[LiveToken] Gerando token para user=${userId}, conv=${conversationId}`);
 
+        // Buscar a chave do Gemini das variáveis de ambiente
+        const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+
+        if (!geminiKey) {
+            console.error('[LiveToken] ❌ GEMINI_API_KEY não configurada!');
+            return res.status(500).json({
+                ok: false,
+                error: 'Gemini API key not configured on server'
+            });
+        }
+
         // Gerar token efêmero (formato compatível com o frontend)
-        // Em produção, isso deveria chamar a API do Gemini para obter um token real
         const ephemeralToken = {
-            token: `eph_${Date.now()}_${userId.substring(0, 8)}`,
+            token: geminiKey, // Retornar a chave real para o frontend
             expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hora
             conversationId: conversationId || null,
             userId: userId
         };
 
-        // Verificar se a variável de ambiente GEMINI_API_KEY está definida
-        const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-        if (!geminiKey) {
-            console.warn('[LiveToken] GEMINI_API_KEY não configurada - modo de desenvolvimento');
-        }
+        console.log('[LiveToken] ✅ Token gerado com sucesso');
 
         return res.json({
             ok: true,
             ...ephemeralToken,
-            // Passar a chave real se disponível (para uso direto no cliente em dev)
-            apiKey: process.env.NODE_ENV === 'development' ? geminiKey : undefined
+            apiKey: geminiKey // Também retornar como apiKey para compatibilidade
         });
     } catch (err) {
         console.error('[LiveToken] Exception:', err);
