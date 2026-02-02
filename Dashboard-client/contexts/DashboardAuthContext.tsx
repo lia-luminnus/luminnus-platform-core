@@ -88,27 +88,29 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 try {
                     console.log(`[DashboardAuth] Tentativa ${attempts}/${MAX_ATTEMPTS}...`);
 
-                    // Timeout de segurança para a busca de perfil
+                    // Timeout estendido para 20s (evitar cold starts do Supabase/Render)
                     const profilePromise = getOrCreateProfile(currentUser.id, currentUser.email || '');
                     const timeoutPromise = new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), 10000)
+                        setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), 20000)
                     );
 
                     userProfile = await Promise.race([profilePromise, timeoutPromise]) as UserProfile;
                     profileLoadedFromDb = true;
-                    console.log('[DashboardAuth] Perfil carregado com sucesso');
+                    console.log('[DashboardAuth] Perfil carregado com sucesso do banco');
                 } catch (pErr: any) {
                     console.warn(`[DashboardAuth] Falha na tentativa ${attempts}:`, pErr.message);
                     if (attempts >= MAX_ATTEMPTS) {
-                        console.error('[DashboardAuth] Máximo de tentativas atingido. Usando fallback.');
-                        // Fallback para permitir que o dashboard carregue mesmo sem perfil do banco
+                        console.error('[DashboardAuth] Máximo de tentativas atingido. Usando fallback de resiliência.');
+                        // Fallback: Se o banco falhar, usamos o que temos no estado local (Zustand/LocalStorage)
+                        // IMPORTANTE: Não forçamos onboarding = false se já tivermos um estado local positivo
                         userProfile = {
                             id: currentUser.id,
                             email: currentUser.email || '',
-                            onboarding_completed: localOnboardingCompleted
+                            onboarding_completed: localOnboardingCompleted, // Confia no LocalStorage
+                            role: 'client' // Assume client em caso de erro crítico de rede
                         } as any;
                     } else {
-                        // Backoff exponencial simples (1s, 2s)
+                        // Backoff exponencial (1s, 2s)
                         await new Promise(resolve => setTimeout(resolve, attempts * 1000));
                     }
                 }
