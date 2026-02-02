@@ -342,9 +342,9 @@ export class GeminiLiveService {
             try {
                 this.genAI = new GoogleGenAI({
                     apiKey: token,
-                    httpOptions: { apiVersion: 'v1alpha' }
+                    httpOptions: { apiVersion: 'v1beta' }
                 });
-                console.log('✅ GoogleGenAI inicializado (v1alpha)');
+                console.log('✅ GoogleGenAI inicializado (v1beta)');
             } catch (err) {
                 console.error('[GeminiLiveService] Erro ao instanciar GoogleGenAI:', err);
                 throw err;
@@ -390,7 +390,7 @@ export class GeminiLiveService {
             }
 
             // 7. Conectar - SEM passar config explícita
-            console.log('[GeminiLiveService] Tentando conectar ao gemini-2.5-flash-native-audio-preview-12-2025...');
+            console.log('[GeminiLiveService] Tentando conectar ao gemini-2.0-flash-exp...');
             const ai = this.genAI as any;
             const liveClient = ai.live || (ai.models && ai.models.live);
 
@@ -400,10 +400,10 @@ export class GeminiLiveService {
             }
 
             this.liveSession = await liveClient.connect({
-                model: 'gemini-2.0-flash-exp',
+                model: 'models/gemini-2.0-flash-exp',
                 config: {
                     systemInstruction: { parts: [{ text: LIA_GEMINI_LIVE_PERSONALITY }] },
-                    responseModalities: 'audio',
+                    responseModalities: ['audio'],
                     speechConfig: {
                         voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } }
                     }
@@ -439,7 +439,7 @@ export class GeminiLiveService {
                         if (event.code === 1008) {
                             console.error('❌ [Erro 1008] Operação não suportada pelo modelo/API. Possíveis causas:');
                             console.error('  1. ❌ Tool calling durante sessão de áudio nativo (verificar se token tem tools=[])');
-                            console.error('  2. ❌ Modelo gemini-2.5-flash-native-audio não suporta bidiGenerateContent com tools');
+                            console.error('  2. ❌ Modelo gemini-2.0-flash-exp não suporta bidiGenerateContent com tools');
                             console.error('  3. ❌ responseModalities incompatível com configuração do token');
                             console.error('  → Solução aplicada: Tools removidos do token efêmero (v4.31)');
                             console.error('  → Se persistir: Migrar para gemini-1.5-flash (suporte estável)');
