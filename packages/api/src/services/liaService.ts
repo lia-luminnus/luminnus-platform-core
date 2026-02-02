@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
-import { LIA_PERSONALITY_V4 } from '@luminnus/shared';
+import { LIA_FULL_PERSONALITY as LIA_PERSONALITY_V4 } from '@luminnus/shared';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '');
 const supabase = createClient(process.env.SUPABASE_URL || '', process.env.SUPABASE_SERVICE_KEY || '');
@@ -14,7 +14,7 @@ export class LiaService {
             console.log(`🧠 [LiaService] Pensando sobre: "${text}" (conv: ${conversationId})`);
 
             const model = genAI.getGenerativeModel({
-                model: 'gemini-1.5-flash', // Estável e rápido para chat textual
+                model: 'gemini-2.5-flash', // Modelo específico solicitado pelo usuário
                 systemInstruction: LIA_PERSONALITY_V4
             });
 
@@ -29,8 +29,12 @@ export class LiaService {
                     .limit(10);
 
                 if (messages && messages.length > 0) {
-                    const history = messages.reverse().map(m => `${m.type === 'user' ? 'Usuário' : 'Lia'}: ${m.content}`).join('\n');
-                    fullPrompt = `Histórico:\n${history}\n\nUsuário: ${text}`;
+                    // Formatar histórico para o Gemini (User/Model)
+                    const history = messages.reverse().map(m =>
+                        `${m.type === 'user' ? 'User' : 'Model'}: ${m.content}`
+                    ).join('\n');
+
+                    fullPrompt = `Consider the following conversation history:\n${history}\n\nUser: ${text}`;
                 }
             }
 

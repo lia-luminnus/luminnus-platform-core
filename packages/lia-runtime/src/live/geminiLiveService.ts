@@ -342,9 +342,9 @@ export class GeminiLiveService {
             try {
                 this.genAI = new GoogleGenAI({
                     apiKey: token,
-                    httpOptions: { apiVersion: 'v1beta' }
+                    httpOptions: { apiVersion: 'v1alpha' }
                 });
-                console.log('✅ GoogleGenAI inicializado (v1beta)');
+                console.log('✅ GoogleGenAI inicializado (v1alpha)');
             } catch (err) {
                 console.error('[GeminiLiveService] Erro ao instanciar GoogleGenAI:', err);
                 throw err;
@@ -400,7 +400,7 @@ export class GeminiLiveService {
             }
 
             this.liveSession = await liveClient.connect({
-                model: 'models/gemini-2.0-flash-exp',
+                model: 'gemini-2.0-flash-exp', // Revertendo para ID direto sem models/ prefixo
                 config: {
                     systemInstruction: { parts: [{ text: LIA_GEMINI_LIVE_PERSONALITY }] },
                     responseModalities: ['audio'],
