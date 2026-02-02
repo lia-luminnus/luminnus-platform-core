@@ -26,22 +26,43 @@ router.get('/load', async (req: Request, res: Response) => {
 
         console.log(`[Assistant] Carregando memórias para: ${userId}`);
 
-        const { data, error } = await supabase
+        // Tentar carregar da view cognitive_memory (preferencial)
+        let data: any[] | null = null;
+        let error: any = null;
+
+        // Attempt 1: Try cognitive_memory view
+        const result1 = await supabase
             .from('cognitive_memory')
             .select('key, content, importance')
             .eq('user_id', userId)
             .order('importance', { ascending: false })
             .limit(50);
 
-        if (error) {
-            console.error('[Assistant] Memory load error:', error);
-            return res.json({ memories: [] });
+        if (result1.error) {
+            console.warn('[Assistant] cognitive_memory view not available:', result1.error.message);
+
+            // Attempt 2: Try memories table directly
+            const result2 = await supabase
+                .from('memories')
+                .select('key, content, value, importance')
+                .eq('user_id', userId)
+                .order('importance', { ascending: false })
+                .limit(50);
+
+            if (result2.error) {
+                console.warn('[Assistant] memories table also failed:', result2.error.message);
+                // Return empty gracefully - memory is optional
+                return res.json({ memories: [] });
+            }
+            data = result2.data;
+        } else {
+            data = result1.data;
         }
 
         const memories = (data || []).map((m: any) => ({
-            key: m.key,
-            content: m.content,
-            importance: m.importance
+            key: m.key || m.id,
+            content: m.content || m.value || '',
+            importance: m.importance || 0
         }));
 
         return res.json({ memories });
