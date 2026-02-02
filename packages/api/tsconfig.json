@@ -16,6 +16,11 @@
         "declaration": true,
         "declarationMap": true,
         "sourceMap": true,
+        "paths": {
+            "@luminnus/shared": [
+                "../shared/src/index.ts"
+            ]
+        }
     },
     "references": [
         {
