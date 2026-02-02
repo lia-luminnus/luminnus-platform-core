@@ -8,6 +8,40 @@ const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANO
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 /**
+ * GET /api/conversations
+ * Lista todas as conversas do usuário
+ */
+conversationRouter.get('/', async (req: Request, res: Response) => {
+    try {
+        const userId = await getUserIdFromRequest(req);
+        if (!userId) {
+            return res.status(401).json({ ok: false, error: 'Unauthorized: userId required' });
+        }
+
+        console.log(`[Conversations] Listando conversas para: ${userId}`);
+
+        const { data, error } = await supabase
+            .from('conversations')
+            .select('*')
+            .eq('user_id', userId)
+            .order('updated_at', { ascending: false });
+
+        if (error) {
+            console.error('[Conversations] Supabase list error:', error);
+            return res.status(500).json({ ok: false, error: error.message });
+        }
+
+        return res.json({
+            ok: true,
+            conversations: data || []
+        });
+    } catch (err) {
+        console.error('[Conversations] List exception:', err);
+        return res.status(500).json({ ok: false, error: 'Internal server error' });
+    }
+});
+
+/**
  * Auxiliar: Extrair userId do token ou da query
  */
 async function getUserIdFromRequest(req: Request): Promise<string | null> {
@@ -15,12 +49,18 @@ async function getUserIdFromRequest(req: Request): Promise<string | null> {
     const authHeader = req.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
         const token = authHeader.split(' ')[1];
-        const { data: { user }, error } = await supabase.auth.getUser(token);
-        if (!error && user) return user.id;
+        try {
+            const { data: { user }, error } = await supabase.auth.getUser(token);
+            if (!error && user) return user.id;
+        } catch (e) {
+            console.warn('[Conversations] JWT auth error (continuando para fallback):', e);
+        }
     }
 
     // 2. Fallback para query/body
-    return (req.query.userId as string) || req.body.userId || null;
+    const userId = (req.query.userId as string) || req.body.userId || null;
+    if (userId === 'null' || userId === 'undefined') return null;
+    return userId;
 }
 
 /**
@@ -39,20 +79,44 @@ conversationRouter.post('/', async (req: Request, res: Response) => {
         console.log(`[Conversations] Criando conversa: mode=${mode}, user=${userId}`);
 
         // Inserir no Supabase (tabela conversations)
+        const insertData: any = {
+            user_id: userId,
+            mode: mode || 'chat',
+            title: title || `Conversa ${new Date().toLocaleString('pt-BR')}`,
+            updated_at: new Date().toISOString()
+        };
+
+        // Adicionar tenant_id opcional (será criado por migration se faltar)
+        if (tenantId) insertData.tenant_id = tenantId;
+
         const { data, error } = await supabase
             .from('conversations')
-            .insert({
-                user_id: userId,
-                tenant_id: tenantId || userId,
-                mode: mode || 'chat',
-                title: title || `Conversa ${new Date().toLocaleString('pt-BR')}`,
-                updated_at: new Date().toISOString()
-            })
+            .insert(insertData)
             .select()
             .single();
 
         if (error) {
-            console.error('[Conversations] Supabase error:', error);
+            console.error('[Conversations] Supabase insert error:', error);
+
+            // Fallback: Tentar novamente sem tenant_id se o erro for de coluna inexistente
+            if (error.message.includes('tenant_id') || error.code === '42703') {
+                console.log('[Conversations] Retrying without tenant_id column...');
+                delete insertData.tenant_id;
+                const retry = await supabase
+                    .from('conversations')
+                    .insert(insertData)
+                    .select()
+                    .single();
+
+                if (!retry.error) {
+                    return res.json({
+                        ok: true,
+                        conversationId: retry.data.id,
+                        conversation: retry.data
+                    });
+                }
+            }
+
             return res.status(500).json({ ok: false, error: error.message });
         }
 

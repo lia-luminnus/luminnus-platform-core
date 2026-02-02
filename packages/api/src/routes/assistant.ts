@@ -73,7 +73,7 @@ router.get('/load', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/location
+ * GET /api/location OR /api/memory
  * Retorna dados de localização/timezone para bootstrap do dashboard
  */
 router.get('/', async (req: Request, res: Response) => {
@@ -81,7 +81,8 @@ router.get('/', async (req: Request, res: Response) => {
         return res.json({
             ok: true,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            now: new Date().toISOString()
+            now: new Date().toISOString(),
+            service: 'assistant-router'
         });
     } catch (err) {
         return res.status(500).json({ error: 'Internal server error' });
@@ -90,16 +91,14 @@ router.get('/', async (req: Request, res: Response) => {
 
 /**
  * POST /api/location
- * Salva localização do usuário (mock persistente por enquanto)
+ * Salva localização do usuário
  */
-router.post('/location', async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
     try {
-        const { userId, location } = req.body;
-        console.log(`[Assistant] Localização recebida para ${userId}:`, location);
+        const { userId, location, address } = req.body;
+        console.log(`[Assistant] Localização recebida para ${userId || 'guest'}:`, address || location);
 
-        // Em um sistema real, salvaríamos isso na sessão
-        // Por enquanto, apenas confirmamos o recebimento
-        return res.json({ success: true, location });
+        return res.json({ ok: true, success: true, location, address });
     } catch (err) {
         console.error('[Assistant] Location exception:', err);
         return res.status(500).json({ error: 'Internal server error' });
