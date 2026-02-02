@@ -48,12 +48,20 @@ export function setupWebSocket(server: HTTPServer): IOServer {
             }
         });
 
-        socket.on('text-message', (data) => {
-            console.log(`[Socket.IO] Message from ${clientId}:`, data.text);
-            // Placeholder para integração com LIA Runtime
+        socket.on('text-message', async (data) => {
+            const { text, conversationId, userId } = data;
+            const client = clients.get(clientId);
+
+            console.log(`[Socket.IO] Message from ${clientId}:`, text);
+
+            // Resposta via LiaService (Gemini)
+            const { LiaService } = await import('../services/liaService.js');
+            const responseText = await LiaService.getResponse(text, conversationId || client?.conversationId, userId || client?.userId);
+
             socket.emit('lia-transcript', {
-                text: 'Backend Socket.IO ativo. Integração com LIA em andamento...',
-                conversationId: data.conversationId
+                text: responseText,
+                conversationId: conversationId || client?.conversationId,
+                status: 'done'
             });
         });
 
