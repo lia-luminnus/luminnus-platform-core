@@ -14,6 +14,7 @@ import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 import { useAppStore } from '../store/useAppStore';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { getApiUrl } from '../config/api';
 
 // Helper para classes condicionais
 function cn(...classes: any[]) {
@@ -171,7 +172,7 @@ const Integrations: React.FC = () => {
         setLoading(true);
         try {
             // v2.1: Usar rota unificada sem prefixo /lia (porte 3000 via proxy)
-            const response = await fetch('/api/integrations', {
+            const response = await fetch(`${getApiUrl()}/api/integrations`, {
                 headers: {
                     'Authorization': `Bearer ${session.access_token}`
                 }
@@ -179,6 +180,8 @@ const Integrations: React.FC = () => {
             if (response.ok) {
                 const data = await response.json();
                 setUserIntegrations(data.integrations || []);
+            } else {
+                console.warn('[Integrations] API retornou erro:', response.status);
             }
         } catch (error) {
             console.error('[Integrations] Erro ao carregar dados:', error);
@@ -204,7 +207,7 @@ const Integrations: React.FC = () => {
     const completeGoogleOAuth = async (code: string, state: string) => {
         const loadToast = toast.loading('Finalizando conexão com Google...');
         try {
-            const response = await fetch('/api/auth/google/callback', {
+            const response = await fetch(`${getApiUrl()}/api/auth/google/callback`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -218,7 +221,8 @@ const Integrations: React.FC = () => {
                 toast.success('Google Workspace conectado com sucesso!');
                 loadData();
             } else {
-                throw new Error('Falha ao validar tokens');
+                const errorData = await response.json().catch(() => ({ error: 'Falha desconhecida' }));
+                throw new Error(errorData.error || 'Falha ao validar tokens');
             }
         } catch (error: any) {
             toast.dismiss(loadToast);
@@ -370,7 +374,7 @@ const Integrations: React.FC = () => {
             const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
 
             // Passamos redirect_to no state para o unificado (3000) saber para onde voltar
-            const apiUrl = `/api/auth/google?services=${selectedGoogleServices.join(',')}&user_id=${userId}&tenant_id=${tenantId || 'undefined'}&redirect_to=${encodeURIComponent(callbackUrl)}&redirect_uri=${encodeURIComponent('https://luminnus-platform-core.onrender.com/api/auth/google/callback')}`;
+            const apiUrl = `${getApiUrl()}/api/auth/google?services=${selectedGoogleServices.join(',')}&user_id=${userId}&tenant_id=${tenantId || 'undefined'}&redirect_to=${encodeURIComponent(callbackUrl)}&redirect_uri=${encodeURIComponent(getApiUrl() + '/api/auth/google/callback')}`;
             console.log('[Integrations] Iniciando OAuth:', apiUrl);
 
             const response = await fetch(apiUrl);

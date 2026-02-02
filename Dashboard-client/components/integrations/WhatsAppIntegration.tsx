@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Header from '../Header';
 import { LanguageContext } from '../../contexts/LanguageContext';
 import { useDashboardAuth } from '../../contexts/DashboardAuthContext';
+import { getApiUrl } from '../../config/api';
 import toast from 'react-hot-toast';
 
 interface IntegrationStatus {
@@ -45,8 +46,6 @@ const WhatsAppIntegration: React.FC = () => {
     const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
     const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : user?.id || null);
 
-    const API_URL = import.meta.env.VITE_API_URL || 'https://luminnus-platform-core.onrender.com';
-
     // 🛡️ SECURITY: Block ONLY if not admin AND no tenant - ensures no client data leakage
     if (!tenantId && !isAdmin) {
         console.warn('⚠️ [WhatsApp] No tenant_id found for non-admin user - blocking to prevent data leak');
@@ -81,12 +80,18 @@ const WhatsAppIntegration: React.FC = () => {
             const timeoutId = setTimeout(() => controller.abort(), 10000);
 
             const response = await fetch(
-                `${API_URL}/api/integrations/whatsapp/status?tenantId=${tenantId}`,
+                `${getApiUrl()}/api/integrations/whatsapp/status?tenantId=${tenantId}`,
                 { signal: controller.signal }
             );
             clearTimeout(timeoutId);
 
-            const data = await response.json();
+            if (!response.ok) {
+                console.error('Failed to fetch status:', response.status);
+                setStatus(null);
+                return;
+            }
+
+            const data = await response.json().catch(() => ({ status: 'error' }));
 
             // 🔒 SECURITY: Validate response belongs to current tenant
             if (data.status === 'ok') {
@@ -128,13 +133,18 @@ const WhatsAppIntegration: React.FC = () => {
 
         try {
             // 1. Get the signup URL from backend
-            const response = await fetch(`${API_URL}/api/whatsapp/embedded/start`, {
+            const response = await fetch(`${getApiUrl()}/api/whatsapp/embedded/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tenant_id: tenantId })
             });
 
-            const data = await response.json();
+            if (!response.ok) {
+                toast.error('Erro ao iniciar conexão', { id: 'quick-connect' });
+                return;
+            }
+
+            const data = await response.json().catch(() => ({ status: 'error' }));
 
             if (data.status === 'ok' && data.data?.signupUrl) {
                 toast.success('Abrindo Meta Business Suite...', { id: 'quick-connect' });
@@ -146,11 +156,26 @@ const WhatsAppIntegration: React.FC = () => {
                     'width=600,height=700,scrollbars=yes,resizable=yes,status=yes'
                 );
 
+                // ✅ NOVO: Ouvir mensagem de sucesso do popup
+                const handleMessage = (event: MessageEvent) => {
+                    if (event.data?.type === 'WA_EMBEDDED_SUCCESS') {
+                        toast.success('Conexão realizada com sucesso!', { id: 'quick-connect' });
+                        fetchStatus(); // Atualiza UI imediatamente
+                        window.removeEventListener('message', handleMessage);
+                    }
+                    if (event.data?.type === 'WA_EMBEDDED_ERROR') {
+                        toast.error(`Erro na conexão: ${event.data.reason}`, { id: 'quick-connect' });
+                        window.removeEventListener('message', handleMessage);
+                    }
+                };
+                window.addEventListener('message', handleMessage);
+
                 // 3. Monitor popup for close (callback will redirect back)
                 if (popup) {
                     const checkPopup = setInterval(() => {
                         if (popup.closed) {
                             clearInterval(checkPopup);
+                            window.removeEventListener('message', handleMessage); // Limpa listener
                             // Refresh status after popup closes
                             setTimeout(() => {
                                 fetchStatus();
@@ -179,7 +204,7 @@ const WhatsAppIntegration: React.FC = () => {
 
     const handleSaveQuickConnection = async (phone: string, token: string) => {
         try {
-            const response = await fetch(`${API_URL}/api/integrations/whatsapp/save-quick`, {
+            const response = await fetch(`${getApiUrl()}/api/integrations/whatsapp/save-quick`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -189,7 +214,12 @@ const WhatsAppIntegration: React.FC = () => {
                 })
             });
 
-            const data = await response.json();
+            if (!response.ok) {
+                toast.error('Erro ao salvar conexão');
+                return;
+            }
+
+            const data = await response.json().catch(() => ({ status: 'error' }));
 
             if (data.status === 'ok') {
                 toast.success('WhatsApp conectado com sucesso!');
@@ -213,7 +243,7 @@ const WhatsAppIntegration: React.FC = () => {
 
         setSaving(true);
         try {
-            const response = await fetch(`${API_URL}/api/integrations/whatsapp/save-manual`, {
+            const response = await fetch(`${getApiUrl()}/api/integrations/whatsapp/save-manual`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -222,7 +252,13 @@ const WhatsAppIntegration: React.FC = () => {
                 })
             });
 
-            const data = await response.json();
+            if (!response.ok) {
+                toast.error('Erro ao salvar integração');
+                return;
+            }
+
+            const data = await response.json().catch(() => ({ status: 'error' }));
+            
             if (data.status === 'ok') {
                 toast.success('Integração salva com sucesso!');
                 fetchStatus();
@@ -242,13 +278,19 @@ const WhatsAppIntegration: React.FC = () => {
     const handleTestWebhook = async () => {
         setTesting(true);
         try {
-            const response = await fetch(`${API_URL}/api/integrations/whatsapp/test-webhook`, {
+            const response = await fetch(`${getApiUrl()}/api/integrations/whatsapp/test-webhook`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tenant_id: tenantId })
             });
 
-            const data = await response.json();
+            if (!response.ok) {
+                toast.error('Erro ao testar webhook');
+                return;
+            }
+
+            const data = await response.json().catch(() => ({ status: 'error' }));
+            
             if (data.status === 'ok') {
                 toast.success(`Webhook OK! Latência: ${data.data.latency_ms}ms`);
             } else {
@@ -264,13 +306,19 @@ const WhatsAppIntegration: React.FC = () => {
 
     const handleReconnect = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/integrations/whatsapp/reconnect`, {
+            const response = await fetch(`${getApiUrl()}/api/integrations/whatsapp/reconnect`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tenant_id: tenantId })
             });
 
-            const data = await response.json();
+            if (!response.ok) {
+                toast.error('Erro ao reconectar');
+                return;
+            }
+
+            const data = await response.json().catch(() => ({ status: 'error' }));
+            
             if (data.status === 'ok') {
                 toast.success('Reconectado com sucesso!');
                 fetchStatus();

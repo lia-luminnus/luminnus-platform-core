@@ -41,6 +41,21 @@ const PRICE_TO_PLAN_MAP: Record<string, {
 // ============================================
 // Helper Functions
 // ============================================
+function safeTimestampToISO(timestamp: number | null | undefined): string | null {
+    if (!timestamp || typeof timestamp !== 'number' || timestamp <= 0) {
+        return null;
+    }
+    try {
+        const date = new Date(timestamp * 1000);
+        if (isNaN(date.getTime())) {
+            return null;
+        }
+        return date.toISOString();
+    } catch {
+        return null;
+    }
+}
+
 function calculateCommitmentEndDate(commitmentMonths: number): string | null {
     if (commitmentMonths === 0) return null;
     const endDate = new Date();
@@ -245,8 +260,8 @@ Deno.serve(async (req) => {
                 status: subscription.status,
                 commitment_end_date: commitmentEndDate,
                 commitment_months: planInfo.commitmentMonths,
-                current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-                current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+                current_period_start: safeTimestampToISO(subscription.current_period_start as number),
+                current_period_end: safeTimestampToISO(subscription.current_period_end as number),
                 metadata: { checkout_session_id: session.id },
             }, {
                 onConflict: "stripe_subscription_id",
@@ -398,8 +413,8 @@ Deno.serve(async (req) => {
                 .from("subscriptions")
                 .update({
                     status: subscription.status,
-                    current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-                    current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+                    current_period_start: safeTimestampToISO(subscription.current_period_start as number),
+                    current_period_end: safeTimestampToISO(subscription.current_period_end as number),
                     cancel_at_period_end: subscription.cancel_at_period_end,
                     updated_at: new Date().toISOString(),
                 })

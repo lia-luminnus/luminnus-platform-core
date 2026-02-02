@@ -20,6 +20,8 @@ import { tryLocalAnswer, isLocalQuery } from './services/localAnswerService';
 // v9.0: INTENT ROUTER & RESPONSE GATE - SSOT Protocol Enforcement
 import { classifyIntent, detectAttachmentType, getIncidentTemplateInstruction, getHybridTemplateInstruction, IntentMode, ContextScope, QuickAction } from './services/intentRouter';
 import { validateResponse, suggestQuickActions, recordTelemetry } from './services/responseGate';
+// Toast notifications
+import toast from 'react-hot-toast';
 
 
 // ======================================================================

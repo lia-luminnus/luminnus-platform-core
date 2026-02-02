@@ -16,24 +16,29 @@ const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
  * URL base do backend unificado (Express + Socket.io)
  * 
  * Ordem de prioridade:
- * 1. VITE_API_URL (variável de ambiente)
- * 2. Detecção automática por hostname
- * 3. Fallback localhost
+ * 1. VITE_API_URL (variável de ambiente) - OBRIGATÓRIO em produção
+ * 2. Fallback localhost APENAS em desenvolvimento
+ * 
+ * ⚠️ Em produção sem VITE_API_URL: erro crítico (config inválida)
  */
 export function getApiUrl(): string {
-    // 1. Variável de ambiente tem prioridade
+    // 1. Variável de ambiente tem prioridade (SSOT)
     if (import.meta.env.VITE_API_URL) {
         return import.meta.env.VITE_API_URL;
     }
 
-    // 2. Detecção automática
-    if (isRenderProduction) {
-        // Em produção no Render, usar o backend unificado
-        return 'https://luminnus-platform-core.onrender.com';
+    // 2. Fallback APENAS para desenvolvimento local
+    if (isLocalhost) {
+        return 'http://localhost:3000';
     }
 
-    // 3. Fallback desenvolvimento
-    return 'http://localhost:3000';
+    // 3. ERRO CRÍTICO: produção sem config
+    console.error('❌ [API Config] VITE_API_URL não definido em produção!');
+    console.error('📋 [API Config] Defina VITE_API_URL=https://api.luminnus.ai no Render');
+    console.error('🚨 [API Config] Todas as chamadas de API falharão.');
+    
+    // Fallback de emergência (vai falhar, mas pelo menos não quebra o build)
+    return 'https://api.luminnus.ai';
 }
 
 /**

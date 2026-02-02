@@ -9,6 +9,7 @@ import WhatsAppSummaries from './whatsapp/WhatsAppSummaries.tsx';
 import WhatsAppKanban from './whatsapp/WhatsAppKanban.tsx';
 import WhatsAppAudioInbox from './whatsapp/WhatsAppAudioInbox.tsx';
 import WhatsAppBriefingConfig from './whatsapp/WhatsAppBriefingConfig.tsx';
+import { getApiUrl } from '../config/api';
 
 import { LIAProvider } from './lia/LIAContext';
 
@@ -28,8 +29,6 @@ const WhatsAppAgentContent: React.FC = () => {
     const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
     const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : user?.id || null);
 
-    const API_URL = import.meta.env.VITE_API_URL || 'https://luminnus-platform-core.onrender.com';
-
     const fetchStatus = async () => {
         // 🔒 SECURITY: Block fetch if no tenant (non-admin users only)
         if (!tenantId) {
@@ -41,8 +40,15 @@ const WhatsAppAgentContent: React.FC = () => {
 
         try {
             // 🔒 SECURITY: Always include tenantId in API calls
-            const response = await fetch(`${API_URL}/api/integrations/whatsapp/status?tenantId=${tenantId}`);
-            const data = await response.json();
+            const response = await fetch(`${getApiUrl()}/api/integrations/whatsapp/status?tenantId=${tenantId}`);
+            
+            if (!response.ok) {
+                console.error('Failed to fetch status:', response.status);
+                setStatus(null);
+                return;
+            }
+            
+            const data = await response.json().catch(() => ({}));
 
             // 🔒 SECURITY: Validate response belongs to current tenant
             if (data.status === 'ok' && data.data) {
@@ -91,12 +97,13 @@ const WhatsAppAgentContent: React.FC = () => {
             case 'reconnect':
                 showNotify(t('waReconnecting'), 'info');
                 try {
-                    const response = await fetch(`${API_URL}/api/integrations/whatsapp/reconnect`, {
+                    const response = await fetch(`${getApiUrl()}/api/integrations/whatsapp/reconnect`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ tenant_id: tenantId })
                     });
                     if (response.ok) {
+                        const data = await response.json().catch(() => ({}));
                         showNotify(t('waReconnected'), 'success');
                         fetchStatus();
                     } else {
@@ -109,12 +116,18 @@ const WhatsAppAgentContent: React.FC = () => {
             case 'webhook':
                 showNotify(t('waTestingWebhook'), 'info');
                 try {
-                    const response = await fetch(`${API_URL}/api/integrations/whatsapp/test-webhook`, {
+                    const response = await fetch(`${getApiUrl()}/api/integrations/whatsapp/test-webhook`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ tenant_id: tenantId })
                     });
-                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                        showNotify('⚠️ Erro no webhook: resposta inválida', 'error');
+                        return;
+                    }
+                    
+                    const data = await response.json().catch(() => ({ success: false, error: 'Erro ao processar resposta' }));
                     if (data.success) {
                         showNotify('✅ Webhook funcionando!', 'success');
                         fetchStatus();

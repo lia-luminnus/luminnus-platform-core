@@ -12,7 +12,8 @@ import { getLiaGreeting } from '@luminnus/lia-runtime';
 export function setupChatRoutes(app: Express, openai: OpenAI) {
   const functions = ToolService.getTools();
 
-  app.post('/chat', async (req: any, res: any) => {
+  // Handler principal de chat (reutilizável para /chat e /api/chat)
+  const chatHandler = async (req: any, res: any) => {
     try {
       const { message, conversationId, mode, personality, userId, tenantId, liaMode, messageId, files } = req.body;
 
@@ -285,7 +286,11 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
       console.error('❌ Erro /chat:', error);
       res.status(500).json({ ok: false, error: String(error) });
     }
-  });
+  };
+
+  // Registrar handler para ambos os endpoints (/chat para compatibilidade, /api/chat para padronização)
+  app.post('/chat', chatHandler);
+  app.post('/api/chat', chatHandler);
 
   // Endpoints auxiliares
   app.post('/api/stt', async (req: any, res: any) => {

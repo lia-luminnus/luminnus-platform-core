@@ -33,6 +33,10 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const [isAdmin, setIsAdmin] = useState(false);
     const [dismissedVersion, setDismissedVersion] = useState<string | null>(localStorage.getItem('luminnus_update_dismissed'));
 
+    // 🔒 SSOT: Controlar se já carregamos um plano real (evitar regressão para Start)
+    const planLoadedRef = React.useRef<boolean>(false);
+    const refreshInProgressRef = React.useRef<boolean>(false);
+
     // Verificar onboarding também no estado local (permite funcionar sem autenticação)
     const localOnboardingCompleted = useAppStore((state) => state.onboarding_completed);
 
@@ -45,8 +49,17 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const refreshProfile = async (initialUser?: User | null) => {
         console.log('[DashboardAuth] Iniciando refreshProfile...');
+        
+        // Evitar refresh concorrente
+        if (refreshInProgressRef.current) {
+            console.log('[DashboardAuth] ⏭️ Refresh já em andamento, ignorando chamada duplicada');
+            return;
+        }
+        refreshInProgressRef.current = true;
+
         if (!supabase) {
             console.warn('[DashboardAuth] Supabase não disponível no refreshProfile');
+            refreshInProgressRef.current = false;
             return;
         }
 
@@ -59,6 +72,7 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             if (!currentUser) {
                 console.log('[DashboardAuth] Sem usuário para carregar perfil');
                 setProfile(null);
+                refreshInProgressRef.current = false;
                 return;
             }
 
@@ -122,11 +136,10 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 }
             }
 
-            // Buscar Plano (Fontes: 1. profile.plan_type do banco, 2. app_metadata, 3. default "Start")
+            // Buscar Plano (Fontes: 1. profile.plan_type do banco, 2. app_metadata, 3. plano atual no estado)
             const metadata = currentUser.app_metadata || {};
             const dbPlanType = userProfile?.plan_type || null;
-            const userPlanName = (dbPlanType || metadata.plan || metadata.claims?.plan || "Start") as string;
-
+            
             // Forçar Pro se for admin conforme requisito (VITE_ADMIN_EMAILS)
             const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com,wendellcomercial2@gmail.com';
             const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
@@ -148,20 +161,47 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 }
             }
 
-            // Se já tiver um plano setado e for admin, mantemos o que está no estado (override)
-            // Se não, inicializamos
+            // 🔒 POLÍTICA DE PLANO (SSOT): Evitar regressão para Start
             setPlan((prev: any) => {
-                if (adminDetected && prev?.name) return prev;
-                const effectivePlan = adminDetected ? "Pro" : userPlanName;
-                return {
-                    name: effectivePlan,
-                    id: effectivePlan.toLowerCase() + "-plan"
-                };
+                // 1. Admin: manter Pro ou override
+                if (adminDetected) {
+                    const adminPlan = prev?.name || "Pro";
+                    return { name: adminPlan, id: adminPlan.toLowerCase() + "-plan" };
+                }
+
+                // 2. Perfil real do DB carregou: usar ele (fonte mais confiável)
+                if (profileLoadedFromDb && dbPlanType) {
+                    planLoadedRef.current = true;
+                    const planName = dbPlanType.charAt(0).toUpperCase() + dbPlanType.slice(1).toLowerCase();
+                    console.log('[DashboardAuth] ✅ Plano do DB:', planName);
+                    return { name: planName, id: planName.toLowerCase() + "-plan" };
+                }
+
+                // 3. Metadata do JWT
+                if (metadata.plan || metadata.claims?.plan) {
+                    const jwtPlan = (metadata.plan || metadata.claims?.plan) as string;
+                    const planName = jwtPlan.charAt(0).toUpperCase() + jwtPlan.slice(1).toLowerCase();
+                    planLoadedRef.current = true;
+                    console.log('[DashboardAuth] ✅ Plano do JWT:', planName);
+                    return { name: planName, id: planName.toLowerCase() + "-plan" };
+                }
+
+                // 4. Timeout/fallback: NÃO regredir se já temos plano válido
+                if (!profileLoadedFromDb && prev?.name && planLoadedRef.current) {
+                    console.log('[DashboardAuth] 🔒 Mantendo plano atual (timeout, plano já carregado):', prev.name);
+                    return prev;
+                }
+
+                // 5. Primeiro carregamento sem dados: fallback Start
+                console.log('[DashboardAuth] ⚠️ Fallback Start (primeira carga sem dados)');
+                return { name: "Start", id: "start-plan" };
             });
 
             console.log('[DashboardAuth] Perfil e Plano inicializados');
         } catch (error) {
             console.error('[DashboardAuth] Erro fatal no refreshProfile:', error);
+        } finally {
+            refreshInProgressRef.current = false;
         }
     };
 
