@@ -106,7 +106,7 @@ async function sendWelcomeEmail(
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                from: "Luminnus <lia@luminus.ai>",
+                from: "Luminnus <lia@luminnus.ai>",
                 to: [email],
                 subject: "Bem-vindo à Luminnus — seu acesso à LIA está liberado",
                 html: htmlContent,

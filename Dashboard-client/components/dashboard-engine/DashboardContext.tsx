@@ -771,8 +771,10 @@ export function DashboardProvider({
 
     // Unified Load Effect
     // Reacts to tenantId, businessType (onboarding) or plan changes
+    const loadedTenantRef = React.useRef<string | null>(null);
+
     useEffect(() => {
-        if (tenantId) {
+        if (tenantId && loadedTenantRef.current !== tenantId) {
             const currentPlan = (plan?.toLowerCase() || 'pro');
             const storePlan = storePlanType.toLowerCase();
 
@@ -782,6 +784,7 @@ export function DashboardProvider({
             }
 
             // Lifecycle silenced
+            loadedTenantRef.current = tenantId;
             loadDashboard(tenantId);
         }
     }, [tenantId, plan, currentBusinessType, loadDashboard]); // Syncs everything at once

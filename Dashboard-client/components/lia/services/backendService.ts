@@ -373,10 +373,14 @@ class BackendService {
                                 console.log(`📍 Localização enviada: ${address || `${latitude}, ${longitude}`}`);
                                 resolve(true);
                             } else {
+                                // Silently fail for 404 to avoid console spam in dev/staging
+                                if (response.status !== 404) {
+                                    console.warn(`⚠️ Falha ao enviar localização: ${response.status}`);
+                                }
                                 resolve(false);
                             }
                         } catch (error) {
-                            console.error('❌ Erro ao enviar localização:', error);
+                            // Network error - silent
                             resolve(false);
                         }
                     },
