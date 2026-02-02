@@ -101,16 +101,42 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                     console.warn(`[DashboardAuth] Falha na tentativa ${attempts}:`, pErr.message);
                     if (attempts >= MAX_ATTEMPTS) {
                         console.error('[DashboardAuth] Máximo de tentativas atingido. Usando fallback de resiliência.');
-                        // Fallback: Se o banco falhar, usamos o que temos no estado local (Zustand/LocalStorage)
-                        // IMPORTANTE: Respeitar o estado local se ele já indicar onboarding completo
-                        const isCompletedLocally = localOnboardingCompleted || false;
+
+                        // 🔒 CRÍTICO: Respeitar o estado REAL do localStorage (Zustand persists aqui)
+                        // Isso evita forçar usuários já onboardados a refazer o onboarding
+                        let isCompletedLocally = localOnboardingCompleted || false;
+                        let storedSegment = null;
+                        let storedModules = null;
+
+                        try {
+                            const storedData = localStorage.getItem('luminnus-storage');
+                            if (storedData) {
+                                const parsed = JSON.parse(storedData);
+                                if (parsed?.state?.onboarding_completed) {
+                                    isCompletedLocally = true;
+                                    console.log('[DashboardAuth] ✅ Onboarding encontrado no localStorage');
+                                }
+                                storedSegment = parsed?.state?.businessType || null;
+                                storedModules = parsed?.state?.activeModules || null;
+                            }
+                        } catch (parseErr) {
+                            console.warn('[DashboardAuth] Erro ao ler localStorage:', parseErr);
+                        }
 
                         userProfile = {
                             id: currentUser.id,
                             email: currentUser.email || '',
-                            onboarding_completed: isCompletedLocally, // Confia no LocalStorage
+                            onboarding_completed: isCompletedLocally, // Respeita localStorage
+                            onboarding_integrations_done: isCompletedLocally, // Se onboarding ok, integrações tb
+                            segment: storedSegment,
+                            modules: storedModules,
                             role: 'client' // Assume client em caso de erro crítico de rede
                         } as any;
+
+                        console.log('[DashboardAuth] 📦 Usando perfil de fallback:', {
+                            id: userProfile.id,
+                            onboarding: isCompletedLocally
+                        });
                     } else {
                         // Backoff exponencial (1s, 2s)
                         await new Promise(resolve => setTimeout(resolve, attempts * 1000));
@@ -407,6 +433,13 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
         // Limpar storage explicitamente
         localStorage.removeItem('sb-dashboard-auth');
         localStorage.removeItem('luminnus-storage');
+
+        // v4.5: Limpar histórico e estado da LIA para evitar "ghost messages" entre sessões
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('lia_')) {
+                localStorage.removeItem(key);
+            }
+        });
 
         // v4.1: Garantir que o estado de onboarding também seja resetado se necessário
         // (Isso força o sistema a re-inicializar do zero no próximo login)

@@ -76,7 +76,7 @@ const AppContent: React.FC = () => {
   // 🔒 SECURITY: Get tenant from user context, admin uses default admin tenant
   const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
   const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
-  const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
+  const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : user?.id || null);
 
   const userPlan = (authPlan?.name?.toLowerCase() as 'start' | 'plus' | 'pro') || (storePlanType?.toLowerCase() as 'start' | 'plus' | 'pro') || 'pro';
 

@@ -146,8 +146,8 @@ export const AdminSidebar = ({
               className="mt-2 w-full justify-start bg-indigo-500/20 text-white hover:bg-indigo-500/40 border border-indigo-400/30 transition-all duration-200"
               onClick={() => {
                 const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL || (import.meta.env.PROD ? "https://luminnus-dashboard.onrender.com" : "http://localhost:3001");
-                // Adicionar flag admin_access para resetar onboarding do admin
-                window.location.href = `${DASHBOARD_URL}/#/?admin_access=true`;
+                // Removido admin_access=true para evitar resets acidentais de onboarding
+                window.location.href = `${DASHBOARD_URL}/#/`;
               }}
             >
               <LayoutDashboard className="mr-3 h-5 w-5" />

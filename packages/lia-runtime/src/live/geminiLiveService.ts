@@ -400,8 +400,14 @@ export class GeminiLiveService {
             }
 
             this.liveSession = await liveClient.connect({
-                model: 'gemini-2.5-flash-native-audio-preview-12-2025',
-                // v4.16: config REMOVIDIO - usar apenas o do token efêmero
+                model: 'gemini-2.0-flash-exp',
+                config: {
+                    systemInstruction: { parts: [{ text: LIA_GEMINI_LIVE_PERSONALITY }] },
+                    responseModalities: 'audio',
+                    speechConfig: {
+                        voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } }
+                    }
+                },
                 callbacks: {
                     onopen: () => {
                         console.log('✅ Conectado ao Gemini Live');

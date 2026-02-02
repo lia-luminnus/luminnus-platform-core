@@ -1590,9 +1590,10 @@ export function LIAProvider({ children }: LIAProviderProps) {
     // ======================================================================
     useEffect(() => {
         const handleGeminiEvent = (event: GeminiLiveEvent) => {
-            // CRÍTICO: Usar o escopo ATIVO (onde o usuário está) para que transcrições apareçam no chat correto
-            const convId = activeScopeRef.current || currentIdRef.current || activeIdsByModeRef.current.multimodal || 'default';
-            const scopeKey = convId; // Sem prefixo de modo - usa o escopo ativo diretamente
+            // v9.5: FIX GHOST MESSAGES - Always use the 'live' mode conversation ID or a dedicated scope key
+            // This prevents Live Mode transcripts from appearing in Multi-Modal or Chat when backgrounded.
+            const convId = activeIdsByModeRef.current.live || currentIdRef.current || 'default';
+            const scopeKey = convId;
             const mode = 'live';
 
             console.log(`📡 [LIAContext] Evento Gemini: ${event.type} | Escopo Ativo: ${scopeKey}`);
