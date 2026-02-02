@@ -22,6 +22,7 @@ import { setupWebSocket } from './ws/gateway.js';
 import http from 'http';
 
 import { conversationRouter } from './routes/conversation.js';
+import liveTokenRouter from './routes/liveToken.js';
 
 const app: express.Express = express();
 const PORT = process.env.PORT || 5000;
@@ -58,6 +59,7 @@ app.use('/api/version', versionRouter);
 app.use('/api/me', meRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/conversations', conversationRouter);
+app.use('/api/live-token', liveTokenRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/metrics', metricsRouter);

@@ -173,3 +173,60 @@ conversationRouter.get('/active', async (req: Request, res: Response) => {
         return res.status(500).json({ ok: false, error: 'Internal server error' });
     }
 });
+
+/**
+ * GET /api/conversations/:id
+ * Retorna uma conversa específica com suas mensagens
+ */
+conversationRouter.get('/:id', async (req: Request, res: Response) => {
+    try {
+        const conversationId = req.params.id;
+        const userId = await getUserIdFromRequest(req);
+
+        if (!userId) {
+            return res.status(401).json({ ok: false, error: 'Unauthorized' });
+        }
+
+        console.log(`[Conversations] Buscando conversa ${conversationId} para ${userId}`);
+
+        // Buscar conversa
+        const { data: conversation, error: convError } = await supabase
+            .from('conversations')
+            .select('*')
+            .eq('id', conversationId)
+            .eq('user_id', userId)
+            .single();
+
+        if (convError) {
+            if (convError.code === 'PGRST116') {
+                return res.status(404).json({ ok: false, error: 'Conversation not found' });
+            }
+            console.error('[Conversations] Get error:', convError);
+            return res.status(500).json({ ok: false, error: convError.message });
+        }
+
+        // Buscar mensagens da conversa
+        const { data: messages, error: msgError } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('conversation_id', conversationId)
+            .order('created_at', { ascending: true });
+
+        if (msgError) {
+            console.error('[Conversations] Messages error:', msgError);
+            // Continua mesmo se falhar ao buscar mensagens
+        }
+
+        return res.json({
+            ok: true,
+            conversation: {
+                ...conversation,
+                messages: messages || []
+            },
+            messages: messages || []
+        });
+    } catch (err) {
+        console.error('[Conversations] Get exception:', err);
+        return res.status(500).json({ ok: false, error: 'Internal server error' });
+    }
+});
