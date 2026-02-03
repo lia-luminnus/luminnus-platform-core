@@ -11,10 +11,15 @@
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true,
-        "resolveJsonModule": true,
         "declaration": true,
-        "sourceMap": true
+        "composite": true,
+        "sourceMap": true,
+        "baseUrl": ".",
+        "paths": {
+            "@luminnus/shared": [
+                "../shared/src/index.ts"
+            ]
+        }
     },
     "references": [
         {

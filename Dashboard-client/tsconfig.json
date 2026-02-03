@@ -19,6 +19,12 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@luminnus/shared": [
+        "../packages/shared/src/index.ts"
+      ],
+      "@luminnus/lia-runtime": [
+        "../packages/lia-runtime/src/index.ts"
       ]
     },
     "allowImportingTsExtensions": true,
@@ -33,7 +39,12 @@
     "**/*.ts",
     "**/*.tsx"
   ],
-  "exclude": [
-    "node_modules"
+  "references": [
+    {
+      "path": "../packages/shared"
+    },
+    {
+      "path": "../packages/lia-runtime"
+    }
   ]
 }
