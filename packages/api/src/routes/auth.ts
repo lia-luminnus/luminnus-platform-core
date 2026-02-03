@@ -273,7 +273,7 @@ router.get('/google/callback', async (req, res) => {
         // Determinar redirectUri
         const host = req.get('host');
         const protocol = req.protocol;
-        let redirectBase = process.env.APP_URL || process.env.FRONTEND_URL || `${protocol}://${host}`;
+        const redirectBase = process.env.APP_URL || process.env.FRONTEND_URL || `${protocol}://${host}`;
         // v3.1: Suporte a redirecionamento dinâmico
         const redirectUri = `${redirectBase}/api/auth/google/callback`;
 

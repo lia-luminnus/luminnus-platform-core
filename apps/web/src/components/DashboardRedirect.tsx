@@ -19,7 +19,7 @@ const DashboardRedirect = () => {
                 session = retry.data.session;
             }
 
-            let targetUrl = dashboardUrl;
+            const targetUrl = dashboardUrl;
             const searchParams = new URLSearchParams(window.location.search);
 
             if (session) {

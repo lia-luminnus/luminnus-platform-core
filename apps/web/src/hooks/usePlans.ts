@@ -153,7 +153,6 @@ export function usePlans() {
 
   useEffect(() => {
     let isMounted = true;
-    let pollingInterval: NodeJS.Timeout;
 
     // Timeout de segurança - CORRIGIDO
     const timeoutId = setTimeout(() => {
@@ -172,7 +171,7 @@ export function usePlans() {
     });
 
     // 🔄 POLLING: Atualizar planos a cada 10 segundos para sincronização com admin
-    pollingInterval = setInterval(() => {
+    const pollingInterval = setInterval(() => {
       if (isMounted) {
         console.log('🔄 [usePlans] Polling - Verificando atualizações...');
         loadPlans();

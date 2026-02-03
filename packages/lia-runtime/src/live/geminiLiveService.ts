@@ -380,7 +380,7 @@ export class GeminiLiveService {
             // Passar config duplicada aqui pode conflitar e causar desconexão imediata.
             // O frontend só precisa passar os callbacks.
 
-            console.log(`🚀 VOICE_START {engine: \"gemini\", conversationId: \"${this.currentConversationId}\", userIdPresent: ${!!this.config.userId}, tenantIdPresent: ${!!this.config.tenantId}}`);
+            console.log(`🚀 VOICE_START {engine: "gemini", conversationId: "${this.currentConversationId}", userIdPresent: ${!!this.config.userId}, tenantIdPresent: ${!!this.config.tenantId}}`);
             console.log('📦 [GeminiLive] Conectando COM TOKEN EFÊMERO (config vem do backend)');
 
             // Garantir que AudioContext está rodando (Autoplay Policy)
@@ -774,7 +774,7 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
                 .trim();
 
             // Detectar se contém scripts não-latinos (mais de 30% = ruído)
-            const nonLatinRegex = /[^\u0000-\u007F\u00C0-\u024F\u1E00-\u1EFF]/g;
+            const nonLatinRegex = /[^\x20-\x7F\u00C0-\u024F\u1E00-\u1EFF]/g;
             const nonLatinChars = (inputText.match(nonLatinRegex) || []).length;
             const latinRatio = 1 - (nonLatinChars / inputText.length);
 
@@ -1409,7 +1409,7 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
         this.emitEvent({ type: 'lia-transcript', data: "Buscando lugares próximos..." });
 
         try {
-            let query = userQuery.toLowerCase()
+            const query = userQuery.toLowerCase()
                 .replace(/onde tem|onde fica|onde é|tem alguma|tem algum|procure por|busca por|perto de mim|próximo/g, '')
                 .trim();
 

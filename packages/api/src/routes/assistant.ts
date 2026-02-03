@@ -28,7 +28,7 @@ router.get('/load', async (req: Request, res: Response) => {
 
         // Tentar carregar da view cognitive_memory (preferencial)
         let data: any[] | null = null;
-        let error: any = null;
+        const error: any = null;
 
         // Attempt 1: Try cognitive_memory view
         const result1 = await supabase
