@@ -1,0 +1,55 @@
+name: CI Gate
+
+on:
+  pull_request:
+    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # (Opcional mas recomendado) sanity check do workspace
+      - name: Workspace sanity
+        run: |
+          node -e "
+            const fs=require('fs');
+            const pkgs=['packages/shared','packages/lia-runtime','packages/api','apps/web'];
+            for (const p of pkgs){
+              const f=p+'/package.json';
+              if (fs.existsSync(f)) JSON.parse(fs.readFileSync(f,'utf8'));
+            }
+            console.log('workspace ok');
+          "
+
+      - name: Build (Turbo)
+        run: pnpm turbo run build
+
+      - name: Typecheck (Turbo)
+        run: pnpm turbo run typecheck
+
+      - name: Lint (Turbo)
+        run: pnpm turbo run lint
