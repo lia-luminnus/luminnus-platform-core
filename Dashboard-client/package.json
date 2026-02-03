@@ -5,7 +5,6 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "cd ../packages/shared && pnpm install && pnpm build && cd ../lia-runtime && pnpm install && pnpm build",
     "build": "vite build",
     "preview": "vite preview"
   },

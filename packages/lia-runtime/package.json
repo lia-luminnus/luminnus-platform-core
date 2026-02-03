@@ -56,8 +56,7 @@
         }
     },
     "scripts": {
-        "prebuild": "cd ../shared && pnpm install && pnpm build",
-        "build": "tsup && tsc --emitDeclarationOnly",
+        "build": "tsup && tsc -b",
         "dev": "tsup --watch",
         "lint": "eslint src/",
         "clean": "rimraf dist",
