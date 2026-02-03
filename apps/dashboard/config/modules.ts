@@ -36,25 +36,25 @@ export const CATEGORY_PRESETS: Record<string, ModuleId[]> = {
 
   liberal_professionals: ['dashboard', 'lia', 'crm', 'calendar', 'files', 'financial', 'automations', 'whatsapp_agent', 'reports', 'plan', 'settings', 'support'],
 
-  health_wellness: ['dashboard', 'lia', 'calendar', 'medical_records', 'financial', 'files', 'crm', 'plan', 'settings', 'support'],
+  health_wellness: ['dashboard', 'lia', 'calendar', 'medical_records', 'financial', 'files', 'crm', 'whatsapp_agent', 'plan', 'settings', 'support'],
 
-  real_estate: ['dashboard', 'lia', 'crm', 'properties', 'calendar', 'files', 'financial', 'automations', 'plan', 'settings', 'support'],
+  real_estate: ['dashboard', 'lia', 'crm', 'properties', 'calendar', 'files', 'financial', 'automations', 'whatsapp_agent', 'plan', 'settings', 'support'],
 
-  retail: ['dashboard', 'lia', 'stock', 'sales', 'financial', 'automations', 'team', 'plan', 'settings', 'support'],
+  retail: ['dashboard', 'lia', 'stock', 'sales', 'financial', 'automations', 'team', 'whatsapp_agent', 'plan', 'settings', 'support'],
 
-  food: ['dashboard', 'lia', 'stock', 'sales', 'financial', 'team', 'plan', 'settings', 'support'],
+  food: ['dashboard', 'lia', 'stock', 'sales', 'financial', 'team', 'whatsapp_agent', 'plan', 'settings', 'support'],
 
-  logistics: ['dashboard', 'lia', 'logistics', 'stock', 'financial', 'team', 'automations', 'plan', 'settings', 'support'],
+  logistics: ['dashboard', 'lia', 'logistics', 'stock', 'financial', 'team', 'automations', 'whatsapp_agent', 'plan', 'settings', 'support'],
 
-  tech: ['dashboard', 'lia', 'projects', 'automations', 'team', 'files', 'crm', 'plan', 'settings', 'support'],
+  tech: ['dashboard', 'lia', 'projects', 'automations', 'team', 'files', 'crm', 'whatsapp_agent', 'plan', 'settings', 'support'],
 
-  creative: ['dashboard', 'lia', 'projects', 'files', 'crm', 'calendar', 'plan', 'settings', 'support'],
+  creative: ['dashboard', 'lia', 'projects', 'files', 'crm', 'calendar', 'whatsapp_agent', 'plan', 'settings', 'support'],
 
   business_services: ['dashboard', 'lia', 'crm', 'financial', 'reports', 'whatsapp_agent', 'files', 'team', 'automations', 'plan', 'settings', 'support'],
 
-  education: ['dashboard', 'lia', 'calendar', 'files', 'crm', 'financial', 'plan', 'settings', 'support'],
+  education: ['dashboard', 'lia', 'calendar', 'files', 'crm', 'financial', 'whatsapp_agent', 'plan', 'settings', 'support'],
 
-  other: ['dashboard', 'lia', 'crm', 'calendar', 'files', 'financial', 'plan', 'settings', 'support'], // Generic default
+  other: ['dashboard', 'lia', 'crm', 'calendar', 'files', 'financial', 'whatsapp_agent', 'plan', 'settings', 'support'], // Generic default
 };
 
 // Helper to get ordered module definitions based on a list of IDs

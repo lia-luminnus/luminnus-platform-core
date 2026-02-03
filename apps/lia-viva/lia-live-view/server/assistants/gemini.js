@@ -43,7 +43,7 @@ export async function runGemini(userText, options = {}) {
     }
 
     const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash", // Corrigido de gemini-2.0-flash para versão estável
+        model: "gemini-2.5-flash", // Atualizado para v2.5 (Stable)
         systemInstruction: LIA_FULL_PERSONALITY,
         tools
     });

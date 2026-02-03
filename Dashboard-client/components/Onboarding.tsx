@@ -38,7 +38,15 @@ const Onboarding: React.FC = () => {
   const [customDescription, setCustomDescription] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Step 1: Select Category
+  // 🔒 CRITICAL: Prevent returning users from seeing onboarding
+  const { user, refreshProfile, onboardingCompleted } = useDashboardAuth();
+
+  React.useEffect(() => {
+    if (onboardingCompleted) {
+      console.log('[Onboarding] Usuário já completou setup, redirecionando para Dashboard');
+      navigate('/', { replace: true });
+    }
+  }, [onboardingCompleted, navigate]);
   const handleSelectCategory = (category: BusinessCategory) => {
     if (category.id === 'custom_other') {
       setIsModalOpen(true);
@@ -74,8 +82,6 @@ const Onboarding: React.FC = () => {
       setTempModules([...tempModules, id]);
     }
   };
-
-  const { user, refreshProfile } = useDashboardAuth();
 
   // Finalize setup and go to dashboard
   const finalizeOnboarding = async () => {

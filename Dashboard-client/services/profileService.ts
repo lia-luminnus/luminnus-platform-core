@@ -34,7 +34,7 @@ export async function getProfile(userId: string): Promise<UserProfile | null> {
     if (!supabase) return null;
 
     const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('DB_TIMEOUT')), 30000)
+        setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000)
     );
 
     try {

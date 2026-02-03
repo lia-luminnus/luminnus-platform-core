@@ -400,7 +400,7 @@ export class GeminiLiveService {
             }
 
             this.liveSession = await liveClient.connect({
-                model: 'gemini-2.0-flash-exp', // Revertendo para ID direto sem models/ prefixo
+                model: 'gemini-2.5-flash', // Atualizado para v2.5
                 config: {
                     systemInstruction: { parts: [{ text: LIA_GEMINI_LIVE_PERSONALITY }] },
                     responseModalities: ['audio'],
@@ -410,7 +410,7 @@ export class GeminiLiveService {
                 },
                 callbacks: {
                     onopen: () => {
-                        console.log('✅ Conectado ao Gemini Live');
+                        console.log('✅ Conectado ao Gemini Live (v2.5)');
                         this.setState(ConnState.OPEN);
                         this.emitEvent({ type: 'connected' });
                         this.emitEvent({ type: 'listening' });
@@ -437,16 +437,11 @@ export class GeminiLiveService {
 
                         // v4.31: Diagnóstico detalhado de erro 1008 (Operation not supported)
                         if (event.code === 1008) {
-                            console.error('❌ [Erro 1008] Operação não suportada pelo modelo/API. Possíveis causas:');
-                            console.error('  1. ❌ Tool calling durante sessão de áudio nativo (verificar se token tem tools=[])');
-                            console.error('  2. ❌ Modelo gemini-2.0-flash-exp não suporta bidiGenerateContent com tools');
-                            console.error('  3. ❌ responseModalities incompatível com configuração do token');
-                            console.error('  → Solução aplicada: Tools removidos do token efêmero (v4.31)');
-                            console.error('  → Se persistir: Migrar para gemini-1.5-flash (suporte estável)');
+                            console.error('❌ [Erro 1008] Operação não suportada. Verificar modelo e tools.');
                         } else if (event.code === 1006) {
-                            console.error('❌ [Erro 1006] Conexão perdida inesperadamente (possivelmente rede/timeout)');
+                            console.error('❌ [Erro 1006] Conexão perdida inesperadamente.');
                         } else if (event.code === 1007) {
-                            console.error('❌ [Erro 1007] Dados inválidos recebidos (verificar formato de áudio/mensagem)');
+                            console.error('❌ [Erro 1007] Dados inválidos recebidos.');
                         }
 
                         this.stopSession();
@@ -654,6 +649,11 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
             console.log('🎤 Captura de áudio configurada (AudioWorkletNode)');
         } catch (error) {
             console.warn('⚠️ AudioWorklet não suportado, usando ScriptProcessor (fallback):', error);
+
+            if (!this.audioContext) {
+                console.error('❌ [GeminiLive] AudioContext perdido no fallback');
+                return;
+            }
 
             // Fallback para ScriptProcessor (navegadores antigos)
             const source = this.audioContext.createMediaStreamSource(this.mediaStream);

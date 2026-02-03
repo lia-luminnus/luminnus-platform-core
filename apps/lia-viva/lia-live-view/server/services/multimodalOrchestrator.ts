@@ -64,8 +64,8 @@ function classificarIntencao(message: string, hasAttachments: boolean): 'ANALYZE
   }
 
   // v9.0: Detecção de contratos visuais - forçar ANALYZE para visual_analysis
-  if (message.includes('CONTRATO DE OUTPUT: VISUAL_ANALYSIS') || 
-      message.includes('MODO ANÁLISE VISUAL')) {
+  if (message.includes('CONTRATO DE OUTPUT: VISUAL_ANALYSIS') ||
+    message.includes('MODO ANÁLISE VISUAL')) {
     console.log('🎯 [IntentRouter] Contrato visual_analysis detectado → forçando ANALYZE');
     return 'ANALYZE';
   }
@@ -76,10 +76,10 @@ function classificarIntencao(message: string, hasAttachments: boolean): 'ANALYZE
   const creationKeywords = ['crie', 'gere', 'monte', 'construa', 'salve', 'exporte', 'create', 'generate', 'make', 'faça', 'faz', 'montar', 'imprimir', 'pdf', 'exportar pdf', 'gerar pdf'];
   const actionKeywords = ['deleta', 'apaga', 'exclua', 'move', 'transfira', 'envia', 'agenda', 'marca'];
   const correctionKeywords = ['corrija', 'conserte', 'fix', 'correct'];
-  
+
   // v8.0: Remover keywords de erro de analysisKeywords para evitar falsos positivos
   const analysisKeywords = ['analise', 'veja', 'explique', 'resuma', 'entenda', 'analyze', 'explain', 'summarize', 'diga', 'fale', 'qual', 'quais', 'mostre', 'pergunta', 'duvida', 'verifique', 'ajuste', 'o que você acha', 'sua opinião'];
-  
+
   // v8.0: Keywords específicas de troubleshooting (separadas para evitar conflito)
   // v9.0: Usar apenas em contexto de pedido real do usuário (após isolamento)
   const troubleshootingKeywords = ['erro', 'bug', 'problema', 'não funciona', 'falha', 'quebrado', 'crash'];
@@ -92,7 +92,7 @@ function classificarIntencao(message: string, hasAttachments: boolean): 'ANALYZE
 
   // Se o usuário está perguntando "o que está acontecendo", é ANALYZE, mesmo se falar "ajuste"
   if (lower.includes('acontecendo') || lower.includes('perdi') || lower.includes('perdido')) return 'ANALYZE';
-  
+
   // v10.0: Se tem troubleshooting keywords, diferenciar diagnóstico de correção ativa
   if (isTroubleshooting) {
     // Se é troubleshooting mas não tem comando explícito de criação ou correção, 
@@ -481,7 +481,7 @@ async function processarComGeminiVision({
     - PROIBIDO: Placeholders como [Veja aqui].`;
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     systemInstruction: currentSystemInstruction,
     tools: geminiTools as any,
     toolConfig: (intent === 'CREATE' || intent === 'CORRECT' || intent === 'HYBRID') ? {
@@ -606,12 +606,12 @@ async function processarComGeminiVision({
           role: 'function',
           parts: toolResults.map(tr => {
             let responseObj = tr.result || { error: tr.error };
-            
+
             // CRITICAL FIX: Gemini exige que functionResponse.response seja um objeto Struct (não string)
             if (typeof responseObj === 'string') {
               responseObj = { result: responseObj };
             }
-            
+
             return {
               functionResponse: {
                 name: tr.name,

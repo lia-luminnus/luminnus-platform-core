@@ -81,17 +81,17 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             let userProfile;
             let profileLoadedFromDb = false;
             let attempts = 0;
-            const MAX_ATTEMPTS = 3;
+            const MAX_ATTEMPTS = 5; // v5.6: Aumentado para lidar com cold starts severos
 
             while (attempts < MAX_ATTEMPTS && !profileLoadedFromDb) {
                 attempts++;
                 try {
                     console.log(`[DashboardAuth] Tentativa ${attempts}/${MAX_ATTEMPTS}...`);
 
-                    // Timeout estendido para 20s (evitar cold starts do Supabase/Render)
+                    // Timeout otimizado para Pro Plan (15s)
                     const profilePromise = getOrCreateProfile(currentUser.id, currentUser.email || '');
                     const timeoutPromise = new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), 20000)
+                        setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), 15000)
                     );
 
                     userProfile = await Promise.race([profilePromise, timeoutPromise]) as UserProfile;
@@ -138,8 +138,10 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                             onboarding: isCompletedLocally
                         });
                     } else {
-                        // Backoff exponencial (1s, 2s)
-                        await new Promise(resolve => setTimeout(resolve, attempts * 1000));
+                        // Backoff exponencial (2s, 4s, 8s...)
+                        const delay = Math.min(Math.pow(2, attempts) * 1000, 10000);
+                        console.log(`[DashboardAuth] Aguardando ${delay}ms antes da próxima tentativa...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
                     }
                 }
             }
@@ -321,8 +323,9 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                         refresh_token: refreshToken || ''
                     });
 
+                    // Timeout otimizado para Pro Plan (7s é suficiente para handshake)
                     const timeoutPromise = new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('SYNC_TIMEOUT')), 10000)
+                        setTimeout(() => reject(new Error('SYNC_TIMEOUT')), 7000)
                     );
 
                     const { data, error } = await Promise.race([syncPromise, timeoutPromise]) as any;

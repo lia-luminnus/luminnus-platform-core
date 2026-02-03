@@ -21,8 +21,13 @@ import {
     WidgetReplacePatch,
     WidgetAddPatch,
     LiaActionReasonCode,
+    LayoutPatch,
+    WidgetReplacePatch,
+    WidgetAddPatch,
+    LiaActionReasonCode,
     PatchValidationResult
 } from './types';
+import { CATEGORY_PRESETS, MODULE_REGISTRY, ModuleId } from '../../config/modules';
 import { supabase } from '../../lib/supabase';
 import { useAppStore } from '../../store/useAppStore';
 import toast from 'react-hot-toast';
@@ -744,11 +749,11 @@ export function DashboardProvider({
 
             // Final fallback to default config
             console.warn('[DashboardContext] Using default config fallback');
-            dispatch({ type: 'SET_CONFIG', payload: getDefaultConfig() });
+            dispatch({ type: 'SET_CONFIG', payload: getDefaultConfig(businessType || undefined) });
 
         } catch (error) {
             console.error('❌ Error loading dashboard:', error);
-            dispatch({ type: 'SET_CONFIG', payload: getDefaultConfig() });
+            dispatch({ type: 'SET_CONFIG', payload: getDefaultConfig(tId === 'demo' ? 'professionals' : undefined) });
         }
     }, []);
 
@@ -1194,62 +1199,103 @@ export function useDashboard() {
 // Default Config (fallback)
 // ============================================
 
-function getDefaultConfig(): DashboardConfig {
+function getDefaultConfig(businessType?: string): DashboardConfig {
+    const defaultWidgets: Record<string, WidgetConfig> = {};
+    const defaultLayout: LayoutItem[] = [];
+    let nextY = 0;
+
+    // Helper to add widget
+    const addWidget = (id: string, type: WidgetType, title: string, w: number, h: number, config: any = {}, metric?: string) => {
+        defaultWidgets[id] = {
+            type,
+            title,
+            metric,
+            config
+        };
+        defaultLayout.push({
+            id,
+            x: (defaultLayout.length % 2) * 6, // 2 columns rough layout
+            y: nextY,
+            w,
+            h,
+            i: id,
+            minW: 2,
+            minH: 2
+        });
+        if (defaultLayout.length % 2 === 0) nextY += h;
+    };
+
+    // 1. Determine active modules based on business type
+    // Fallback to a generic checklist if type not found
+    let activeModules: ModuleId[] = ['dashboard', 'lia', 'financial', 'calendar']; // Minimal default
+
+    if (businessType && CATEGORY_PRESETS[businessType]) {
+        activeModules = CATEGORY_PRESETS[businessType];
+    } else if (businessType) {
+        // Try to fuzzy match or map known types
+        const key = Object.keys(CATEGORY_PRESETS).find(k => k.includes(businessType) || businessType.includes(k));
+        if (key) activeModules = CATEGORY_PRESETS[key];
+    }
+
+    // 2. Build Dashboard based on Modules
+    // Always add Revenue/Financial Overview first if financial module is present
+    if (activeModules.includes('financial')) {
+        addWidget('kpi_revenue', 'kpi_card', 'Receitas', 3, 2, { color: 'green', icon: 'trending_up' }, 'cash_in');
+        addWidget('kpi_expenses', 'kpi_card', 'Despesas', 3, 2, { color: 'red', icon: 'trending_down' }, 'cash_out');
+        addWidget('kpi_net', 'kpi_card', 'Saldo', 3, 2, { color: 'blue', icon: 'account_balance' }, 'net_cash');
+        // Kpi 4 placeholder
+        addWidget('kpi_clients', 'kpi_card', 'Clientes', 3, 2, { color: 'purple', icon: 'people' }, 'contacts_count');
+
+        // Next row
+        nextY = 2;
+        addWidget('chart_performance', 'line_timeseries', 'Desempenho Financeiro', 8, 4, { color: 'blue' }, 'cash_in');
+        addWidget('chart_breakdown', 'donut_breakdown', 'Gastos por Categoria', 4, 4, {}, 'expenses_by_category');
+        nextY += 4;
+    }
+
+    // WhatsApp / CRM
+    if (activeModules.includes('whatsapp_agent') || activeModules.includes('crm')) {
+        // If we didn't add financial widgets, reset Y
+        if (nextY === 0) nextY = 0;
+
+        if (activeModules.includes('whatsapp_agent')) {
+            addWidget('whatsapp_overview', 'kpi_card', 'WhatsApp Ativos', 3, 2, { color: 'green', icon: 'chat' }, 'active_chats');
+        }
+    }
+
+    // LIA Insights (Always add if possible)
+    if (activeModules.includes('lia')) {
+        addWidget('alerts_insights', 'alerts_list', 'Lia Insights', 12, 4, { color: 'amber', icon: 'auto_awesome' }, 'insights');
+        nextY += 4;
+    }
+
+    // If specific modules need table
+    if (activeModules.includes('financial') || activeModules.includes('sales')) {
+        addWidget('table_activity', 'table_transactions', 'Últimas Transações', 12, 4, { color: 'cyan', icon: 'list_alt' }, 'transactions_recent');
+        nextY += 4;
+    }
+
+    // Fallback if empty (should not happen with default fallback)
+    if (Object.keys(defaultWidgets).length === 0) {
+        return {
+            globals: { dateRange: 'last_30_days', currency: 'BRL', timezone: 'America/Sao_Paulo' },
+            layout: [
+                { id: 'welcome', x: 0, y: 0, w: 12, h: 4, minW: 4, minH: 2 }
+            ],
+            widgets: {
+                welcome: { type: 'alerts_list', title: 'Bem-vindo ao Luminnus', config: {} }
+            }
+        };
+    }
+
     return {
         globals: {
             dateRange: 'last_30_days',
             currency: 'BRL',
             timezone: 'America/Sao_Paulo',
         },
-        layout: [
-            // Row 1: KPIs
-            { id: 'kpi_revenue', x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
-            { id: 'kpi_expenses', x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
-            { id: 'kpi_net', x: 6, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
-            { id: 'kpi_clients', x: 9, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
-
-            // Row 2: Main Chart and Breakdown
-            { id: 'chart_performance', x: 0, y: 2, w: 8, h: 4, minW: 4, minH: 3 },
-            { id: 'chart_breakdown', x: 8, y: 2, w: 4, h: 4, minW: 3, minH: 3 },
-
-            // Row 3: Table and Alerts
-            { id: 'table_activity', x: 0, y: 6, w: 8, h: 4, minW: 4, minH: 3 },
-            { id: 'alerts_insights', x: 8, y: 6, w: 4, h: 4, minW: 3, minH: 3 },
-        ],
-        widgets: {
-            kpi_revenue: { type: 'kpi_card', title: 'Receitas', metric: 'cash_in', icon: 'trending_up', color: 'green' },
-            kpi_expenses: { type: 'kpi_card', title: 'Despesas', metric: 'cash_out', icon: 'trending_down', color: 'red' },
-            kpi_net: { type: 'kpi_card', title: 'Saldo', metric: 'net_cash', icon: 'account_balance', color: 'blue' },
-            kpi_clients: { type: 'kpi_card', title: 'Clientes', metric: 'contacts_count', icon: 'people', color: 'purple' },
-
-            chart_performance: {
-                type: 'line_timeseries',
-                title: 'Desempenho Financeiro',
-                metric: 'cash_in',
-                icon: 'show_chart',
-                color: 'blue'
-            },
-            chart_breakdown: {
-                type: 'donut_breakdown',
-                title: 'Distribuição de Gastos',
-                metric: 'expenses_by_category',
-                icon: 'pie_chart',
-            },
-            table_activity: {
-                type: 'table_transactions',
-                title: 'Transações Recentes',
-                metric: 'transactions_recent',
-                icon: 'list_alt',
-                color: 'cyan'
-            },
-            alerts_insights: {
-                type: 'alerts_list',
-                title: 'LIA Insights',
-                metric: 'insights',
-                icon: 'auto_awesome',
-                color: 'amber'
-            },
-        },
+        layout: defaultLayout,
+        widgets: defaultWidgets,
     };
 }
 
