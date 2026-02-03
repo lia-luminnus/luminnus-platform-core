@@ -54,6 +54,8 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, '.'),
         '@lia': path.resolve(__dirname, './components/lia'),
+        '@luminnus/shared': path.resolve(__dirname, '../packages/shared/src'),
+        '@luminnus/lia-runtime': path.resolve(__dirname, '../packages/lia-runtime/src'),
       }
     },
     optimizeDeps: {

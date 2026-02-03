@@ -19,12 +19,6 @@
     "paths": {
       "@/*": [
         "./*"
-      ],
-      "@luminnus/shared": [
-        "../packages/shared/src/index.ts"
-      ],
-      "@luminnus/lia-runtime": [
-        "../packages/lia-runtime/src/index.ts"
       ]
     },
     "allowImportingTsExtensions": true,
