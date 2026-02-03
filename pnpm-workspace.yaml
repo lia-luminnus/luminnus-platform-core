@@ -1,7 +1,7 @@
 packages:
   - "apps/dashboard"
   - "apps/web"
-  - "apps/lia-modes"
+
   - "apps/lia-viva/lia-live-view"
   - "Dashboard-client"
   - "packages/*"
