@@ -17,7 +17,12 @@
         "outDir": "./dist",
         "rootDir": "./src",
         "resolveJsonModule": true,
-        "baseUrl": "."
+        "baseUrl": ".",
+        "paths": {
+            "@luminnus/shared": [
+                "../shared/dist/index.d.ts"
+            ]
+        }
     },
     "references": [
         {
