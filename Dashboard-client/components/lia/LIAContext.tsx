@@ -384,19 +384,42 @@ export function LIAProvider({ children }: LIAProviderProps) {
     useEffect(() => {
         const syncUser = () => {
             const storedAuth = localStorage.getItem('sb-dashboard-auth');
-            if (storedAuth) {
+            // Priorizar contexto vivo (authPlan) sobre localStorage para evitar "null" em race conditions
+            const effectivePlanName = authPlan?.name || authUser?.app_metadata?.plan || null;
+
+            if (storedAuth || authUser) {
                 try {
-                    const authData = JSON.parse(storedAuth);
-                    const uId = authData.user?.id || null;
-                    const userPlan = authData.user?.app_metadata?.plan || null;
-                    const role = authData.user?.app_metadata?.role || authProfile?.role || 'client';
+                    const authData = storedAuth ? JSON.parse(storedAuth) : {};
+                    const uId = authUser?.id || authData.user?.id || null;
+                    const storedPlan = authData.user?.app_metadata?.plan || null;
+                    const role = authUser?.app_metadata?.role || authData.user?.app_metadata?.role || authProfile?.role || 'client';
+
                     if (uId) {
-                        const activePlan = authPlan || authUser?.app_metadata?.plan || userPlan;
+                        // NORMALIZATION: Ensure plan is string to prevent "Object valid as React child" crash
+                        const activePlan = effectivePlanName || storedPlan;
+
                         setUserId(uId);
                         setContextTenantId(uId);
-                        setPlanState(activePlan);
+                        // Apenas atualizar se tiver valor válido para não sobrescrever com null durante loading
+                        if (activePlan) {
+                            setPlanState(activePlan);
+                        }
                         setUserRole(role);
-                        console.log('👤 [LIAContext] Sincronizado via AuthContext:', uId, 'Plano:', activePlan, 'Role:', role);
+
+                        // Debug log only if plan actually changed or is null
+                        if (plan !== activePlan) {
+                            console.log('👤 [LIAContext] Sync:', uId, 'Plan:', activePlan, 'Role:', role);
+                        }
+
+                        // v5.10: Inject userName for Gemini Live context to fix hallucinations (Wendel vs Windows)
+                        const userName = authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || 'Usuário';
+                        if (geminiLiveService.updateConfig) {
+                            geminiLiveService.updateConfig({
+                                userName: userName,
+                                userId: uId,
+                                userPlan: activePlan || 'free'
+                            });
+                        }
 
                         // Sincronizar com o socket para voz/realtime (usando import estático)
                         if (currentIdRef.current) {
@@ -404,16 +427,19 @@ export function LIAProvider({ children }: LIAProviderProps) {
                         }
                     }
                 } catch (e) {
-                    console.warn('[LIAContext] Falha ao sincronizar usuário do localStorage');
+                    console.warn('[LIAContext] Falha ao sincronizar usuário:', e);
                 }
             }
         };
 
-        syncUser();
+        if (authInitialized) {
+            syncUser();
+        }
+
         // Listener para o evento disparado pelo LiaOS quando o handshake completa
         window.addEventListener('lia-auth-updated', syncUser);
         return () => window.removeEventListener('lia-auth-updated', syncUser);
-    }, [authProfile]);
+    }, [authProfile, authPlan, authUser, authInitialized]);
 
     // Manter refs sincronizadas
     useEffect(() => {
@@ -1186,8 +1212,19 @@ export function LIAProvider({ children }: LIAProviderProps) {
         return () => window.removeEventListener('lia-auth-updated', syncAuth);
     }, []);
 
+    // Ref to track the last authPlan value and prevent unnecessary socket re-init
+    const lastAuthPlanRef = useRef<{ name: string } | null>(null);
+
     useEffect(() => {
         if (!authInitialized) return;
+
+        // 🚫 EVITAR RE-INIT SE PLANO NÃO MUDOU REALMENTE
+        if (authPlan && lastAuthPlanRef.current && authPlan.name === lastAuthPlanRef.current.name) {
+            console.log(`[LIAContext] ⏭️ Plano não mudou (${authPlan.name}), mantendo socket`);
+            return;
+        }
+
+        lastAuthPlanRef.current = authPlan;
 
         const initSocket = async () => {
             const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -1227,8 +1264,9 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 console.warn('⚠️ [LIAContext] Erro ao carregar conexões:', e);
             }
 
-            // v1.3.0: Definir plano do usuário
+            // v1.3.0: Garantir que o plano nunca seja undefined (FALLBACK SEGURO)
             const userPlan = authPlan?.name || authUser?.app_metadata?.plan || 'free';
+            console.log('🔐 [LIAContext] Plano do usuário:', userPlan);
 
             // Configurar parâmetros de autenticação COM plano e conexões
             socketService.setAuthParams({
@@ -1239,12 +1277,12 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 connections
             });
 
-            const socket = await socketService.connectSocket({
-                token,
-                userId: finalUserId,
-                tenantId: finalUserId,
-                conversationId: currentIdRef.current || undefined
-            });
+            // v1.3.1: FIX - Chamar connectSocket SEM params para não sobrescrever o plano configurado acima
+            // O setAuthParams já definiu tudo que precisamos.
+            if (currentIdRef.current) {
+                socketService.registerConversation(currentIdRef.current);
+            }
+            const socket = await socketService.connectSocket();
 
             setUserId(finalUserId);
             setContextTenantId(finalUserId);
@@ -1257,7 +1295,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         }
 
         initSocket();
-    }, [authInitialized, authUser?.id, authPlan]);
+    }, [authInitialized, authUser?.id, authPlan?.name]); // Apenas nome do plano
 
     // Registro de eventos - Refatorado para evitar duplicação ou perda de eventos
     useEffect(() => {
@@ -1590,13 +1628,15 @@ export function LIAProvider({ children }: LIAProviderProps) {
     // ======================================================================
     useEffect(() => {
         const handleGeminiEvent = (event: GeminiLiveEvent) => {
-            // v9.5: FIX GHOST MESSAGES - Always use the 'live' mode conversation ID or a dedicated scope key
-            // This prevents Live Mode transcripts from appearing in Multi-Modal or Chat when backgrounded.
-            const convId = activeIdsByModeRef.current.live || currentIdRef.current || 'default';
+            // v9.5: FIX GHOST MESSAGES - Usar a sessão ativa ou o escopo atual para garantir visibilidade
+            const activeSession = geminiLiveService.getSession();
+            const convId = activeSession?.id || currentIdRef.current || activeIdsByModeRef.current.live || 'default';
             const scopeKey = convId;
-            const mode = 'live';
+            // v9.6: Usar o modo ativo do contexto para garantir que mensagens apareçam na aba atual
+            // Se estivermos em Live mas visualizando Multi-Modal, queremos ver as mensagens lá
+            const mode = activeModeRef.current || 'live';
 
-            console.log(`📡 [LIAContext] Evento Gemini: ${event.type} | Escopo Ativo: ${scopeKey}`);
+            console.log(`📡 [LIAContext] Evento Gemini: ${event.type} | Escopo Ativo: ${scopeKey} | Modo: ${mode}`);
 
             switch (event.type) {
                 case 'connected':
@@ -2326,13 +2366,81 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
     /**
      * Analisa arquivo (imagem/PDF) com Gemini Vision
+     * v3.0: Salvamento condicional baseado na aba ativa
+     * - Se em /files → Salva no Supabase Storage (fileService)
+     * - Senão → Mantém apenas como attachment na mensagem
      */
     const analyzeFile = useCallback(async (file: File) => {
         try {
             console.log('📤 Analisando arquivo:', file.name);
             setIsProcessingUpload(true);
 
-            // Criar FormData
+            // v3.0: LÓGICA CONDICIONAL DE SALVAMENTO
+            const isOnFilesTab = window.location.pathname.includes('/files');
+            let fileStorageUrl: string | undefined = undefined;
+            let fileId: string | undefined = undefined;
+
+            console.log(`[analyzeFile] Aba ativa: ${window.location.pathname} | Salvar no Storage: ${isOnFilesTab}`);
+
+            // Se estiver na aba Arquivos, salvar no Supabase Storage ANTES de analisar
+            if (isOnFilesTab) {
+                try {
+                    console.log('[analyzeFile] Salvando arquivo no Supabase Storage...');
+
+                    // Importar fileService dinamicamente para evitar dependência circular
+                    const fileServiceModule = await import('../../services/fileService');
+                    const fileService = fileServiceModule.fileService;
+
+                    const uploadResult = await fileService.uploadFile({
+                        file,
+                        tenantId: tenantIdRef.current || '',
+                        userId: userIdRef.current || '',
+                        folderId: null, // Root da pasta
+                        scope: 'lia_shared' // Arquivos da LIA ficam em lia_shared
+                    });
+
+                    if (uploadResult) {
+                        fileStorageUrl = uploadResult.storage_url;
+                        fileId = uploadResult.id;
+                        console.log('[analyzeFile] ✅ Arquivo salvo no Storage:', { fileId, url: fileStorageUrl });
+                    } else {
+                        console.warn('[analyzeFile] ⚠️ Falha ao salvar arquivo no Storage. Continua apenas como attachment.');
+                    }
+                } catch (uploadErr) {
+                    console.error('[analyzeFile] Erro ao salvar no Storage:', uploadErr);
+                    // Continua com análise mesmo se upload falhar
+                }
+            } else {
+                console.log('[analyzeFile] Não está na aba Arquivos. Arquivo será salvo apenas na conversa.');
+            }
+
+            // ADICIONAR MENSAGEM DO USUÁRIO com o anexo (para histórico da conversa)
+            const userFileMessage: Message = {
+                id: `user_${Date.now()}`,
+                type: 'user',
+                content: `📎 Arquivo enviado: ${file.name}`,
+                timestamp: Date.now(),
+                attachments: [{
+                    name: file.name,
+                    type: file.type.startsWith('image/') ? 'image' :
+                        file.type.includes('pdf') ? 'document' :
+                            file.type.startsWith('video/') ? 'video' :
+                                file.type.startsWith('audio/') ? 'audio' : 'other',
+                    url: fileStorageUrl || URL.createObjectURL(file) // Usa URL temporária se não tem storage
+                }],
+                metadata: {
+                    fileId: fileId,
+                    savedToStorage: isOnFilesTab,
+                    mimeType: file.type,
+                    sizeBytes: file.size
+                }
+            };
+
+            if (addToScopeRef.current && activeIdsByModeRef.current.multimodal) {
+                addToScopeRef.current(userFileMessage, 'multimodal', activeIdsByModeRef.current.multimodal);
+            }
+
+            // Criar FormData para análise
             const formData = new FormData();
             formData.append('file', file);
             formData.append('prompt', `Analise esta imagem/documento detalhadamente.
@@ -2343,6 +2451,12 @@ export function LIAProvider({ children }: LIAProviderProps) {
             // v2.6: MENTE ÚNICA - Incluir credenciais
             formData.append('userId', userIdRef.current || '');
             formData.append('tenantId', tenantIdRef.current || '');
+
+            // v3.0: Informar se arquivo já está salvo
+            if (fileId) {
+                formData.append('fileId', fileId);
+                formData.append('storageUrl', fileStorageUrl || '');
+            }
 
             const storedAuth = localStorage.getItem('sb-dashboard-auth') || localStorage.getItem('supabase.auth.token');
             let authHeaders: any = {};
@@ -2452,7 +2566,9 @@ export function LIAProvider({ children }: LIAProviderProps) {
         setActiveScope,
         getScopeKey,
 
-        messages,
+        // v9.7: FIX UI VISIBILITY - Expose scoped messages as "messages" for UI compatibility
+        // This bridges the gap between the new "Scoped" architecture and legacy UI components
+        messages: activeScope ? (messagesByScope[activeScope] || []) : messages,
 
         // Estados por Escopo
         typingByScope,
@@ -2506,7 +2622,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         plan,
         userRole,
         clearMessages,
-        isTyping,
+        isTyping
     }), [
         isConnected, conversationId, conversations, activeConversationIdByMode,
         currentConversationId, createConversation, switchConversation,

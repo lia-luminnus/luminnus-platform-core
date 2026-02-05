@@ -3,25 +3,33 @@
 // ======================================================================
 
 // Contracts
-export * from './contracts';
+export { ConnectionState } from './contracts/events.contract.js';
+export type {
+    GeminiLiveEvent,
+    GeminiLiveEventType,
+    GeminiLiveSession,
+    LiaRuntimeConfig,
+    UpdateAvailableEvent,
+    ToolResult
+} from './contracts/events.contract.js';
 
 // Utils
-export * from './utils';
+export * from './utils/index.js';
 
 // Live Service
-export * from './live';
+export * from './live/index.js';
 
 // Version/Update Service
-export * from './version';
+export * from './version/index.js';
 
 // Memory Policy & Governance
-export * from './memory';
+export * from './memory/index.js';
 
 // Persona & Personality SSOT
-export { getLiaGreeting, LIA_PERSONALITY_V4, LIA_ADMIN_OVERRIDE } from './persona';
+export { getLiaGreeting, LIA_PERSONALITY_V4, LIA_ADMIN_OVERRIDE } from './persona.js';
 
 // Protocols
-export * from './protocols/fileUnderstandingProtocol';
+export * from './protocols/fileUnderstandingProtocol.js';
 
 // Capabilities (Execution Router)
-export * from './capabilities/capabilityRegistry';
+export * from './capabilities/capabilityRegistry.js';

@@ -36,6 +36,7 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // 🔒 SSOT: Controlar se já carregamos um plano real (evitar regressão para Start)
     const planLoadedRef = React.useRef<boolean>(false);
     const refreshInProgressRef = React.useRef<boolean>(false);
+    const lastPlanRef = React.useRef<{ name: string; id: string } | null>(null);
 
     // Verificar onboarding também no estado local (permite funcionar sem autenticação)
     const localOnboardingCompleted = useAppStore((state) => state.onboarding_completed);
@@ -69,6 +70,7 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 const { data: userData } = await supabase.auth.getUser();
                 currentUser = userData?.user;
             }
+
             if (!currentUser) {
                 console.log('[DashboardAuth] Sem usuário para carregar perfil');
                 setProfile(null);
@@ -76,22 +78,48 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 return;
             }
 
+            // 🛡️ GUARDRAIL CRÍTICO (CORRIGIDO): 
+            // Agora comparamos strings reais, não Promises. Isso evita o loop infinito de requests.
+            if (profile && profile.id === currentUser.id) {
+                console.log('[DashboardAuth] 🛑 Perfil já carregado para este usuário. Ignorando refresh.');
+                refreshInProgressRef.current = false;
+                return;
+            }
+
+
+            // ⚡ DETECÇÃO PRECOCE DE ADMIN (evita loops de onboarding)
+            const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
+            const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
+            const isAdminByEmail = adminEmails.includes(currentUser.email?.toLowerCase() || '');
+            if (isAdminByEmail) {
+                console.log('[DashboardAuth] ⚡ Admin detectado precocemente via email');
+                setIsAdmin(true);
+
+                // Reset imediato do onboarding para admins
+                const sessionKey = `admin_session_${currentUser.id}`;
+                if (!sessionStorage.getItem(sessionKey)) {
+                    console.log('[DashboardAuth] 🔄 Admin - Resetando onboarding (Sincronamente)');
+                    useAppStore.getState().resetOnboarding();
+                    sessionStorage.setItem(sessionKey, 'active');
+                }
+            }
+
             console.log('[DashboardAuth] Carregando perfil do banco...');
 
             let userProfile;
             let profileLoadedFromDb = false;
             let attempts = 0;
-            const MAX_ATTEMPTS = 5; // v5.6: Aumentado para lidar com cold starts severos
+            const MAX_ATTEMPTS = 1; // v7.1: Reduzido para 1 (cache + timeout menor = não precisa retry)
 
             while (attempts < MAX_ATTEMPTS && !profileLoadedFromDb) {
                 attempts++;
                 try {
                     console.log(`[DashboardAuth] Tentativa ${attempts}/${MAX_ATTEMPTS}...`);
 
-                    // Timeout otimizado para Pro Plan (15s)
+                    // v7.1: Timeout reduzido para 10s (profileService já tem 8s)
                     const profilePromise = getOrCreateProfile(currentUser.id, currentUser.email || '');
                     const timeoutPromise = new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), 15000)
+                        setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), 10000)
                     );
 
                     userProfile = await Promise.race([profilePromise, timeoutPromise]) as UserProfile;
@@ -99,16 +127,25 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                     console.log('[DashboardAuth] Perfil carregado com sucesso do banco');
                 } catch (pErr: any) {
                     console.warn(`[DashboardAuth] Falha na tentativa ${attempts}:`, pErr.message);
+
+                    // Se falhou por timeout ou erro, mas já sabemos que é admin pelo email, setar flag antecipadamente
+                    const isAdminByEmail = adminEmails.includes(currentUser.email?.toLowerCase() || '');
+                    if (isAdminByEmail && !isAdmin) {
+                        console.log('[DashboardAuth] ⚡ Admin detectado via email durante falha de carga');
+                        setIsAdmin(true);
+                    }
+
                     if (attempts >= MAX_ATTEMPTS) {
                         console.error('[DashboardAuth] Máximo de tentativas atingido. Usando fallback de resiliência.');
 
-                        // 🔒 CRÍTICO: Respeitar o estado REAL do localStorage (Zustand persists aqui)
-                        // Isso evita forçar usuários já onboardados a refazer o onboarding
+                        // 🔒 CRÍTICO: Respeitar o estado REAL do localStorage E cache (evitar regressão de onboarding)
                         let isCompletedLocally = localOnboardingCompleted || false;
                         let storedSegment = null;
                         let storedModules = null;
+                        let storedPlan = null;
 
                         try {
+                            // 1. Verificar localStorage (Zustand persists)
                             const storedData = localStorage.getItem('luminnus-storage');
                             if (storedData) {
                                 const parsed = JSON.parse(storedData);
@@ -118,9 +155,27 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                                 }
                                 storedSegment = parsed?.state?.businessType || null;
                                 storedModules = parsed?.state?.activeModules || null;
+                                storedPlan = parsed?.state?.planType || null; // v9.8: Recuperar plano do storage
+                            }
+
+                            // 2. Verificar cache de perfil (pode ter dados mais recentes que localStorage)
+                            const cacheKey = `profile_cache_${currentUser.id}`;
+                            const cachedProfile = localStorage.getItem(cacheKey);
+                            if (cachedProfile) {
+                                const { data, timestamp } = JSON.parse(cachedProfile);
+                                const age = Date.now() - timestamp;
+                                const TTL = 2 * 60 * 1000; // 2min
+
+                                if (age < TTL && data?.onboarding_completed) {
+                                    isCompletedLocally = true;
+                                    storedSegment = storedSegment || data.segment;
+                                    storedModules = storedModules || data.modules;
+                                    storedPlan = storedPlan || data.plan_type; // v9.8: Recuperar plano do cache
+                                    console.log('[DashboardAuth] ✅ Onboarding encontrado no cache de perfil');
+                                }
                             }
                         } catch (parseErr) {
-                            console.warn('[DashboardAuth] Erro ao ler localStorage:', parseErr);
+                            console.warn('[DashboardAuth] Erro ao ler localStorage/cache:', parseErr);
                         }
 
                         userProfile = {
@@ -130,12 +185,14 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                             onboarding_integrations_done: isCompletedLocally, // Se onboarding ok, integrações tb
                             segment: storedSegment,
                             modules: storedModules,
-                            role: 'client' // Assume client em caso de erro crítico de rede
+                            plan_type: storedPlan, // v9.8: Injetar plano recuperado
+                            role: isAdminByEmail ? 'admin' : 'client' // v6.1: Fallback deve respeitar Admin por email!
                         } as any;
 
                         console.log('[DashboardAuth] 📦 Usando perfil de fallback:', {
                             id: userProfile.id,
-                            onboarding: isCompletedLocally
+                            onboarding: isCompletedLocally,
+                            plan: userProfile.plan_type
                         });
                     } else {
                         // Backoff exponencial (2s, 4s, 8s...)
@@ -148,57 +205,9 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
             setProfile(userProfile);
 
-            // 🔑 SSOT: Sincronizar estado completo do onboarding e perfil para o localStorage
-            if (profileLoadedFromDb) {
-                const store = useAppStore.getState();
-                let needsUpdate = false;
-                const updatePayload: any = {};
-
-                if (userProfile?.onboarding_completed && !store.onboarding_completed) {
-                    updatePayload.onboarding_completed = true;
-                    updatePayload.isFirstVisit = false;
-                    needsUpdate = true;
-                }
-
-                if (userProfile?.onboarding_integrations_done && !store.integrations_completed) {
-                    updatePayload.integrations_completed = true;
-                    needsUpdate = true;
-                }
-
-                if (userProfile?.segment && store.businessType !== userProfile.segment) {
-                    updatePayload.businessType = userProfile.segment;
-                    needsUpdate = true;
-                }
-
-                if (userProfile?.modules && JSON.stringify(store.activeModules) !== JSON.stringify(userProfile.modules)) {
-                    updatePayload.activeModules = userProfile.modules;
-                    needsUpdate = true;
-                }
-
-                if (needsUpdate) {
-                    console.log('[DashboardAuth] 🔄 Sincronizando Perfil (DB -> LocalStorage):', Object.keys(updatePayload));
-                    useAppStore.setState(updatePayload);
-                }
-            }
-
-            // Buscar Plano (Fontes: 1. profile.plan_type do banco, 2. app_metadata, 3. plano atual no estado)
-            const metadata = currentUser.app_metadata || {};
-            const dbPlanType = userProfile?.plan_type || null;
-
-            // Forçar Pro se for admin conforme requisito (VITE_ADMIN_EMAILS)
-            const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
-            const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
-            const isAdminByEmail = adminEmails.includes(currentUser.email?.toLowerCase() || '');
-            const isAdminByRole = userProfile?.role === 'admin';
-            const adminDetected = isAdminByEmail || isAdminByRole;
-
-            // 🔑 SSOT: Setar flag isAdmin para controlar fluxo de onboarding
-            setIsAdmin(adminDetected);
-            console.log('[DashboardAuth] Admin check:', { email: currentUser.email, isAdmin: adminDetected, role: userProfile?.role });
-
             // 🔄 ADMIN ONBOARDING: Apenas admins passam pelo onboarding TODA sessão
             // Clientes (não-admin) passam APENAS UMA VEZ - valor resgatado do banco ou localStorage
-            if (adminDetected) {
+            if (isAdmin) {
                 const sessionKey = `admin_session_${currentUser.id}`;
                 const currentSession = sessionStorage.getItem(sessionKey);
                 if (!currentSession) {
@@ -208,40 +217,59 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 }
             }
 
+            // 🔑 SSOT: Sincronizar estado completo do onboarding e perfil para o localStorage
+            if (profileLoadedFromDb && userProfile) {
+                // v9.6: Usar a nova action inteligente syncWithProfile
+                useAppStore.getState().syncWithProfile(userProfile);
+            }
+
+            // Buscar Plano (Fontes: 1. profile.plan_type do banco, 2. app_metadata, 3. plano atual no estado)
+            const metadata = currentUser.app_metadata || {};
+            const dbPlanType = userProfile?.plan_type || null;
+
             // 🔒 POLÍTICA DE PLANO (SSOT): Evitar regressão para Start
             setPlan((prev: any) => {
-                // 1. Admin: manter Pro ou override
-                if (adminDetected) {
-                    const adminPlan = prev?.name || "Pro";
-                    return { name: adminPlan, id: adminPlan.toLowerCase() + "-plan" };
-                }
+                let newPlan: { name: string; id: string } | null = null;
 
-                // 2. Perfil real do DB carregou: usar ele (fonte mais confiável)
-                if (profileLoadedFromDb && dbPlanType) {
+                // 1. Admin: manter Pro ou override
+                if (isAdmin) {
+                    const adminPlan = prev?.name || "Pro";
+                    newPlan = { name: adminPlan, id: adminPlan.toLowerCase() + "-plan" };
+                }
+                // 2. Perfil real do DB (ou fallback recuperado) carregou: usar ele
+                else if (dbPlanType) {
                     planLoadedRef.current = true;
                     const planName = dbPlanType.charAt(0).toUpperCase() + dbPlanType.slice(1).toLowerCase();
-                    console.log('[DashboardAuth] ✅ Plano do DB:', planName);
-                    return { name: planName, id: planName.toLowerCase() + "-plan" };
+                    console.log('[DashboardAuth] ✅ Plano do DB/Fallback:', planName);
+                    newPlan = { name: planName, id: planName.toLowerCase() + "-plan" };
                 }
-
                 // 3. Metadata do JWT
-                if (metadata.plan || metadata.claims?.plan) {
+                else if (metadata.plan || metadata.claims?.plan) {
                     const jwtPlan = (metadata.plan || metadata.claims?.plan) as string;
                     const planName = jwtPlan.charAt(0).toUpperCase() + jwtPlan.slice(1).toLowerCase();
                     planLoadedRef.current = true;
                     console.log('[DashboardAuth] ✅ Plano do JWT:', planName);
-                    return { name: planName, id: planName.toLowerCase() + "-plan" };
+                    newPlan = { name: planName, id: planName.toLowerCase() + "-plan" };
                 }
-
                 // 4. Timeout/fallback: NÃO regredir se já temos plano válido
-                if (!profileLoadedFromDb && prev?.name && planLoadedRef.current) {
+                else if (!profileLoadedFromDb && prev?.name && planLoadedRef.current) {
                     console.log('[DashboardAuth] 🔒 Mantendo plano atual (timeout, plano já carregado):', prev.name);
                     return prev;
                 }
-
                 // 5. Primeiro carregamento sem dados: fallback Start
-                console.log('[DashboardAuth] ⚠️ Fallback Start (primeira carga sem dados)');
-                return { name: "Start", id: "start-plan" };
+                else {
+                    console.log('[DashboardAuth] ⚠️ Fallback Start (primeira carga sem dados)');
+                    newPlan = { name: "Start", id: "start-plan" };
+                }
+
+                // 🚫 APENAS ATUALIZAR SE REALMENTE MUDOU (evitar re-renders desnecessários)
+                if (newPlan && JSON.stringify(newPlan) === JSON.stringify(lastPlanRef.current)) {
+                    console.log('[DashboardAuth] ⏭️ Plano não mudou, mantendo estado atual');
+                    return prev;
+                }
+
+                lastPlanRef.current = newPlan;
+                return newPlan;
             });
 
             console.log('[DashboardAuth] Perfil e Plano inicializados');
@@ -323,9 +351,9 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                         refresh_token: refreshToken || ''
                     });
 
-                    // Timeout otimizado para Pro Plan (7s é suficiente para handshake)
+                    // v6.0: Timeout aumentado para 20s (handshake + rede instável)
                     const timeoutPromise = new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('SYNC_TIMEOUT')), 7000)
+                        setTimeout(() => reject(new Error('SYNC_TIMEOUT')), 20000)
                     );
 
                     const { data, error } = await Promise.race([syncPromise, timeoutPromise]) as any;
@@ -352,14 +380,35 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             // 1. Configurar listener de auth PRIMEIRO para capturar o setSession subsequente
             const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
                 console.log(`[DashboardAuth] 🔔 AuthEvent: ${event}`, { hasSession: !!currentSession });
+
+                // 🛡️ IGNORAR eventos irrelevantes para refresh de perfil
+                if (event === 'TOKEN_REFRESHED') {
+                    // Apenas atualiza sessão, não recarrega perfil (muito custoso)
+                    setSession(currentSession);
+                    return;
+                }
+
+                // v7.6: FIX CRÍTICO - Evitar refresh duplicado em SIGNED_IN (F5 reload)
+                // Se o perfil já está carregado para este usuário, não recarregar
+                if (event === 'SIGNED_IN' && currentSession?.user && profile?.id === currentSession.user.id) {
+                    console.log('[DashboardAuth] 🛑 SIGNED_IN ignorado - perfil já carregado para este usuário');
+                    setSession(currentSession);
+                    setUser(currentSession.user);
+                    setLoading(false);
+                    setInitialized(true);
+                    return;
+                }
+
                 setSession(currentSession);
                 setUser(currentSession?.user || null);
+
                 if (currentSession?.user) {
                     await refreshProfile(currentSession.user);
-                } else {
+                } else if (event === 'SIGNED_OUT') {
                     setProfile(null);
                     setPlan(null);
                 }
+
                 setLoading(false);
                 setInitialized(true);
             });

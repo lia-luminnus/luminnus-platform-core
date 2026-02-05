@@ -1,4 +1,4 @@
-import { inferIntentMode, IntentMode, validateResponse } from './fileUnderstandingProtocol';
+import { inferIntentMode, IntentMode, validateResponse } from './fileUnderstandingProtocol.js';
 
 function runTests() {
     console.log('🧪 Iniciando testes do FileUnderstandingProtocol...');

@@ -5,15 +5,15 @@
 // ======================================================================
 
 import { GoogleGenAI } from '@google/genai';
-import { sanitizeForTTS } from '../utils/ttsSanitizer';
+import { sanitizeForTTS } from '../utils/ttsSanitizer.js';
 import type {
     GeminiLiveEvent,
     GeminiLiveSession,
     LiaRuntimeConfig,
     ConnectionState,
     ToolResult,
-} from '../contracts/events.contract';
-import { ConnectionState as ConnState } from '../contracts/events.contract';
+} from '../contracts/events.contract.js';
+import { ConnectionState as ConnState } from '../contracts/events.contract.js';
 import { LIA_GEMINI_LIVE_PERSONALITY, LIA_FULL_PERSONALITY } from '@luminnus/shared';
 
 // ======================================================================
@@ -200,11 +200,21 @@ export class GeminiLiveService {
         text = text.replace(/\s{2,}/g, ' ').trim();
 
         // Se o texto restante ainda for majoritariamente em inglês, ignorar
+        // v5.8: Aumentado limiar de 30% → 60% para permitir português com termos técnicos
         const englishWords = (text.match(/\b(I've|I'm|I will|The|Based on|Here's|Let me|which|that|and|the|for|with|this|have|been|are|was|were)\b/gi) || []).length;
         const totalWords = text.split(/\s+/).length;
-        if (totalWords > 0 && englishWords / totalWords > 0.3) {
-            console.log('⚠️ [Sanitize] Texto majoritariamente em inglês removido');
+        const englishRatio = totalWords > 0 ? (englishWords / totalWords) : 0;
+
+        if (totalWords > 0 && englishRatio > 0.6) {
+            console.warn(
+                `⚠️ [Sanitize] Transcrição descartada (${Math.round(englishRatio * 100)}% inglês):`,
+                text.substring(0, 80) + (text.length > 80 ? '...' : '')
+            );
             return '';
+        }
+
+        if ((window as any).DEBUG_LIA_LOGS && englishWords > 0) {
+            console.log(`🔍 [Sanitize] Texto aceito (${Math.round(englishRatio * 100)}% inglês, limiar 60%)`);
         }
 
         return text;
@@ -212,29 +222,56 @@ export class GeminiLiveService {
 
     /**
      * v4.32: Normaliza transcrição do usuário para remover fragmentação
-     * Corrige: "p r e c i s a n d o" → "precisando"
+     * Corrige: "p r e c i s a n d o" → "precisando", "vo cê" → "você"
      */
     private normalizeUserTranscript(text: string): string {
         if (!text) return '';
 
+        // v9.5: CORREÇÕES ESPECÍFICAS DE FRAGMENTAÇÃO PT-BR
+        const corrections = [
+            { pattern: /\bvo\s+cê\b/gi, replacement: 'você' },
+            { pattern: /\bes\s+tá\b/gi, replacement: 'está' },
+            { pattern: /\bda\s+dos\b/gi, replacement: 'dados' },
+            { pattern: /\bá\s+udio\b/gi, replacement: 'áudio' },
+            { pattern: /\bco\s+nhe\s+cer\b/gi, replacement: 'conhecer' },
+            { pattern: /\bex\s+a\s+ta\s+men\s+te\b/gi, replacement: 'exatamente' },
+            { pattern: /\bre\s+fe\s+rên\s+cia\b/gi, replacement: 'referência' },
+            { pattern: /\bcor\s+re\s+ta\s+men\s+te\b/gi, replacement: 'corretamente' },
+            { pattern: /\bcha\s+man\s+do\b/gi, replacement: 'chamando' },
+            { pattern: /\ble\s+ta\b/gi, replacement: 'leta' } // Para "coleta"
+        ];
+
+        let normalized = text;
+        corrections.forEach(({ pattern, replacement }) => {
+            normalized = normalized.replace(pattern, replacement);
+        });
+
         // Detectar e corrigir espaçamento entre letras (min 3 chars consecutivos com espaço)
         // Padrão: letra + espaço + letra, repetido 3+ vezes
         // Ex: "p r e c i s a" → "precisa"
-        text = text.replace(/(\p{L})\s+(?=\p{L}\s+\p{L})/gu, '$1');
+        normalized = normalized.replace(/(\p{L})\s+(?=\p{L}\s+\p{L})/gu, '$1');
 
         // Segunda passada mais agressiva para casos como "á udio" → "áudio"
-        text = text.replace(/(\p{L})\s(\p{L})(?=\s|$)/gu, (match, p1, p2) => {
-            // Se são duas letras separadas por espaço, verificar se faz sentido juntar
+        // MAS CUIDADO: Não juntar "de a", "e o", "é a"
+        // Lista de palavras curtas válidas que não devem ser fundidas
+        const validShortWords = new Set(['e', 'a', 'o', 'é', 'à', 'de', 'da', 'do', 'em', 'na', 'no', 'se', 'já', 'lá', 'só', 'eu', 'tu', 'ele', 'nós', 'vós', 'eles', 'me', 'te', 'se', 'nos', 'vos', 'lhe']);
+        
+        normalized = normalized.replace(/(\p{L})\s(\p{L})(?=\s|$)/gu, (match, p1, p2) => {
+            const potentialWord = (p1 + p2).toLowerCase();
+            // Se p1 ou p2 forem palavras válidas isoladas, não juntar
+            if (validShortWords.has(p1.toLowerCase()) || validShortWords.has(p2.toLowerCase())) {
+                return match;
+            }
             return p1 + p2;
         });
 
         // Colapsar múltiplos espaços
-        text = text.replace(/\s{2,}/g, ' ').trim();
+        normalized = normalized.replace(/\s{2,}/g, ' ').trim();
 
-        // Remover fragmentos muito curtos isolados
-        if (text.length < 3) return '';
+        // Remover fragmentos muito curtos isolados se não forem palavras válidas
+        if (normalized.length < 2 && !validShortWords.has(normalized.toLowerCase())) return '';
 
-        return text;
+        return normalized;
     }
 
     /**
@@ -350,16 +387,20 @@ export class GeminiLiveService {
                 throw err;
             }
 
-            // 3. AudioContext
-            this.audioContext = new AudioContext({ sampleRate: 24000 });
+            // 3. AudioContext - v5.8: CRÍTICO
+            // Remover sampleRate fixo de 16000. Deixar o navegador usar a taxa nativa (48kHz/44.1kHz).
+            // O AudioWorklet fará o downsampling correto para 16kHz.
+            // Isso evita artefatos de resampling do navegador e "voz de robô".
+            this.audioContext = new AudioContext();
 
             // 4. Microfone
+            // NOTA: Browser sempre entrega 48kHz (hardware padrão), ignora sampleRate request
+            // AudioContext automaticamente faz resampling 48kHz → 16kHz CORRETAMENTE
             this.mediaStream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: true,
                     noiseSuppression: true,
                     autoGainControl: true,
-                    sampleRate: 16000,
                     channelCount: 1,
                 },
             });
@@ -399,15 +440,10 @@ export class GeminiLiveService {
                 throw new Error('Gemini Live client not found in SDK');
             }
 
+            // ✅ CORREÇÃO: Usar SOMENTE token efêmero (backend já tem config completa)
+            // v5.7: CRÍTICO - Adicionar model explícito (SDK exige mesmo com token efêmero)
             this.liveSession = await liveClient.connect({
-                model: 'gemini-2.5-flash', // Atualizado para v2.5
-                config: {
-                    systemInstruction: { parts: [{ text: LIA_GEMINI_LIVE_PERSONALITY }] },
-                    responseModalities: ['audio'],
-                    speechConfig: {
-                        voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } }
-                    }
-                },
+                model: 'gemini-2.5-flash', // OBRIGATÓRIO: SDK valida este parâmetro antes do handshake
                 callbacks: {
                     onopen: () => {
                         console.log('✅ Conectado ao Gemini Live (v2.5)');
@@ -480,8 +516,9 @@ export class GeminiLiveService {
             instruction += this.memoriesCache.map(m => `- ${m.key}: ${m.value}`).join('\n');
         }
 
-        // Adicionar info de modo
-        instruction += `\n\n## CONTEXTO:\n- Modo: ${this.config.mode}\n- Plano: ${this.config.userPlan || 'Free'}`;
+        // Adicionar info de modo e Usuário
+        const userName = this.config.userName || 'Usuário';
+        instruction += `\n\n## CONTEXTO:\n- Modo: ${this.config.mode}\n- Plano: ${this.config.userPlan || 'Free'}\n- Usuário: ${userName}`;
 
         return instruction;
     }
@@ -550,6 +587,11 @@ class GeminiLiveAudioProcessor extends AudioWorkletProcessor {
         super();
         this.chunkCount = 0;
         this.lastLogTime = 0;
+        // Buffer para acumular samples brutos antes do downsample
+        // 4096 samples @ 48kHz ~= 85ms. @ 44.1kHz ~= 92ms.
+        this.bufferSize = 4096;
+        this.buffer = new Float32Array(this.bufferSize);
+        this.bufferIndex = 0;
     }
 
     process(inputs, outputs, parameters) {
@@ -557,18 +599,41 @@ class GeminiLiveAudioProcessor extends AudioWorkletProcessor {
         if (!input || !input[0]) return true;
 
         const inputData = input[0]; // mono channel
-        const maxAmplitude = Math.max(...Array.from(inputData).map(Math.abs));
+        const inputLength = inputData.length;
 
-        // Downsampling 48kHz → 16kHz
-        const downsampled = downsample(inputData, sampleRate, 16000);
+        // Se o input for maior que o espaço restante, processar o que der
+        let sourceIndex = 0;
         
-        // Float32 → Int16 PCM
+        while (sourceIndex < inputLength) {
+            const spaceInBuff = this.bufferSize - this.bufferIndex;
+            const toCopy = Math.min(inputLength - sourceIndex, spaceInBuff);
+            
+            this.buffer.set(inputData.subarray(sourceIndex, sourceIndex + toCopy), this.bufferIndex);
+            
+            this.bufferIndex += toCopy;
+            sourceIndex += toCopy;
+
+            // Se buffer cheio, envia
+            if (this.bufferIndex >= this.bufferSize) {
+                this.flush();
+            }
+        }
+
+        return true;
+    }
+
+    flush() {
+        if (this.bufferIndex === 0) return;
+
+        const dataToProcess = this.buffer; // Processar buffer cheio
+        const maxAmplitude = Math.max(...Array.from(dataToProcess).map(Math.abs));
+
+        // Downsample e conversão
+        // sampleRate é global do AudioWorkletGlobalScope
+        const downsampled = downsample(dataToProcess, sampleRate, 16000);
         const pcm16 = floatTo16BitPCM(downsampled);
-        
-        // Int16 → Base64
         const base64 = int16ToBase64(pcm16);
 
-        // Enviar para main thread
         this.port.postMessage({
             type: 'audio-chunk',
             data: base64,
@@ -577,17 +642,10 @@ class GeminiLiveAudioProcessor extends AudioWorkletProcessor {
             chunkCount: ++this.chunkCount
         });
 
-        // Log periódico (10s)
-        const now = currentTime * 1000;
-        if (now - this.lastLogTime > 10000) {
-            this.port.postMessage({
-                type: 'log',
-                message: \`🎤 [AudioWorklet] \${this.chunkCount} chunks | amp: \${maxAmplitude.toFixed(2)}\`
-            });
-            this.lastLogTime = now;
-        }
-
-        return true; // keep alive
+        // Reset buffer
+        this.bufferIndex = 0;
+        // Otimização: não recriar buffer, apenas sobrescrever na próxima iteração
+        // mas precisamos garantir que não processamos lixo se flushar parcial (não deve ocorrer no while loop acima para buffer cheio, mas safety first)
     }
 }
 
@@ -917,11 +975,31 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
 
             if (this.hasReceivedAudioThisTurn && this.outputTranscriptionText.trim()) {
                 // MODO ÁUDIO: usar transcrição limpa do que foi REALMENTE falado
-                liaText = this.sanitizeTranscriptPTBR(this.outputTranscriptionText.trim());
+                const originalText = this.outputTranscriptionText.trim();
+                const sanitized = this.sanitizeTranscriptPTBR(originalText);
+
+                // v5.8: FALLBACK - se sanitização removeu tudo, usar original
+                if (!sanitized && originalText) {
+                    console.warn('⚠️ [Live] Sanitização removeu tudo, usando texto original como fallback');
+                    liaText = originalText;
+                } else {
+                    liaText = sanitized;
+                }
+
                 console.log('🎵 [Live] Usando outputTranscriptionText (modo áudio)');
             } else if (this.accumulatedLiaText.trim()) {
                 // MODO TEXTO/FALLBACK: usar accumulatedLiaText sanitizado
-                liaText = this.sanitizeTranscriptPTBR(this.accumulatedLiaText.trim());
+                const originalText = this.accumulatedLiaText.trim();
+                const sanitized = this.sanitizeTranscriptPTBR(originalText);
+
+                // v5.8: FALLBACK - se sanitização removeu tudo, usar original
+                if (!sanitized && originalText) {
+                    console.warn('⚠️ [Live] Sanitização removeu tudo, usando texto original como fallback');
+                    liaText = originalText;
+                } else {
+                    liaText = sanitized;
+                }
+
                 console.log('📝 [Live] Usando accumulatedLiaText (fallback/texto)');
             }
 

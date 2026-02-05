@@ -1,7 +1,7 @@
 import './config/envLoader.js';// [RELOAD_TRIGGER] v4.0.1 - Applying personality updates
 const RELOAD_STAMP = "2026-01-29T16:00:00";
 // ===========================================================
-// LIA UNIFIED SERVER - Port 3000
+// LIA UNIFIED SERVER - Port 3006
 // Frontend (Vite) + Backend (Express + Socket.io + WebRTC)
 // ===========================================================
 
@@ -47,8 +47,8 @@ function cleanPort(port: number | string) {
 }
 
 // Initial Cleanup
-const PORT = process.env.PORT || 3000;
-cleanPort(PORT);
+const PORT = process.env.PORT || 3006;
+// cleanPort(PORT); // Removido para evitar matar o servidor de Auth legado na porta 3000
 
 // Routes (these import supabase.js which needs env vars)
 import { setupSessionRoutes } from './routes/session.js';
@@ -316,30 +316,30 @@ async function startServer() {
   // API Routes
   setupSessionRoutes(app);
   console.log('   ✅ Session routes (includes /api/location)');
-  
+
   setupChatRoutes(app, openai);
   console.log('   ✅ Chat routes');
-  
+
   setupMemoryRoutes(app);
   console.log('   ✅ Memory routes');
-  
+
   setupSearchRoutes(app);
   setupTranscribeRoutes(app);
   setupSpeechRoutes(app);  // Google Cloud Speech-to-Text
   setupMetricsRoutes(app);
   setupVisionRoutes(app);
   console.log('   ✅ Vision routes (/api/vision/analyze)');
-  
+
   setupDocumentRoutes(app);
   setupMultimodalRoutes(app);
   console.log('   ✅ Multimodal routes (/api/multimodal/analyze)');
-  
+
   setupToolRoutes(app);  // Weather, Places, Directions, Translate
   setupImageRoutes(app); // Image generation (Nano Banana + DALL-E)
-  
+
   setupConversationRoutes(app);
   console.log('   ✅ Conversation routes (/api/conversations)');
-  
+
   setupWhatsAppRoutes(app); // Conversation history management
   setupWhatsAppWebhookRoutes(app);
   setupEmotionRoutes(app);       // Emotion decode for Avatar
@@ -464,15 +464,18 @@ async function startServer() {
   // ===========================================================
 
   // Unified architecture: Single port for all services
-  const PORT = process.env.PORT || 3000;
+  const PORT = process.env.PORT || 3006;
 
   httpServer.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`🚀 LIA Unified Server ready on http://127.0.0.1:${PORT} [${process.env.NODE_ENV || 'dev'}]`);
   }).on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {
-      console.log(`⚠️ Porta ${PORT} ocupada. Tentando limpeza...`);
+      console.log(`⚠️ Porta ${PORT} ocupada. Tentando limpeza forçada (aguardando 3s)...`);
       cleanPort(PORT);
-      setTimeout(() => httpServer.listen(Number(PORT), '127.0.0.1'), 1500);
+      setTimeout(() => {
+        console.log(`🔄 Tentando iniciar servidor novamente na porta ${PORT}...`);
+        httpServer.listen(Number(PORT), '0.0.0.0'); // Listen on all interfaces
+      }, 3000);
     }
   });
 }

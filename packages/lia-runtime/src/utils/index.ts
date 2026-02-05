@@ -1,1 +1,1 @@
-export * from './ttsSanitizer';
+export * from './ttsSanitizer.js';

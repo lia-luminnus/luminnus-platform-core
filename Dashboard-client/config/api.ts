@@ -29,14 +29,14 @@ export function getApiUrl(): string {
 
     // 2. Fallback APENAS para desenvolvimento local
     if (isLocalhost) {
-        return 'http://localhost:3000';
+        return 'http://127.0.0.1:3006';
     }
 
     // 3. ERRO CRÍTICO: produção sem config
     console.error('❌ [API Config] VITE_API_URL não definido em produção!');
     console.error('📋 [API Config] Defina VITE_API_URL=https://api.luminnus.ai no Render');
     console.error('🚨 [API Config] Todas as chamadas de API falharão.');
-    
+
     // Fallback de emergência (vai falhar, mas pelo menos não quebra o build)
     return 'https://api.luminnus.ai';
 }

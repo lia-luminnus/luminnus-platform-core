@@ -25,7 +25,7 @@ import { conversationRouter } from './routes/conversation.js';
 import liveTokenRouter from './routes/liveToken.js';
 
 const app: express.Express = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3006;
 
 // Configuração de CORS robusta (Hardened)
 const allowedOrigins = [

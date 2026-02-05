@@ -14,32 +14,32 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     strictPort: true,
     proxy: {
-      // Routes hosted on LIA Live View server (port 3000)
+      // Routes hosted on LIA Live View server (port 3006)
       '/api/admin/whatsapp': {
-        target: 'http://localhost:3000',
+        target: 'http://127.0.0.1:3006',
         changeOrigin: true,
         secure: false,
       },
       '/api/admin': {
-        target: 'http://localhost:3000',
+        target: 'http://127.0.0.1:3006',
         changeOrigin: true,
         secure: false,
       },
       '/api/integrations': {
-        target: 'http://localhost:3000',
+        target: 'http://127.0.0.1:3006',
         changeOrigin: true,
         secure: false,
       },
-      // Fallback for other API routes (port 5000)
+      // Fallback for other API routes (port 3006)
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://127.0.0.1:3006',
         changeOrigin: true,
         secure: false,
       },
-      '/health': 'http://localhost:5000',
-      '/version': 'http://localhost:5000',
+      '/health': 'http://127.0.0.1:3006',
+      '/version': 'http://127.0.0.1:3006',
       '/ws': {
-        target: 'ws://localhost:5000',
+        target: 'ws://127.0.0.1:3006',
         ws: true
       }
     }

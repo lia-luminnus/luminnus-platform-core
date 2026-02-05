@@ -50,7 +50,7 @@ export const AdminOverview = () => {
     queryKey: ["admin-total-messages"],
     queryFn: async () => {
       const { count, error } = await supabase
-        .from("chat_messages")
+        .from("messages")
         .select("*", { count: "exact", head: true });
 
       if (error) throw error;
@@ -70,7 +70,7 @@ export const AdminOverview = () => {
 
       // Conta ocorrências de cada plano
       const planCounts: Record<string, number> = {};
-      data?.forEach((profile) => {
+      (data as { plan_type: string | null }[] || []).forEach((profile) => {
         const plan = profile.plan_type || "free";
         planCounts[plan] = (planCounts[plan] || 0) + 1;
       });
@@ -89,14 +89,14 @@ export const AdminOverview = () => {
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
       const { data, error } = await supabase
-        .from("chat_messages")
+        .from("messages")
         .select("conversation_id")
         .gte("created_at", sevenDaysAgo.toISOString());
 
       if (error) throw error;
 
       // Conta conversas únicas (aproximação de usuários ativos)
-      const uniqueConversations = new Set(data?.map((msg) => msg.conversation_id));
+      const uniqueConversations = new Set((data as { conversation_id: string }[] || []).map((msg) => msg.conversation_id));
       return uniqueConversations.size;
     },
   });
@@ -114,7 +114,7 @@ export const AdminOverview = () => {
 
       // Agrupa por mês
       const monthCounts: Record<string, number> = {};
-      data?.forEach((profile) => {
+      (data as { created_at: string }[] || []).forEach((profile) => {
         const month = new Date(profile.created_at).toLocaleDateString("pt-BR", {
           month: "short",
           year: "numeric",

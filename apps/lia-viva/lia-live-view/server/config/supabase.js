@@ -22,7 +22,7 @@ if (!supabaseUrl || !supabaseKey) {
         supabase = createClient(supabaseUrl, supabaseKey);
         const keyType = supabaseServiceKey ? "SERVICE_ROLE" : "ANON";
         console.log(`✅ [Supabase] Cliente inicializado com sucesso usando chave: ${keyType}`);
-        
+
         // Diagnóstico de URL (apenas host)
         const host = new URL(supabaseUrl).hostname;
         console.log(`📡 [Supabase] Host: ${host}`);
@@ -194,7 +194,7 @@ export async function loadConversation(conversationId, limit = 10) {
             .from("messages")
             .select("*")
             .eq("conversation_id", conversationId)
-            .not('role', 'in', '("system","system_summary")')
+            .not('role', 'in', '(system,system_summary)')  // v7.5: Fix Supabase filter syntax
             .order("created_at", { ascending: false })
             .limit(limit);
 

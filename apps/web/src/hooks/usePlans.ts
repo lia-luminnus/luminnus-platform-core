@@ -171,7 +171,7 @@ export function usePlans() {
     });
 
     // 🔄 POLLING: Atualizar planos a cada 10 segundos para sincronização com admin
-    const pollingInterval = setInterval(() => {
+    const pollingInterval: ReturnType<typeof setInterval> = setInterval(() => {
       if (isMounted) {
         console.log('🔄 [usePlans] Polling - Verificando atualizações...');
         loadPlans();

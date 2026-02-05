@@ -10,7 +10,7 @@ const PROVIDERS = ["openai", "gemini", "render", "cloudflare", "supabase"];
 const TIMEOUT_MS = 3000; // 3 segundos de timeout para health checks
 
 // Armazena tokens acumulados da sessão atual
-const sessionMetrics = {
+export const sessionMetrics = {
   openai: { tokens_input: 0, tokens_output: 0 },
   gemini: { tokens_input: 0, tokens_output: 0 },
   render: { requests: 0 },
@@ -863,14 +863,3 @@ export async function getTodaySummary() {
     return [];
   }
 }
-
-// Exportações atualizadas
-export {
-  runMetricsCollection,
-  trackOpenAIUsage,
-  trackGeminiUsage,
-  trackRenderRequest, // Corrigido nome para coincidir com a declaração
-  trackSupabaseOperation,
-  getProviderStatus,
-  sessionMetrics
-};

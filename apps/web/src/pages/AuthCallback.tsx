@@ -122,9 +122,17 @@ const AuthCallback: React.FC = () => {
                     hasActivePlan = true;
                 }
 
+                // v6.0: FIX CRÍTICO - Permitir que novos usuários (sem plano/perfil) acessem o Dashboard
+                // O Dashboard é quem deve lidar com o Onboarding e criação de perfil.
+                // Se bloquearmos aqui, o usuário nunca consegue entrar para criar a conta.
+                if (!hasActivePlan) {
+                    console.log('[AuthCallback] Usuário sem plano detectado. Redirecionando para Onboarding no Dashboard.');
+                    hasActivePlan = true;
+                }
+
                 if (hasActivePlan) {
-                    console.log('[AuthCallback] Plano ativo encontrado, redirecionando para Dashboard');
-                    const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL || (import.meta.env.PROD ? "https://luminnus-dashboard.onrender.com" : "http://localhost:3001");
+                    console.log('[AuthCallback] Redirecionando para Dashboard');
+                    const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL || (import.meta.env.DEV ? "http://localhost:3001" : "https://luminnus-dashboard.onrender.com");
                     setMessage('Redirecionando para o seu Dashboard...');
 
                     // v5.5: Sincronização de Sessão Cross-Origin (Local e Produção)
@@ -144,6 +152,7 @@ const AuthCallback: React.FC = () => {
                         window.location.href = redirectFinalUrl;
                     }, 800);
                 } else {
+                    // CÓDIGO MORTO: Mantido apenas por segurança, mas o if acima garante que sempre entra no bloco verdadeiro
                     console.log('[AuthCallback] Sem plano ativo, redirecionando para o site principal');
                     setMessage('Você não possui um plano ativo.');
                     setTimeout(() => {

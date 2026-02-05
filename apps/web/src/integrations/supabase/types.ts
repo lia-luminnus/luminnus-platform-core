@@ -15,6 +15,7 @@ export type Database = {
           email: string | null
           full_name: string | null
           avatar_url: string | null
+          plan_type: string | null
           created_at: string | null
           updated_at: string | null
         }
@@ -23,6 +24,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           avatar_url?: string | null
+          plan_type?: string | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -31,6 +33,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           avatar_url?: string | null
+          plan_type?: string | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -87,6 +90,61 @@ export type Database = {
           tenant_id?: string
           user_id?: string
           role?: "owner" | "admin" | "member"
+          created_at?: string | null
+        }
+      }
+      conversations: {
+        Row: {
+          id: string
+          user_id: string
+          title: string | null
+          mode: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string
+          title?: string | null
+          mode?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string | null
+          mode?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+      }
+      messages: {
+        Row: {
+          id: string
+          conversation_id: string
+          role: string
+          content: string
+          origin: string | null
+          attachments: Json | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          conversation_id: string
+          role: string
+          content: string
+          origin?: string | null
+          attachments?: Json | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          conversation_id?: string
+          role?: string
+          content?: string
+          origin?: string | null
+          attachments?: Json | null
           created_at?: string | null
         }
       }

@@ -54,7 +54,7 @@ export const AdminLIAContainer = () => {
         // Health check simplificado
         const checkLiaStatus = async () => {
             try {
-                await fetch(`${LIA_VIVA_URL}/api/health`, { mode: 'no-cors' });
+                await fetch('/api/health');
                 setLoading(false);
             } catch (err) {
                 setLoading(false);

@@ -33,11 +33,20 @@ const DashboardRedirect = () => {
 
             const finalQuery = searchParams.toString();
 
-            // Se targetUrl for vazio (produção sem VITE_DASHBOARD_URL), fallback para root
+            // DashboardAuthContext expects tokens in HashRouter format:
+            // Method 1: /#/?access_token=... (preferred)
+            // Method 2: ?access_token=... (fallback)
             const baseRedirect = targetUrl || "/";
-            const finalUrl = finalQuery ? `${baseRedirect}${baseRedirect.endsWith('/') ? '' : '/'}#/?${finalQuery}` : targetUrl;
+            const finalUrl = finalQuery
+                ? `${baseRedirect}${baseRedirect.endsWith('/') ? '' : '/'}#/?${finalQuery}`
+                : targetUrl;
 
             console.log("[DashboardRedirect] Redirecionando para:", finalUrl);
+            console.log("[DashboardRedirect] Tokens incluídos:", {
+                hasAccessToken: searchParams.has('access_token'),
+                hasRefreshToken: searchParams.has('refresh_token'),
+                source: searchParams.get('source')
+            });
             window.location.href = finalUrl;
         };
 

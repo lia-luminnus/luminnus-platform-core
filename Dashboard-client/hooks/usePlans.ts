@@ -181,15 +181,58 @@ export function usePlans() {
     }, []);
 
     const loadPlans = async () => {
+        // v7.0: Cache-first strategy
+        const cacheKey = 'plans_cache';
+        const cached = localStorage.getItem(cacheKey);
+
+        if (cached) {
+            try {
+                const { data, timestamp } = JSON.parse(cached);
+                const age = Date.now() - timestamp;
+                const TTL = 5 * 60 * 1000; // 5min TTL
+
+                if (age < TTL) {
+                    console.log(`[usePlans] ✅ Using cached plans (age: ${Math.round(age / 1000)}s)`);
+                    setPlans(data);
+                    setLoading(false);
+                    // Revalidate em background
+                    setTimeout(() => loadPlansFromDB(), 100);
+                    return;
+                } else {
+                    console.log(`[usePlans] ⚠️ Cache expired (age: ${Math.round(age / 1000)}s), fetching fresh`);
+                }
+            } catch (e) {
+                console.warn('[usePlans] Cache parse error, ignoring:', e);
+            }
+        }
+
+        // Fetch from DB
+        await loadPlansFromDB();
+    };
+
+    const loadPlansFromDB = async () => {
         try {
             if (!supabase) return;
-            const { data, error } = await supabase.from('plan_configs').select('*').order('created_at', { ascending: true });
+
+            // v6.2: Timeout de 5s para evitar spinner infinito
+            const fetchPromise = supabase.from('plan_configs').select('*').order('created_at', { ascending: true });
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('PLANS_TIMEOUT')), 5000));
+
+            const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as any;
+
             if (error) throw error;
             if (data && data.length > 0) {
-                setPlans(sortPlans(data.map(convertPlanFromDB)));
+                const parsedPlans = sortPlans(data.map(convertPlanFromDB));
+                setPlans(parsedPlans);
+
+                // v7.0: Salvar no cache
+                localStorage.setItem('plans_cache', JSON.stringify({
+                    data: parsedPlans,
+                    timestamp: Date.now()
+                }));
             }
         } catch (err) {
-            console.error('[Dashboard-usePlans] Error:', err);
+            console.warn('[Dashboard-usePlans] Error/Timeout fetching plans, using fallback:', err);
         } finally {
             setLoading(false);
         }

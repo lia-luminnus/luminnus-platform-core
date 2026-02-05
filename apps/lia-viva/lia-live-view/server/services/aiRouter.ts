@@ -270,12 +270,20 @@ Detectei que você quer **${effectiveRequest.action.replace('_', ' ')}**. Esta e
                 if (f.mimetype.includes('wordprocessingml') || f.name.toLowerCase().endsWith('.docx') || f.name.toLowerCase().endsWith('.doc')) {
                     try {
                         const buffer = Buffer.from(f.data, 'base64');
-                        // v7.2: Suporte a ESM/CJS interop para mammoth
-                        const extractFn = (mammoth as any).extractRawText || (mammoth as any).default?.extractRawText;
-                        if (extractFn) {
-                            const result = await extractFn({ buffer });
-                            extractedText = result.value;
-                            console.log(`📄 [AIRouter] Texto extraído do Word: ${extractedText.length} caracteres`);
+
+                        // v7.5: Validar se o buffer é um ZIP válido (formato .docx)
+                        const isValidZip = buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4B;
+                        if (!isValidZip) {
+                            console.error(`❌ [AIRouter] Arquivo ${f.name} não é um ZIP válido (formato .docx corrompido)`);
+                            // Continuar sem extrair texto
+                        } else {
+                            // v7.2: Suporte a ESM/CJS interop para mammoth
+                            const extractFn = (mammoth as any).extractRawText || (mammoth as any).default?.extractRawText;
+                            if (extractFn) {
+                                const result = await extractFn({ buffer });
+                                extractedText = result.value;
+                                console.log(`📄 [AIRouter] Texto extraído do Word: ${extractedText.length} caracteres`);
+                            }
                         }
                     } catch (wordErr) {
                         console.error('❌ [AIRouter] Erro ao extrair texto do Word:', wordErr);
@@ -386,7 +394,7 @@ Detectei que você quer **${effectiveRequest.action.replace('_', ' ')}**. Esta e
                     content_snapshot: (file as any).extracted_text
                 }
             });
-            
+
             if (fileRecord?.id) {
                 allFileIds.push(fileRecord.id);
             }

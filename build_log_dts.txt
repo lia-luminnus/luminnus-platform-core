@@ -1,0 +1,46 @@
+
+> @luminnus/lia-runtime@1.0.0 build D:\luminnus-platform-core\packages\lia-runtime
+> tsup && tsc -b
+
+[34mCLI[39m Building entry: src/index.ts
+[34mCLI[39m Using tsconfig: tsconfig.json
+[34mCLI[39m tsup v8.5.1
+[34mCLI[39m Using tsup config: D:\luminnus-platform-core\packages\lia-runtime\tsup.config.ts
+[34mCLI[39m Target: es2020
+[34mCLI[39m Cleaning output folder
+[34mCJS[39m Build start
+[34mESM[39m Build start
+[32mESM[39m [1mdist\index.js     [22m[32m83.73 KB[39m
+[32mESM[39m [1mdist\index.js.map [22m[32m188.87 KB[39m
+[32mESM[39m ÔÜí´©Å Build success in 1130ms
+[32mCJS[39m [1mdist\index.cjs     [22m[32m84.51 KB[39m
+[32mCJS[39m [1mdist\index.cjs.map [22m[32m188.91 KB[39m
+[32mCJS[39m ÔÜí´©Å Build success in 1132ms
+[34mDTS[39m Build start
+src/index.ts(6,15): error TS6307: File 'D:/luminnus-platform-core/packages/lia-runtime/src/contracts/index.ts' is not listed within the file list of project ''. Projects must list all files or use an 'include' pattern.
+  File is ECMAScript module because 'D:/luminnus-platform-core/packages/lia-runtime/package.json' has field "type" with value "module"
+src/index.ts(9,15): error TS6307: File 'D:/luminnus-platform-core/packages/lia-runtime/src/utils/index.ts' is not listed within the file list of project ''. Projects must list all files or use an 'include' pattern.
+  File is ECMAScript module because 'D:/luminnus-platform-core/packages/lia-runtime/package.json' has field "type" with value "module"
+src/index.ts(12,15): error TS6307: File 'D:/luminnus-platform-core/packages/lia-runtime/src/live/index.ts' is not listed within the file list of project ''. Projects must list all files or use an 'include' pattern.
+  File is ECMAScript module because 'D:/luminnus-platform-core/packages/lia-runtime/package.json' has field "type" with value "module"
+src/index.ts(15,15): error TS6307: File 'D:/luminnus-platform-core/packages/lia-runtime/src/version/index.ts' is not listed within the file list of project ''. Projects must list all files or use an 'include' pattern.
+  File is ECMAScript module because 'D:/luminnus-platform-core/packages/lia-runtime/package.json' has field "type" with value "module"
+src/index.ts(18,15): error TS6307: File 'D:/luminnus-platform-core/packages/lia-runtime/src/memory/index.ts' is not listed within the file list of project ''. Projects must list all files or use an 'include' pattern.
+  File is ECMAScript module because 'D:/luminnus-platform-core/packages/lia-runtime/package.json' has field "type" with value "module"
+src/index.ts(21,72): error TS6307: File 'D:/luminnus-platform-core/packages/lia-runtime/src/persona.ts' is not listed within the file list of project ''. Projects must list all files or use an 'include' pattern.
+  File is ECMAScript module because 'D:/luminnus-platform-core/packages/lia-runtime/package.json' has field "type" with value "module"
+src/index.ts(24,15): error TS6307: File 'D:/luminnus-platform-core/packages/lia-runtime/src/protocols/fileUnderstandingProtocol.ts' is not listed within the file list of project ''. Projects must list all files or use an 'include' pattern.
+  File is ECMAScript module because 'D:/luminnus-platform-core/packages/lia-runtime/package.json' has field "type" with value "module"
+src/index.ts(27,15): error TS6307: File 'D:/luminnus-platform-core/packages/lia-runtime/src/capabilities/capabilityRegistry.ts' is not listed within the file list of project ''. Projects must list all files or use an 'include' pattern.
+  File is ECMAScript module because 'D:/luminnus-platform-core/packages/lia-runtime/package.json' has field "type" with value "module"
+
+Error: error occurred in dts build
+    at Worker.<anonymous> (D:\luminnus-platform-core\node_modules\.pnpm\tsup@8.5.1_@swc+core@1.15.7_@swc+helpers@0.5.17__jiti@2.6.1_postcss@8.5.6_tsx@4.21.0_typescript@5.8.3\node_modules\tsup\dist\index.js:1545:26)
+    at Worker.emit (node:events:519:28)
+    at MessagePort.<anonymous> (node:internal/worker:270:53)
+    at [nodejs.internal.kHybridDispatch] (node:internal/event_target:827:20)
+    at MessagePort.<anonymous> (node:internal/per_context/messageport:23:28)
+DTS Build error
+D:\luminnus-platform-core\packages\lia-runtime:
+ÔÇëERR_PNPM_RECURSIVE_RUN_FIRST_FAILÔÇë @luminnus/lia-runtime@1.0.0 build: `tsup && tsc -b`
+Exit status 1

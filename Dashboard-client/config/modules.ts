@@ -1,5 +1,6 @@
 
-import { ModuleDefinition, ModuleId } from '../types';
+import { ModuleDefinition, type ModuleId } from '../types';
+export type { ModuleId };
 
 // 1. Registry of ALL available modules
 export const MODULE_REGISTRY: Record<ModuleId, ModuleDefinition> = {

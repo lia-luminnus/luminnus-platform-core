@@ -164,15 +164,15 @@ export function getResponseConstraints(mode: IntentMode, userWantsDetail: boolea
 
 /**
  * Template sugerido para MODO A (Incidente)
- * v7.5: Tornado OPCIONAL e mais humano.
+ * v7.6: Removida formatação numerada - resposta narrativa e natural.
  */
 export function templateIncident(): string {
     return `
-Analise o problema de forma natural seguindo estes pontos:
-- O que está acontecendo (Achado Principal)
-- Evidência ou erro detectado
-- Causa provável
-- Sugestão de correção e como validar
+Analise o problema de forma natural e conversacional, como se estivesse explicando para um colega.
+
+Explique o que está acontecendo, mostre evidências ou erros detectados, identifique a causa provável, e sugira como corrigir e validar a solução.
+
+⚠️ IMPORTANTE: NÃO use formatação numerada (1), 2), 3)). Responda de forma fluida e narrativa. Use parágrafos curtos ou bullets simples (•) se necessário.
 `.trim();
 }
 
@@ -204,7 +204,7 @@ export function templateAction(executed: boolean, capability?: string): string {
  */
 export function validateResponse(lowerText: string): { ok: boolean; errors: string[] } {
     const errors: string[] = [];
-    
+
     // v7.5: Flexibilidade Total - Validamos apenas se a resposta não é genérica demais
     // Anti-descrição vazia
     if (lowerText.includes('na imagem há') && !lowerText.includes('causa') && !lowerText.includes('porque') && lowerText.length < 100) {

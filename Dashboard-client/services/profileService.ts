@@ -33,8 +33,32 @@ export async function getProfile(userId: string): Promise<UserProfile | null> {
     console.log(`[ProfileService] Buscando perfil para: ${userId}...`);
     if (!supabase) return null;
 
+    // v7.0: Cache-first strategy - Tentar cache primeiro
+    const cacheKey = `profile_cache_${userId}`;
+    const cached = localStorage.getItem(cacheKey);
+
+    if (cached) {
+        try {
+            const { data, timestamp } = JSON.parse(cached);
+            const age = Date.now() - timestamp;
+            const TTL = 2 * 60 * 1000; // 2min TTL (reduzido para evitar dados obsoletos)
+
+            if (age < TTL) {
+                console.log(`[ProfileService] ✅ Using cached profile (age: ${Math.round(age / 1000)}s)`);
+                // Revalidate em background (não bloqueia UI)
+                setTimeout(() => revalidateProfile(userId), 100);
+                return data;
+            } else {
+                console.log(`[ProfileService] ⚠️ Cache expired (age: ${Math.round(age / 1000)}s), fetching fresh`);
+            }
+        } catch (e) {
+            console.warn('[ProfileService] Cache parse error, ignoring:', e);
+        }
+    }
+
+    // v7.1: Timeout ajustado para 8s (balanço entre UX e confiabilidade)
     const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000)
+        setTimeout(() => reject(new Error('DB_TIMEOUT')), 8000)
     );
 
     try {
@@ -58,7 +82,7 @@ export async function getProfile(userId: string): Promise<UserProfile | null> {
         console.log('[ProfileService] Perfil carregado com sucesso');
 
         const profile = data as any;
-        return {
+        const userProfile: UserProfile = {
             id: profile.id,
             email: profile.email || null,
             full_name: profile.full_name || null,
@@ -81,6 +105,14 @@ export async function getProfile(userId: string): Promise<UserProfile | null> {
             created_at: profile.created_at || new Date().toISOString(),
             updated_at: profile.updated_at || new Date().toISOString()
         };
+
+        // v7.0: Salvar no cache
+        localStorage.setItem(cacheKey, JSON.stringify({
+            data: userProfile,
+            timestamp: Date.now()
+        }));
+
+        return userProfile;
     } catch (err: any) {
         if (err.message === 'DB_TIMEOUT') {
             console.warn('[ProfileService] Timeout na busca de perfil (usando fallback)');
@@ -285,6 +317,79 @@ export async function completeOnboarding(
     };
 }
 
+// v7.0: Background revalidation (não bloqueia UI)
+async function revalidateProfile(userId: string): Promise<void> {
+    if (!supabase) return;
+
+    const cacheKey = `profile_cache_${userId}`;
+    const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('REVALIDATE_TIMEOUT')), 3000)
+    );
+
+    try {
+        const fetchPromise = supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
+
+        const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as any;
+
+        if (!error && data) {
+            console.log('[ProfileService] 🔄 Cache revalidated');
+            const profile = data as any;
+            const userProfile: UserProfile = {
+                id: profile.id,
+                email: profile.email || null,
+                full_name: profile.full_name || null,
+                avatar_url: profile.avatar_url || null,
+                company_name: profile.company_name || null,
+                phone: profile.phone || null,
+                address: profile.address || null,
+                city: profile.city || null,
+                state: profile.state || null,
+                postal_code: profile.postal_code || null,
+                country: profile.country || 'Brasil',
+                tax_id: profile.tax_id || null,
+                role: profile.role || 'client',
+                segment: profile.segment || null,
+                modules: profile.modules || null,
+                onboarding_completed: profile.onboarding_completed ?? false,
+                onboarding_integrations_done: profile.onboarding_integrations_done ?? false,
+                integrations_selected: profile.integrations_selected || [],
+                plan_type: profile.plan_type || null,
+                created_at: profile.created_at || new Date().toISOString(),
+                updated_at: profile.updated_at || new Date().toISOString()
+            };
+
+            localStorage.setItem(cacheKey, JSON.stringify({
+                data: userProfile,
+                timestamp: Date.now()
+            }));
+        }
+    } catch (err) {
+        // Silent fail - cache permanece válido
+        console.warn('[ProfileService] Revalidation failed (cache unchanged)');
+    }
+}
+
+// v7.0: Clear cache on logout
+export function clearProfileCache(userId?: string): void {
+    if (userId) {
+        localStorage.removeItem(`profile_cache_${userId}`);
+        console.log('[ProfileService] Cache cleared for user:', userId);
+    } else {
+        // Clear all profile caches
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('profile_cache_')) {
+                localStorage.removeItem(key);
+            }
+        });
+        console.log('[ProfileService] All profile caches cleared');
+    }
+}
+
+
 export async function uploadAvatar(userId: string, file: File): Promise<string> {
     if (!supabase) throw new Error('Supabase not initialized');
 
@@ -292,11 +397,20 @@ export async function uploadAvatar(userId: string, file: File): Promise<string> 
     const fileName = `${userId}/${Math.random()}.${fileExt}`;
     const filePath = `${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
+    console.log('[ProfileService] Uploading to:', filePath);
+    // DEBUG: Verificar se a URL está carregada
+    console.log('[ProfileService] Supabase URL configured:', import.meta.env.VITE_SUPABASE_URL ? 'YES' : 'NO');
+
+    const uploadPromise = supabase.storage
         .from('avatars')
         .upload(filePath, file);
 
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('UPLOAD_TIMEOUT')), 15000));
+
+    const { error: uploadError } = await Promise.race([uploadPromise, timeoutPromise]) as any;
+
     if (uploadError) {
+        console.error('[ProfileService] Upload failed:', uploadError);
         throw uploadError;
     }
 

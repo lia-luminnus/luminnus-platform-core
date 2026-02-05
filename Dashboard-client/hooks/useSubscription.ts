@@ -36,7 +36,8 @@ export const useSubscription = () => {
         setLoading(true);
         try {
             // 1. Fetch Subscription
-            const { data: subData } = await supabase
+            // v6.2: Timeout de 5s para evitar spinner infinito
+            const fetchSubPromise = supabase
                 .from('subscriptions')
                 .select('*')
                 .eq('user_id', user.id)
@@ -44,6 +45,10 @@ export const useSubscription = () => {
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();
+
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SUB_TIMEOUT')), 5000));
+
+            const { data: subData } = await Promise.race([fetchSubPromise, timeoutPromise]) as any;
 
             if (subData) {
                 setSubscription({
@@ -56,44 +61,65 @@ export const useSubscription = () => {
                 });
             }
 
-            // 2. Fetch Invoices
-            // v5.6: Tabela invoices usa tenant_id, não user_id. 
-            // Só buscamos se tivermos um tenant_id da subscription ou do user metadata
-            let tenantId = subData?.tenant_id || (user.user_metadata as any)?.tenant_id;
-            
+            // 2. Fetch Invoices (only if profile has tenant_id for performance)
             let invData: any[] = [];
-            
-            if (tenantId) {
-                const { data } = await supabase
-                    .from('invoices')
-                    .select('*')
-                    .eq('tenant_id', tenantId)
-                    .order('created_at', { ascending: false });
-                invData = data || [];
-            } else {
-                // Tenta buscar por customer_id como fallback se for igual ao user.id
-                // Mas apenas se não tiver tenant_id para evitar query pesada
-                 const { data } = await supabase
-                    .from('invoices')
-                    .select('*')
-                    .eq('customer_id', user.id)
-                    .order('created_at', { ascending: false });
-                 invData = data || [];
+
+            // v6.3: Pular busca de invoices completamente se demorar - não bloquear Dashboard
+            const invoiceTimeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('INV_TIMEOUT')), 3000));
+
+            try {
+                const profile = user as any;
+                if (profile.tenant_id) {
+                    const fetchInvPromise = supabase
+                        .from('invoices')
+                        .select('*')
+                        .eq('tenant_id', profile.tenant_id)
+                        .order('created_at', { ascending: false });
+
+                    const { data } = await Promise.race([fetchInvPromise, invoiceTimeoutPromise]) as any;
+                    invData = data || [];
+                } else {
+                    // Tenta buscar por customer_id como fallback se for igual ao user.id
+                    // Mas apenas se não tiver tenant_id para evitar query pesada
+                    const fetchInvPromise = supabase
+                        .from('invoices')
+                        .select('*')
+                        .eq('customer_id', user.id)
+                        .order('created_at', { ascending: false });
+
+                    const { data } = await Promise.race([fetchInvPromise, invoiceTimeoutPromise]) as any;
+                    invData = data || [];
+                }
+
+                if (invData) {
+                    setInvoices(invData.map(inv => ({
+                        id: inv.id,
+                        amount_paid: inv.amount_paid / 100, // Amout is usually in cents
+                        currency: inv.currency,
+                        status: inv.status,
+                        created_at: inv.created_at,
+                        invoice_pdf: inv.invoice_pdf,
+                        description: inv.description
+                    })));
+                }
+            } catch (invError: any) {
+                // v6.3: Ignorar silenciosamente erros de invoice - não são críticos
+                if (invError.message !== 'INV_TIMEOUT') {
+                    console.warn('[useSubscription] Invoice fetch failed (non-blocking):', invError.message);
+                }
+                setInvoices([]); // Fallback vazio
             }
 
-            if (invData) {
-                setInvoices(invData.map(inv => ({
-                    id: inv.id,
-                    amount_paid: inv.amount_paid / 100, // Amout is usually in cents
-                    currency: inv.currency,
-                    status: inv.status,
-                    created_at: inv.created_at,
-                    invoice_pdf: inv.invoice_pdf,
-                    description: inv.description
-                })));
+        } catch (error: any) {
+            // v6.3: Capturar QUALQUER erro (timeout, network, RLS, etc.)
+            if (error.message === 'SUB_TIMEOUT') {
+                console.warn('[useSubscription] Subscription timeout (using fallback)');
+            } else {
+                console.warn('[useSubscription] Error fetching billing data (non-blocking):', error.message || error.code);
             }
-        } catch (error) {
-            console.error('[useSubscription] Error fetching billing data:', error);
+            // Definir valores vazios como fallback para não travar UI
+            setSubscription(null);
+            setInvoices([]);
         } finally {
             setLoading(false);
         }

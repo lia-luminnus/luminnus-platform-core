@@ -187,10 +187,10 @@ const Onboarding: React.FC = () => {
                   key={module.id}
                   onClick={() => !isFixed && toggleTempModule(module.id)}
                   className={`p-4 rounded-xl border transition-all flex items-center gap-4 ${isFixed
-                      ? 'bg-brand-primary/30 border-brand-primary cursor-default'
-                      : isSelected
-                        ? 'bg-brand-primary/20 border-brand-primary shadow-[0_0_15px_rgba(139,92,246,0.2)] cursor-pointer'
-                        : 'bg-white/5 border-white/10 hover:bg-white/10 cursor-pointer'
+                    ? 'bg-brand-primary/30 border-brand-primary cursor-default'
+                    : isSelected
+                      ? 'bg-brand-primary/20 border-brand-primary shadow-[0_0_15px_rgba(139,92,246,0.2)] cursor-pointer'
+                      : 'bg-white/5 border-white/10 hover:bg-white/10 cursor-pointer'
                     }`}
                 >
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isSelected || isFixed ? 'bg-brand-primary text-white' : 'bg-white/10 text-gray-400'}`}>
@@ -251,19 +251,19 @@ const Onboarding: React.FC = () => {
             <button
               key={category.id}
               onClick={() => handleSelectCategory(category)}
-              className="group relative flex flex-col items-start p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-brand-primary/50 transition-all duration-300 hover:shadow-[0_0_20px_rgba(139,92,246,0.15)] text-left"
+              className="group relative flex flex-col items-start p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-brand-primary/50 transition-all duration-300 hover:shadow-[0_0_20px_rgba(139,92,246,0.15)] text-left"
               style={{ animationDelay: `${index * 50}ms` }}
             >
-              <div className="p-3 rounded-xl bg-brand-primary/10 text-brand-primary mb-4 group-hover:scale-110 transition-transform duration-300">
-                <span className="material-symbols-outlined text-3xl">{category.icon}</span>
+              <div className="p-2.5 rounded-xl bg-brand-primary/10 text-brand-primary mb-3 group-hover:scale-110 transition-transform duration-300">
+                <span className="material-symbols-outlined text-2xl">{category.icon}</span>
               </div>
-              <h3 className="text-xl font-bold mb-2 group-hover:text-brand-primary transition-colors">
+              <h3 className="text-lg font-bold mb-1.5 group-hover:text-brand-primary transition-colors">
                 {category.title}
               </h3>
-              <p className="text-sm text-gray-400 leading-relaxed">
+              <p className="text-xs text-gray-400 leading-relaxed">
                 {category.description}
               </p>
-              <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0">
+              <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0">
                 <span className="material-symbols-outlined text-brand-primary">arrow_forward</span>
               </div>
             </button>

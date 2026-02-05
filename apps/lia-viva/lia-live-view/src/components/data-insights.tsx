@@ -16,7 +16,7 @@ export function DataInsights() {
 
   async function loadMetrics() {
     try {
-      const res = await fetch('http://localhost:3000/api/metrics');
+      const res = await fetch('http://localhost:3006/api/metrics');
       const data = await res.json();
       if (data.success) setMetrics(data.metrics);
       setLoading(false);

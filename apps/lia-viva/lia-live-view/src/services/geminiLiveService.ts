@@ -32,7 +32,7 @@ export { GeminiLiveService, createGeminiLiveService, ConnectionState, sanitizeFo
 // ======================================================================
 
 const config: LiaRuntimeConfig = {
-  apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:3000',
+  apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:3006',
   mode: 'admin',
   voiceName: 'Aoede',  // Voz feminina natural (mais expressiva que Kore)
   languageCode: 'pt-BR',

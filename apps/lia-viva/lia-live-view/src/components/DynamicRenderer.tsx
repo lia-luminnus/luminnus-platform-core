@@ -245,7 +245,7 @@ export const DynamicRenderer: React.FC<DynamicRendererProps> = ({
             </p>
           </div>
           <a
-            href={`http://localhost:3000${data.downloadUrl}`}
+            href={`http://localhost:3006${data.downloadUrl}`}
             download={data.fileName}
             className="px-4 py-2 bg-gradient-to-r from-[#00f3ff] to-[#bc13fe] text-white rounded-lg hover:opacity-80 transition-opacity"
           >

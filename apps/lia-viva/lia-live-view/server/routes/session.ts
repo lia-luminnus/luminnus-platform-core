@@ -28,6 +28,51 @@ export function setupSessionRoutes(app: Express) {
     res.json(response);
   });
 
+  // GET /api/me - Retorna dados do perfil do usuário (plan, company, entitlements)
+  app.get('/api/me', async (req, res) => {
+    try {
+      // Extrair userId do Authorization header
+      const authHeader = req.headers.authorization;
+
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Token não fornecido' });
+      }
+
+      const token = authHeader.slice(7);
+
+      // Validar token com Supabase
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseUrl = process.env.SUPABASE_URL!;
+      const serviceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!;
+      const supabaseAdmin = createClient(supabaseUrl, serviceKey, {
+        auth: { persistSession: false, autoRefreshToken: false }
+      });
+
+      const { data: userData, error: authError } = await supabaseAdmin.auth.getUser(token);
+
+      if (authError || !userData?.user?.id) {
+        return res.status(401).json({ error: 'Token inválido' });
+      }
+
+      const userId = userData.user.id;
+
+      // Buscar perfil do usuário
+      const { getUserProfile } = await import('../config/supabase.js');
+      const profile = await getUserProfile(userId);
+
+      // Retornar dados conforme esperado pelo AuthContext.tsx
+      res.json({
+        company: profile?.company || null,
+        plan: profile?.plan_type || profile?.plan || 'free',
+        entitlements: profile?.entitlements || []
+      });
+
+    } catch (error) {
+      console.error('❌ [/api/me] Erro:', error);
+      res.status(500).json({ error: 'Erro ao buscar dados do usuário' });
+    }
+  });
+
   // GET /api/history - Retorna histórico de mensagens
   app.get('/api/history', async (req, res) => {
     const session = await ensureSession();

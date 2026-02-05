@@ -43,17 +43,17 @@ const LiaChatWindow = ({ onClose }: LiaChatWindowProps) => {
 
       // Criar nova conversa
       const { data, error } = await supabase
-        .from('chat_conversations')
+        .from('conversations')
         .insert({ user_id: user.id })
         .select()
         .single();
 
       if (!error && data) {
         setConversationId(data.id);
-        
+
         // Nome do usuário para saudação personalizada
         const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'usuário';
-        
+
         // Mensagem de boas-vindas personalizada
         setMessages([{
           role: 'assistant',
@@ -146,7 +146,7 @@ const LiaChatWindow = ({ onClose }: LiaChatWindowProps) => {
     setIsTyping(true);
 
     // Salvar mensagem do usuário
-    await supabase.from('chat_messages').insert({
+    await supabase.from('messages').insert({
       conversation_id: conversationId,
       role: 'user',
       content: text
@@ -164,7 +164,7 @@ const LiaChatWindow = ({ onClose }: LiaChatWindowProps) => {
       setMessages(prev => [...prev, assistantMessage]);
 
       // Salvar resposta da IA
-      await supabase.from('chat_messages').insert({
+      await supabase.from('messages').insert({
         conversation_id: conversationId,
         role: 'assistant',
         content: assistantMessage.content
@@ -190,7 +190,7 @@ const LiaChatWindow = ({ onClose }: LiaChatWindowProps) => {
     <div className="fixed bottom-24 right-6 z-50 w-[380px] h-[600px] bg-[#0B0B0F] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-fade-in">
       {/* Header */}
       <div className="bg-gradient-to-r from-[#7C3AED] to-[#FF2E9E] p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
           <img src={liaAvatar} alt="Lia" className="w-10 h-10 rounded-full" />
           <div>
             <h3 className="font-semibold text-white">Lia</h3>
@@ -202,11 +202,10 @@ const LiaChatWindow = ({ onClose }: LiaChatWindowProps) => {
         <div className="flex items-center gap-2">
           <button
             onClick={toggleMicrofone}
-            className={`transition-colors ${
-              micAtivo 
-                ? 'text-red-400 hover:text-red-300 animate-pulse' 
-                : 'text-white/80 hover:text-white'
-            }`}
+            className={`transition-colors ${micAtivo
+              ? 'text-red-400 hover:text-red-300 animate-pulse'
+              : 'text-white/80 hover:text-white'
+              }`}
             title={micAtivo ? 'Desativar microfone' : 'Ativar microfone'}
           >
             {micAtivo ? (
@@ -236,19 +235,18 @@ const LiaChatWindow = ({ onClose }: LiaChatWindowProps) => {
                 <Bot className="w-5 h-5 text-white" />
               </div>
             )}
-            
+
             <div
-              className={`max-w-[75%] p-3 rounded-2xl ${
-                msg.role === 'user'
-                  ? 'bg-[#22D3EE]/20 border border-[#22D3EE]/30 text-white'
-                  : 'bg-white/5 border border-white/10 text-white/90'
-              }`}
+              className={`max-w-[75%] p-3 rounded-2xl ${msg.role === 'user'
+                ? 'bg-[#22D3EE]/20 border border-[#22D3EE]/30 text-white'
+                : 'bg-white/5 border border-white/10 text-white/90'
+                }`}
             >
               <p className="text-sm leading-relaxed whitespace-pre-line">
                 {msg.content}
               </p>
             </div>
-            
+
             {msg.role === 'user' && (
               <div className="w-8 h-8 rounded-full bg-[#22D3EE]/20 border border-[#22D3EE]/30 flex items-center justify-center flex-shrink-0">
                 <User className="w-5 h-5 text-[#22D3EE]" />
@@ -256,7 +254,7 @@ const LiaChatWindow = ({ onClose }: LiaChatWindowProps) => {
             )}
           </div>
         ))}
-        
+
         {isTyping && (
           <div className="flex gap-2">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#FF2E9E] flex items-center justify-center">
@@ -271,7 +269,7 @@ const LiaChatWindow = ({ onClose }: LiaChatWindowProps) => {
             </div>
           </div>
         )}
-        
+
         <div ref={messagesEndRef} />
       </div>
 

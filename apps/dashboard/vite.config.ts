@@ -10,32 +10,32 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
     server: {
-      port: 3005,
+      port: 3001,
       strictPort: true,
       host: '0.0.0.0',
       proxy: {
-        // Admin routes are hosted on LIA Live View server (port 3000)
+        // Admin routes are hosted on LIA Live View server (port 3006)
         '/api/admin': {
-          target: 'http://localhost:3000',
+          target: 'http://127.0.0.1:3006',
           changeOrigin: true,
           secure: false,
         },
         // Integrations routes (also on LIA Live View)
         '/api/integrations': {
-          target: 'http://localhost:3000',
+          target: 'http://127.0.0.1:3006',
           changeOrigin: true,
           secure: false,
         },
-        // Default API routes (port 5000)
+        // Default API routes (port 3006)
         '/api': {
-          target: 'http://localhost:5000',
+          target: 'http://127.0.0.1:3006',
           changeOrigin: true,
           secure: false,
         },
-        '/health': 'http://localhost:5000',
-        '/version': 'http://localhost:5000',
+        '/health': 'http://127.0.0.1:3006',
+        '/version': 'http://127.0.0.1:3006',
         '/ws': {
-          target: 'ws://localhost:5000',
+          target: 'ws://127.0.0.1:3006',
           ws: true
         }
       }

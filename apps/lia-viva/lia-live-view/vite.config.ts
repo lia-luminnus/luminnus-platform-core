@@ -24,7 +24,7 @@ export default defineConfig(({ mode }) => {
       },
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:3000',
+          target: 'http://127.0.0.1:3006',
           changeOrigin: true,
           secure: false,
           // Silencia erros temporários de conexão durante startup
@@ -38,7 +38,7 @@ export default defineConfig(({ mode }) => {
 
               // Only log if it's a new error or 5 seconds have passed
               if (code !== lastErrorCode || (now - lastErrorTime > 5000)) {
-                console.warn('[Vite Proxy] Aguardando backend:', code);
+                console.warn('[Vite Proxy] Aguardando backend (3006):', code);
                 lastErrorCode = code;
                 lastErrorTime = now;
               }
@@ -46,11 +46,11 @@ export default defineConfig(({ mode }) => {
           }
         },
         '/chat': {
-          target: 'http://127.0.0.1:3000',
+          target: 'http://127.0.0.1:3006',
           changeOrigin: true
         },
         '/socket.io': {
-          target: 'http://127.0.0.1:3000',
+          target: 'http://127.0.0.1:3006',
           ws: true,
           changeOrigin: true
         }

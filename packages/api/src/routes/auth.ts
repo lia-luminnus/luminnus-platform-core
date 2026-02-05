@@ -84,15 +84,15 @@ router.get('/google', async (req, res) => {
 
         // Determinar base URL para o callback
         // CRITICAL: Para o Google Cloud de produção/homologação deste projeto, a URI autorizada é localhost:3000.
-        // O backend (5000) deve usar a 3000 como redirect_uri para bater com o cadastro no Google Console.
-        const host = req.get('host') || 'localhost:5000';
+        // O backend (3006) deve usar a 3000 como redirect_uri para bater com o cadastro no Google Console.
+        const host = req.get('host') || 'localhost:3006';
         const protocol = req.protocol;
 
         let redirectBase = process.env.APP_URL || process.env.FRONTEND_URL || `${protocol}://${host}`;
-        // v3.1: Evitar localhost:5000 em produção se possível
-        if (redirectBase.includes(':5000') && !process.env.NODE_ENV?.includes('dev')) {
-            console.warn('[OAuth Google] Alerta: APP_URL aponta para porta 5000 em produção. Ajustando origin.');
-            redirectBase = `${protocol}://${host.replace(':5000', '')}`;
+        // v3.1: Evitar localhost:3006 em produção se possível
+        if (redirectBase.includes(':3006') && !process.env.NODE_ENV?.includes('dev')) {
+            console.warn('[OAuth Google] Alerta: APP_URL aponta para porta 3006 em produção. Ajustando origin.');
+            redirectBase = `${protocol}://${host.replace(':3006', '')}`;
         }
 
         const redirectUri = `${redirectBase}/api/auth/google/callback`;
@@ -342,7 +342,7 @@ router.get('/google/callback', async (req, res) => {
         // Redirecionar usuário
         let frontendUrl = stateData.redirect_to || process.env.FRONTEND_URL;
         if (!frontendUrl) {
-            frontendUrl = appUrl.includes('5000') ? appUrl.replace('5000', '8080') : appUrl;
+            frontendUrl = appUrl.includes('3006') ? appUrl.replace('3006', '8080') : appUrl;
         }
         frontendUrl = frontendUrl.replace(/\/$/, "");
         const targetPage = stateData.redirect_to ? "" : "/admin-dashboard?integrations=true&success=true&provider=google";

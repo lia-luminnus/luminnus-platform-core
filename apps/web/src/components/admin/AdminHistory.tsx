@@ -39,14 +39,14 @@ export const AdminHistory = () => {
     queryKey: ["admin-chat-history", limit],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("chat_messages")
+        .from("messages")
         .select(`
           id,
           role,
           content,
           created_at,
           conversation_id,
-          chat_conversations (
+          conversations (
             id,
             user_id,
             profiles (
@@ -66,7 +66,7 @@ export const AdminHistory = () => {
         content: msg.content,
         created_at: msg.created_at,
         conversation_id: msg.conversation_id,
-        user_name: msg.chat_conversations?.profiles?.full_name || "Usuário Desconhecido",
+        user_name: msg.conversations?.profiles?.full_name || "Usuário Desconhecido",
       }));
     },
   });
@@ -137,11 +137,10 @@ export const AdminHistory = () => {
                 {messages?.map((msg: any) => (
                   <div
                     key={msg.id}
-                    className={`rounded-lg border p-4 transition-all hover:shadow-md ${
-                      msg.role === "user"
+                    className={`rounded-lg border p-4 transition-all hover:shadow-md ${msg.role === "user"
                         ? "border-l-4 border-l-blue-500 bg-blue-50"
                         : "border-l-4 border-l-purple-500 bg-purple-50"
-                    }`}
+                      }`}
                   >
                     {/* Header */}
                     <div className="mb-2 flex items-center justify-between">

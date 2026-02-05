@@ -15,7 +15,7 @@ class SocketService {
     if (!this.socket) {
       // v3.0: Forçar URL do backend via ENV (OBRIGATÓRIO)
       let socketUrl = import.meta.env.VITE_SOCKET_URL;
-      const fallback = `${window.location.protocol}//${window.location.hostname}:3000`;
+      const fallback = `${window.location.protocol}//${window.location.hostname}:3006`;
 
       if (!socketUrl) {
         // v3.1: Silenciar erro irritante e usar fallback inteligente baseada no host atual

@@ -31,6 +31,7 @@ interface GoogleService {
 }
 
 const GOOGLE_SERVICES: GoogleService[] = [
+    { id: 'gmail', name: 'Gmail', icon: <Mail className="w-4 h-4 text-red-500" />, description: 'E-mails', planRequired: 'start' },
     { id: 'calendar', name: 'Calendar', icon: <Calendar className="w-4 h-4 text-blue-500" />, description: 'Eventos', planRequired: 'start' },
     { id: 'meet', name: 'Meet', icon: <Video className="w-4 h-4 text-green-500" />, description: 'Reuniões', planRequired: 'plus' },
     { id: 'drive', name: 'Drive', icon: <Folder className="w-4 h-4 text-yellow-500" />, description: 'Arquivos', planRequired: 'plus' },

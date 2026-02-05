@@ -80,6 +80,9 @@ export interface LiaRuntimeConfig {
     /** ID do usuário atual */
     userId?: string;
 
+    /** Nome do usuário para personalização (Contexto) */
+    userName?: string;
+
     /** ID do tenant */
     tenantId?: string;
 

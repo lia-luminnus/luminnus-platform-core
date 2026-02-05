@@ -1,0 +1,129 @@
+turbo 2.6.3
+
+ÔÇó Packages in scope: @luminnus/api, @luminnus/core, @luminnus/dashboard, @luminnus/database, @luminnus/lia-runtime, @luminnus/shared, @luminnus/web, lia-unified, luminnus-dashboard
+ÔÇó Running build, typecheck, lint in 9 packages
+ÔÇó Remote caching disabled
+@luminnus/web:lint: cache miss, executing 97963afa9da0dc12
+@luminnus/web:build: cache miss, executing ae8be462ff9bb746
+@luminnus/database:lint: cache hit, replaying logs 46b638768ae1a463
+@luminnus/database:lint: 
+@luminnus/database:lint: > @luminnus/database@0.1.0 lint D:\luminnus-platform-core\packages\database
+@luminnus/database:lint: > echo 'No linting for SQL files'
+@luminnus/database:lint: 
+@luminnus/database:lint: 'No linting for SQL files'
+@luminnus/shared:lint: cache hit, replaying logs d189525a0a753be7
+@luminnus/shared:lint: 
+@luminnus/shared:lint: > @luminnus/shared@0.1.0 lint D:\luminnus-platform-core\packages\shared
+@luminnus/shared:lint: > echo 'No lint configured'
+@luminnus/shared:lint: 
+@luminnus/shared:lint: 'No lint configured'
+@luminnus/shared:build: cache hit, replaying logs 2ae825a459e36a4e
+@luminnus/shared:build: 
+@luminnus/shared:build: > @luminnus/shared@0.1.0 build D:\luminnus-platform-core\packages\shared
+@luminnus/shared:build: > tsc -b
+@luminnus/shared:build: 
+@luminnus/lia-runtime:lint: cache hit, replaying logs ce3db2837678770b
+@luminnus/lia-runtime:lint: 
+@luminnus/lia-runtime:lint: > @luminnus/lia-runtime@1.0.0 lint D:\luminnus-platform-core\packages\lia-runtime
+@luminnus/lia-runtime:lint: > eslint src/
+@luminnus/lia-runtime:lint: 
+@luminnus/api:lint: cache hit, replaying logs 38c6f203700f1f78
+@luminnus/core:lint: cache hit, replaying logs 66daa453b2a64a85
+@luminnus/core:lint: 
+@luminnus/core:lint: > @luminnus/core@0.1.0 lint D:\luminnus-platform-core\packages\core
+@luminnus/core:lint: > echo 'No lint configured'
+@luminnus/core:lint: 
+@luminnus/core:lint: 'No lint configured'
+@luminnus/lia-runtime:typecheck: cache hit, replaying logs 04bd1495a20b97af
+@luminnus/lia-runtime:typecheck: 
+@luminnus/lia-runtime:typecheck: > @luminnus/lia-runtime@1.0.0 typecheck D:\luminnus-platform-core\packages\lia-runtime
+@luminnus/lia-runtime:typecheck: > tsc --noEmit
+@luminnus/lia-runtime:typecheck: 
+@luminnus/api:lint: 
+@luminnus/api:lint: > @luminnus/api@4.0.0 lint D:\luminnus-platform-core\packages\api
+@luminnus/api:lint: > eslint src/
+@luminnus/api:lint: 
+@luminnus/core:build: cache hit, replaying logs 75bcd8b041a169ec
+@luminnus/core:build: 
+@luminnus/core:build: > @luminnus/core@0.1.0 build D:\luminnus-platform-core\packages\core
+@luminnus/core:build: > tsc -b
+@luminnus/core:build: 
+@luminnus/dashboard:build: cache miss, executing 632627e0ea73710b
+@luminnus/api:build: cache hit, replaying logs 1d6f297c7d048896
+@luminnus/api:build: 
+@luminnus/api:build: > @luminnus/api@4.0.0 build D:\luminnus-platform-core\packages\api
+@luminnus/api:build: > tsc -b
+@luminnus/api:build: 
+@luminnus/lia-runtime:build: cache hit, replaying logs fcda6ca63bc7f7e1
+@luminnus/lia-runtime:build: 
+@luminnus/lia-runtime:build: > @luminnus/lia-runtime@1.0.0 build D:\luminnus-platform-core\packages\lia-runtime
+@luminnus/lia-runtime:build: > tsup && tsc -b
+@luminnus/lia-runtime:build: 
+@luminnus/lia-runtime:build: [34mCLI[39m Building entry: src/index.ts
+@luminnus/lia-runtime:build: [34mCLI[39m Using tsconfig: tsconfig.json
+@luminnus/lia-runtime:build: [34mCLI[39m tsup v8.5.1
+@luminnus/lia-runtime:build: [34mCLI[39m Using tsup config: D:\luminnus-platform-core\packages\lia-runtime\tsup.config.ts
+@luminnus/lia-runtime:build: [34mCLI[39m Target: es2020
+@luminnus/lia-runtime:build: [34mCJS[39m Build start
+@luminnus/lia-runtime:build: [34mESM[39m Build start
+@luminnus/lia-runtime:build: [32mESM[39m [1mdist\index.mjs     [22m[32m82.90 KB[39m
+@luminnus/lia-runtime:build: [32mESM[39m [1mdist\index.mjs.map [22m[32m186.64 KB[39m
+@luminnus/lia-runtime:build: [32mESM[39m ÔÜí´©Å Build success in 4273ms
+@luminnus/lia-runtime:build: [32mCJS[39m [1mdist\index.js     [22m[32m83.68 KB[39m
+@luminnus/lia-runtime:build: [32mCJS[39m [1mdist\index.js.map [22m[32m186.69 KB[39m
+@luminnus/lia-runtime:build: [32mCJS[39m ÔÜí´©Å Build success in 4275ms
+luminnus-dashboard:build: cache miss, executing c121f7b3119a77e5
+lia-unified:build: cache miss, executing 3803574327fcc7ec
+@luminnus/web:lint: 
+@luminnus/web:lint: > @luminnus/web@0.1.0 lint D:\luminnus-platform-core\apps\web
+@luminnus/web:lint: > eslint .
+@luminnus/web:lint: 
+@luminnus/dashboard:build: 
+@luminnus/dashboard:build: > @luminnus/dashboard@0.1.0 build D:\luminnus-platform-core\apps\dashboard
+@luminnus/dashboard:build: > vite build
+@luminnus/dashboard:build: 
+@luminnus/web:build: 
+@luminnus/web:build: > @luminnus/web@0.1.0 build D:\luminnus-platform-core\apps\web
+@luminnus/web:build: > vite build
+@luminnus/web:build: 
+lia-unified:build: 
+lia-unified:build: > lia-unified@4.0.0 build D:\luminnus-platform-core\apps\lia-viva\lia-live-view
+lia-unified:build: > vite build
+lia-unified:build: 
+luminnus-dashboard:build: 
+luminnus-dashboard:build: > luminnus-dashboard@0.0.0 build D:\luminnus-platform-core\Dashboard-client
+luminnus-dashboard:build: > vite build
+luminnus-dashboard:build: 
+@luminnus/dashboard:build: [36mvite v5.4.21 [32mbuilding for production...[36m[39m
+@luminnus/dashboard:build: 
+@luminnus/dashboard:build: /index.css doesn't exist at build time, it will remain unchanged to be resolved at runtime
+@luminnus/dashboard:build: transforming...
+@luminnus/web:build: [36mvite v5.4.21 [32mbuilding for production...[36m[39m
+@luminnus/web:build: transforming...
+luminnus-dashboard:build: [36mvite v6.4.1 [32mbuilding for production...[36m[39m
+luminnus-dashboard:build: transforming...
+lia-unified:build: [36mvite v6.4.1 [32mbuilding for production...[36m[39m
+lia-unified:build: transforming...
+@luminnus/web:build: 
+@luminnus/web:build: [1m[33mwarn[39m[22m - The class `duration-[var(--transition)]` is ambiguous and matches multiple utilities.
+@luminnus/web:build: [1m[33mwarn[39m[22m - If this is content and not a class, replace it with `duration-&lsqb;var(--transition)&rsqb;` to silence this warning.
+@luminnus/web:build: 
+@luminnus/web:build: [1m[33mwarn[39m[22m - The class `duration-[var(--transition-smooth)]` is ambiguous and matches multiple utilities.
+@luminnus/web:build: [1m[33mwarn[39m[22m - If this is content and not a class, replace it with `duration-&lsqb;var(--transition-smooth)&rsqb;` to silence this warning.
+@luminnus/web:lint: 
+@luminnus/web:lint: D:\luminnus-platform-core\apps\web\src\hooks\usePlans.ts
+@luminnus/web:lint:   175:11  error  'pollingInterval' is never reassigned. Use 'const' instead  prefer-const
+@luminnus/web:lint: 
+@luminnus/web:lint: Ô£û 1 problem (1 error, 0 warnings)
+@luminnus/web:lint:   1 error and 0 warnings potentially fixable with the `--fix` option.
+@luminnus/web:lint: 
+@luminnus/web:lint: ÔÇëELIFECYCLEÔÇë Command failed with exit code 1.
+@luminnus/web:lint: ERROR: command finished with error: command (D:\luminnus-platform-core\apps\web) C:\Users\wende\AppData\Local\pnpm\.tools\pnpm\9.0.0\bin\pnpm.CMD run lint exited (1)
+@luminnus/web#lint: command (D:\luminnus-platform-core\apps\web) C:\Users\wende\AppData\Local\pnpm\.tools\pnpm\9.0.0\bin\pnpm.CMD run lint exited (1)
+
+ Tasks:    10 successful, 15 total
+Cached:    10 cached, 15 total
+  Time:    49.16s 
+Failed:    @luminnus/web#lint
+
+ ERROR  run failed: command  exited (1)

@@ -1,52 +1,53 @@
 {
     "name": "@luminnus/lia-runtime",
     "version": "1.0.0",
+    "type": "module",
     "private": true,
-    "main": "./dist/index.js",
-    "module": "./dist/index.mjs",
+    "main": "./dist/index.cjs",
+    "module": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "exports": {
         ".": {
             "types": "./dist/index.d.ts",
-            "import": "./dist/index.mjs",
-            "require": "./dist/index.js",
-            "default": "./dist/index.mjs"
+            "import": "./dist/index.js",
+            "require": "./dist/index.cjs",
+            "default": "./dist/index.js"
         },
         "./live": {
             "types": "./dist/live/index.d.ts",
-            "import": "./dist/live/index.mjs",
-            "require": "./dist/live/index.js",
-            "default": "./dist/live/index.mjs"
+            "import": "./dist/live/index.js",
+            "require": "./dist/live/index.cjs",
+            "default": "./dist/live/index.js"
         },
         "./contracts": {
             "types": "./dist/contracts/index.d.ts",
-            "import": "./dist/contracts/index.mjs",
-            "require": "./dist/contracts/index.js",
-            "default": "./dist/contracts/index.mjs"
+            "import": "./dist/contracts/index.js",
+            "require": "./dist/contracts/index.cjs",
+            "default": "./dist/contracts/index.js"
         },
         "./utils": {
             "types": "./dist/utils/index.d.ts",
-            "import": "./dist/utils/index.mjs",
-            "require": "./dist/utils/index.js",
-            "default": "./dist/utils/index.mjs"
+            "import": "./dist/utils/index.js",
+            "require": "./dist/utils/index.cjs",
+            "default": "./dist/utils/index.js"
         },
         "./version": {
             "types": "./dist/version/index.d.ts",
-            "import": "./dist/version/index.mjs",
-            "require": "./dist/version/index.js",
-            "default": "./dist/version/index.mjs"
+            "import": "./dist/version/index.js",
+            "require": "./dist/version/index.cjs",
+            "default": "./dist/version/index.js"
         },
         "./memory": {
             "types": "./dist/memory/index.d.ts",
-            "import": "./dist/memory/index.mjs",
-            "require": "./dist/memory/index.js",
-            "default": "./dist/memory/index.mjs"
+            "import": "./dist/memory/index.js",
+            "require": "./dist/memory/index.cjs",
+            "default": "./dist/memory/index.js"
         },
         "./persona": {
             "types": "./dist/persona.d.ts",
-            "import": "./dist/persona.mjs",
-            "require": "./dist/persona.js",
-            "default": "./dist/persona.mjs"
+            "import": "./dist/persona.js",
+            "require": "./dist/persona.cjs",
+            "default": "./dist/persona.js"
         },
         "./system": {
             "types": "./system/systemManifest.ts",
@@ -56,7 +57,7 @@
         }
     },
     "scripts": {
-        "build": "tsup && tsc -b",
+        "build": "rimraf dist && tsup && tsc -p tsconfig.json --declaration --emitDeclarationOnly",
         "dev": "tsup --watch",
         "lint": "eslint src/",
         "clean": "rimraf dist",

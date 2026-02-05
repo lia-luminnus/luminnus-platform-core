@@ -77,10 +77,8 @@ function LIAHubContent() {
     const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
     const getUserPlanLevel = (): number => {
-        if (isAdmin || isDev) {
-            console.log('[LIAHub] 🔓 Admin/Dev bypass - acesso total');
-            return 999;
-        }
+        // v2.7: Remover bypass de admin para testar restrições de plano corretamente
+        // Admins agora devem ter um plano atribuído manualmente no banco
 
         const contextPlanName = plan?.name?.toLowerCase();
         if (contextPlanName && PLAN_LEVELS[contextPlanName]) {
@@ -116,12 +114,12 @@ function LIAHubContent() {
         }
 
         const hasPlan = !!(plan?.name || (profile as any)?.plan_type || user?.app_metadata?.plan);
-        
+
         if (!hasPlan) {
             const timer = setTimeout(() => {
                 console.warn('[LIAHub] ⏱️ Timeout ao aguardar plano → Assumindo Start');
                 setPlanLoading(false);
-            }, 3000);
+            }, 12000); // v9.8: Aumentado para 12s (acompanhar AuthContext timeout)
             return () => clearTimeout(timer);
         } else {
             setPlanLoading(false);
@@ -156,18 +154,18 @@ function LIAHubContent() {
     };
 
     const canAccessMode = (mode: LIAMode): boolean => {
-        if (isAdmin || isDev) return true;
-        
+        // v2.7: Remover bypass - admin agora respeita plano
+
         if (planLoading) {
             console.log('[LIAHub] ⏳ Aguardando carregamento do plano...');
             return true;
         }
-        
+
         const tab = TABS.find(t => t.id === mode);
         if (!tab) return false;
-        
+
         const hasAccess = userPlanLevel >= PLAN_LEVELS[tab.requiredPlan];
-        
+
         if (!hasAccess) {
             console.warn('[LIAHub] 🔒 Acesso negado:', {
                 mode,
@@ -177,7 +175,7 @@ function LIAHubContent() {
                 profile: (profile as any)?.plan_type
             });
         }
-        
+
         return hasAccess;
     };
 

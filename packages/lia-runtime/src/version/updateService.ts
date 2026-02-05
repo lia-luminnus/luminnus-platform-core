@@ -2,7 +2,7 @@
 // 🔄 UPDATE SERVICE - Sistema de detecção e notificação de updates
 // ======================================================================
 
-import type { UpdateAvailableEvent } from '../contracts/events.contract';
+import type { UpdateAvailableEvent } from '../contracts/events.contract.js';
 
 type UpdateListener = (event: UpdateAvailableEvent) => void;
 

@@ -1,0 +1,7 @@
+src/services/geminiLiveService.ts(19,3): error TS2724: '"@luminnus/lia-runtime"' has no exported member named 'GeminiLiveEvent'. Did you mean 'GeminiLiveService'?
+src/services/geminiLiveService.ts(20,3): error TS2305: Module '"@luminnus/lia-runtime"' has no exported member 'GeminiLiveSession'.
+src/services/geminiLiveService.ts(21,3): error TS2305: Module '"@luminnus/lia-runtime"' has no exported member 'LiaRuntimeConfig'.
+src/services/geminiLiveService.ts(22,3): error TS2305: Module '"@luminnus/lia-runtime"' has no exported member 'ToolResult'.
+src/services/geminiLiveService.ts(23,3): error TS2305: Module '"@luminnus/lia-runtime"' has no exported member 'UpdateAvailableEvent'.
+src/services/geminiLiveService.ts(35,11): error TS1343: The 'import.meta' meta-property is only allowed when the '--module' option is 'es2020', 'es2022', 'esnext', 'system', 'node16', 'node18', or 'nodenext'.
+src/services/geminiLiveService.ts(35,23): error TS2339: Property 'env' does not exist on type 'ImportMeta'.

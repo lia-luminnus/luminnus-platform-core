@@ -1,0 +1,17 @@
+
+> @luminnus/lia-runtime@1.0.0 lint D:\luminnus-platform-core\packages\lia-runtime
+> eslint src/
+
+
+D:\luminnus-platform-core\packages\lia-runtime\src\live\geminiLiveService.ts
+  383:50   error  Unnecessary escape character: \"                             no-useless-escape
+  383:58   error  Unnecessary escape character: \"                             no-useless-escape
+  383:78   error  Unnecessary escape character: \"                             no-useless-escape
+  383:109  error  Unnecessary escape character: \"                             no-useless-escape
+  777:35   error  Unexpected control character(s) in regular expression: \x00  no-control-regex
+
+Ô£û 5 problems (5 errors, 0 warnings)
+
+D:\luminnus-platform-core\packages\lia-runtime:
+ÔÇëERR_PNPM_RECURSIVE_RUN_FIRST_FAILÔÇë @luminnus/lia-runtime@1.0.0 lint: `eslint src/`
+Exit status 1

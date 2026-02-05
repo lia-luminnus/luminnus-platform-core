@@ -1087,7 +1087,7 @@ cron.schedule("*/1 * * * *", async () => {
 // INICIALIZAÇÃO DO SERVIDOR
 // =====================================================
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3005;
 
 app.listen(PORT, async () => {
   console.log(`\n🚀 Servidor LIA ativo na porta ${PORT}`);

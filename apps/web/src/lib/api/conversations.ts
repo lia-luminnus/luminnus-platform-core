@@ -43,7 +43,7 @@ export async function createConversation(
 ): Promise<Conversation> {
   try {
     const { data, error } = await supabase
-      .from('chat_conversations')
+      .from('conversations')
       .insert([
         {
           user_id: userId,
@@ -74,7 +74,7 @@ export async function createConversation(
 export async function listConversations(userId: string): Promise<Conversation[]> {
   try {
     const { data, error } = await supabase
-      .from('chat_conversations')
+      .from('conversations')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
@@ -103,7 +103,7 @@ export async function getConversation(
   try {
     // Buscar conversa
     const { data: conversation, error: convError } = await supabase
-      .from('chat_conversations')
+      .from('conversations')
       .select('*')
       .eq('id', conversationId)
       .single();
@@ -115,7 +115,7 @@ export async function getConversation(
 
     // Buscar mensagens
     const { data: messages, error: msgError } = await supabase
-      .from('chat_messages')
+      .from('messages')
       .select('*')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
@@ -154,7 +154,7 @@ export async function saveMessage(
 ): Promise<Message> {
   try {
     const { data, error } = await supabase
-      .from('chat_messages')
+      .from('messages')
       .insert([
         {
           conversation_id: conversationId,
@@ -193,7 +193,7 @@ export async function updateConversationTitle(
 ): Promise<Conversation> {
   try {
     const { data, error } = await supabase
-      .from('chat_conversations')
+      .from('conversations')
       .update({ title } as any)
       .eq('id', conversationId)
       .select()
@@ -219,7 +219,7 @@ export async function updateConversationTitle(
 export async function deleteConversation(conversationId: string): Promise<void> {
   try {
     const { error } = await supabase
-      .from('chat_conversations')
+      .from('conversations')
       .delete()
       .eq('id', conversationId);
 
@@ -314,7 +314,7 @@ export async function loadMessages(
 ): Promise<Message[]> {
   try {
     const { data, error } = await supabase
-      .from('chat_messages')
+      .from('messages')
       .select('*')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true })
@@ -348,7 +348,7 @@ export async function getConversationStats(conversationId: string): Promise<{
 }> {
   try {
     const { data, error } = await supabase
-      .from('chat_messages')
+      .from('messages')
       .select('role')
       .eq('conversation_id', conversationId);
 

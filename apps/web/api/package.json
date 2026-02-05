@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev:legacy": "node --watch server.js"
   },
   "keywords": [
     "lia",
@@ -25,7 +25,7 @@
     "node-fetch": "^3.3.2",
     "node-cron": "^3.0.3",
     "@supabase/supabase-js": "^2.46.1",
-    "@google/genai": "^0.21.0"
+    "@google/genai": "^0.24.1"
   },
   "engines": {
     "node": ">=18.0.0"

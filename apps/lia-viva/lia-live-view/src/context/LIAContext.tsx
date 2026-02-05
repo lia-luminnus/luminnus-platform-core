@@ -2170,15 +2170,19 @@ export function LIAProvider({ children }: LIAProviderProps) {
       console.log('📍 [startLiveMode] Stack trace do chamador:');
       console.trace();
       // v4.5: SSOT - SEMPRE usar o ID do Chat. Chat é a mente.
-      const unifiedConvId = activeIdsByModeRef.current.chat || '';
+      let unifiedConvId = activeIdsByModeRef.current.chat || '';
 
       if (!unifiedConvId || unifiedConvId === 'default') {
         console.log('📝 Nenhuma conversa de chat ativa - criando nova mente unificada...');
         const autoConv = createConversation('chat');
-        // createConversation já atualiza activeIdsByModeRef.current e SSOT
+        // ✅ v8.0 FIX: Recalcular unifiedConvId DEPOIS do createConversation
+        unifiedConvId = activeIdsByModeRef.current.chat || autoConv.id;
       }
 
-      const activeId = currentIdRef.current || '';
+      // ✅ v8.0 CRITICAL FIX: SSOT - GARANTIR que currentIdRef == unifiedConvId
+      currentIdRef.current = unifiedConvId;
+      const activeId = unifiedConvId;  // Usar sempre o mesmo ID
+
       console.log(`🚀 VOICE_START {engine: "gemini", conversationId: "${activeId}", userIdPresent: ${!!userIdRef.current}, tenantIdPresent: ${!!tenantIdRef.current}}`);
 
       // v3.1: GARANTIR que memórias estão carregadas antes de sincronizar
@@ -2207,7 +2211,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         console.warn('⚠️ [LIAContext] Verifique se as memórias estão salvas no Supabase para o userId correto.');
       }
 
-      // Sincronizar com o serviço de voz usando o ID unificado
+      // ✅ v8.0 CRITICAL FIX: Sincronizar com o serviço de voz usando o ID SSOT
       geminiLiveService.setConversationId(activeId);
       geminiLiveService.addEventListener(handleGeminiLiveEvent);
       await geminiLiveService.startSession();
@@ -2223,6 +2227,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
       console.log(`✅ Gemini Live ativado com contexto unificado`);
       console.log(`   📦 Scope ativo: ${scopeKey}`);
       console.log(`   🎯 ConversationId: ${unifiedConvId}`);
+      console.log(`   ✅ SSOT Check: currentIdRef=${currentIdRef.current}, activeScopeRef=${activeScopeRef.current}, geminiService=${activeId}`);
     } catch (error: any) {
       console.error('❌ Erro ao iniciar Gemini Live:', error);
       setIsLiveActive(false);
@@ -2230,6 +2235,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
       alert(`Erro ao iniciar Live Mode: ${error.message}`);
     }
   }, [handleGeminiLiveEvent, createConversation, memories]);
+
 
   /**
    * Para modo live

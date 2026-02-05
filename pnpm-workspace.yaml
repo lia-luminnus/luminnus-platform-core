@@ -1,8 +1,8 @@
 packages:
-  - "apps/dashboard"
   - "apps/web"
 
   - "apps/lia-viva/lia-live-view"
   - "Dashboard-client"
+  - "Projeto_Lia_Node_3_gpt"
   - "packages/*"
 

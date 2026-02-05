@@ -1,0 +1,58 @@
+turbo 2.6.3
+
+ÔÇó Packages in scope: @luminnus/api, @luminnus/core, @luminnus/dashboard, @luminnus/database, @luminnus/lia-runtime, @luminnus/shared, @luminnus/web, lia-unified, luminnus-dashboard
+ÔÇó Running lint in 9 packages
+ÔÇó Remote caching disabled
+@luminnus/database:lint: cache hit, replaying logs 46b638768ae1a463
+@luminnus/database:lint: 
+@luminnus/database:lint: > @luminnus/database@0.1.0 lint D:\luminnus-platform-core\packages\database
+@luminnus/database:lint: > echo 'No linting for SQL files'
+@luminnus/database:lint: 
+@luminnus/database:lint: 'No linting for SQL files'
+@luminnus/shared:lint: cache hit, replaying logs d189525a0a753be7
+@luminnus/shared:lint: 
+@luminnus/shared:lint: > @luminnus/shared@0.1.0 lint D:\luminnus-platform-core\packages\shared
+@luminnus/shared:lint: > echo 'No lint configured'
+@luminnus/shared:lint: 
+@luminnus/shared:lint: 'No lint configured'
+@luminnus/web:lint: cache miss, executing 78712a0d24db0227
+@luminnus/api:lint: cache miss, executing 891323715ec756d5
+@luminnus/lia-runtime:lint: cache hit, replaying logs a45be6fe30b3c559
+@luminnus/lia-runtime:lint: 
+@luminnus/lia-runtime:lint: > @luminnus/lia-runtime@1.0.0 lint D:\luminnus-platform-core\packages\lia-runtime
+@luminnus/lia-runtime:lint: > eslint src/
+@luminnus/lia-runtime:lint: 
+@luminnus/core:lint: cache hit, replaying logs 66daa453b2a64a85
+@luminnus/core:lint: 
+@luminnus/core:lint: > @luminnus/core@0.1.0 lint D:\luminnus-platform-core\packages\core
+@luminnus/core:lint: > echo 'No lint configured'
+@luminnus/core:lint: 
+@luminnus/core:lint: 'No lint configured'
+@luminnus/web:lint: 
+@luminnus/web:lint: > @luminnus/web@0.1.0 lint D:\luminnus-platform-core\apps\web
+@luminnus/web:lint: > eslint .
+@luminnus/web:lint: 
+@luminnus/api:lint: 
+@luminnus/api:lint: > @luminnus/api@4.0.0 lint D:\luminnus-platform-core\packages\api
+@luminnus/api:lint: > eslint src/
+@luminnus/api:lint: 
+@luminnus/api:lint: 
+@luminnus/api:lint: D:\luminnus-platform-core\packages\api\src\routes\assistant.ts
+@luminnus/api:lint:   31:13  error  'error' is never reassigned. Use 'const' instead  prefer-const
+@luminnus/api:lint: 
+@luminnus/api:lint: D:\luminnus-platform-core\packages\api\src\routes\auth.ts
+@luminnus/api:lint:   276:13  error  'redirectBase' is never reassigned. Use 'const' instead  prefer-const
+@luminnus/api:lint: 
+@luminnus/api:lint: Ô£û 2 problems (2 errors, 0 warnings)
+@luminnus/api:lint:   2 errors and 0 warnings potentially fixable with the `--fix` option.
+@luminnus/api:lint: 
+@luminnus/api:lint: ÔÇëELIFECYCLEÔÇë Command failed with exit code 1.
+@luminnus/api:lint: ERROR: command finished with error: command (D:\luminnus-platform-core\packages\api) C:\Users\wende\AppData\Local\pnpm\.tools\pnpm\9.0.0\bin\pnpm.CMD run lint exited (1)
+@luminnus/api#lint: command (D:\luminnus-platform-core\packages\api) C:\Users\wende\AppData\Local\pnpm\.tools\pnpm\9.0.0\bin\pnpm.CMD run lint exited (1)
+
+ Tasks:    4 successful, 6 total
+Cached:    4 cached, 6 total
+  Time:    9.867s 
+Failed:    @luminnus/api#lint
+
+ ERROR  run failed: command  exited (1)

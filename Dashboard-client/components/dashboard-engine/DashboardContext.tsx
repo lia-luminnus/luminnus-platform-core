@@ -21,10 +21,6 @@ import {
     WidgetReplacePatch,
     WidgetAddPatch,
     LiaActionReasonCode,
-    LayoutPatch,
-    WidgetReplacePatch,
-    WidgetAddPatch,
-    LiaActionReasonCode,
     PatchValidationResult
 } from './types';
 import { CATEGORY_PRESETS, MODULE_REGISTRY, ModuleId } from '../../config/modules';
@@ -1204,7 +1200,7 @@ function getDefaultConfig(businessType?: string): DashboardConfig {
     const defaultLayout: LayoutItem[] = [];
     let nextY = 0;
 
-    // Helper to add widget
+    // Helper to add widget with row-aware positioning
     const addWidget = (id: string, type: WidgetType, title: string, w: number, h: number, config: any = {}, metric?: string) => {
         defaultWidgets[id] = {
             type,
@@ -1212,17 +1208,31 @@ function getDefaultConfig(businessType?: string): DashboardConfig {
             metric,
             config
         };
+
+        // Find current X position
+        const currentX = defaultLayout.reduce((acc, item) => (item.y === nextY ? Math.max(acc, item.x + item.w) : acc), 0);
+
+        // If widget doesn't fit in current row (12 cols), move to next row
+        let x = currentX;
+        let y = nextY;
+
+        if (x + w > 12) {
+            const maxYInRow = defaultLayout.filter(l => l.y === nextY).reduce((max, l) => Math.max(max, l.h), 0);
+            nextY += (maxYInRow || 2);
+            x = 0;
+            y = nextY;
+        }
+
         defaultLayout.push({
             id,
-            x: (defaultLayout.length % 2) * 6, // 2 columns rough layout
-            y: nextY,
+            x,
+            y,
             w,
             h,
             i: id,
             minW: 2,
             minH: 2
         });
-        if (defaultLayout.length % 2 === 0) nextY += h;
     };
 
     // 1. Determine active modules based on business type

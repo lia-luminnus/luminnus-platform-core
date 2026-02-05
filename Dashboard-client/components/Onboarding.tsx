@@ -39,10 +39,10 @@ const Onboarding: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   // 🔒 CRITICAL: Prevent returning users from seeing onboarding
-  const { user, refreshProfile, onboardingCompleted } = useDashboardAuth();
+  const { user, refreshProfile, onboardingCompleted, initialized } = useDashboardAuth();
 
   React.useEffect(() => {
-    if (onboardingCompleted) {
+    if (initialized && onboardingCompleted) {
       console.log('[Onboarding] Usuário já completou setup, redirecionando para Dashboard');
       navigate('/', { replace: true });
     }

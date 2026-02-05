@@ -1,1 +1,1 @@
-export * from './events.contract';
+export * from './events.contract.js';
