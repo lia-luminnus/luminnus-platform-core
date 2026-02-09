@@ -26,7 +26,7 @@ jobs:
       - run: pnpm --filter @luminnus/lia-runtime typecheck
 
   build-admin:
-    name: Build Admin (lia-live-view)
+    name: Build Admin (lia-unified)
     needs: build-runtime
     runs-on: ubuntu-latest
     steps:
@@ -39,10 +39,10 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter lia-live-view build
+      - run: pnpm --filter lia-unified build
 
   build-client:
-    name: Build Dashboard-client
+    name: Build Dashboard Client
     needs: build-runtime
     runs-on: ubuntu-latest
     steps:
@@ -55,7 +55,7 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter dashboard-client build
+      - run: pnpm --filter luminnus-dashboard build
 
   parity-check:
     name: Parity Guard
