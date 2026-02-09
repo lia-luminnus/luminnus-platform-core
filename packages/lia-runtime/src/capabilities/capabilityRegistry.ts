@@ -175,7 +175,7 @@ export interface ActionRequest {
 
 export function extractActionRequest(userText: string): ActionRequest | null {
     // ... Legacy regex logic preserved for backward compatibility ...
-    let text = userText.toLowerCase();
+    const text = userText.toLowerCase();
 
     // Gmail Delete
     if ((text.includes('delete') || text.includes('apag') || text.includes('exclu')) &&

@@ -288,20 +288,20 @@ export class GeminiLiveService {
         // Remove títulos rígidos de template para fala natural.
         normalized = normalized
             .replace(/\*\*\s*PARTE\s*\d+\s*-[^*]+\*\*/gi, '')
-            .replace(/\b(Achado principal|Evid[eê]ncia|Causa raiz(?: prov[aá]vel)?|Corre[cç][aã]o m[ií]nima|Valida[cç][aã]o)\s*[:\-]\s*/gi, '');
+            .replace(/\b(Achado principal|Evid[eê]ncia|Causa raiz(?: prov[aá]vel)?|Corre[cç][aã]o m[ií]nima|Valida[cç][aã]o)\s*[:-]\s*/gi, '');
 
         // Quebra enumerações inline para facilitar normalização.
-        normalized = normalized.replace(/\s+(\d+[\)\.])\s+/g, '\n$1 ');
+        normalized = normalized.replace(/\s+(\d+[).])\s+/g, '\n$1 ');
 
         const lines = normalized
             .split('\n')
             .map(line => line.trim())
             .filter(Boolean);
 
-        const numberedLines = lines.filter(line => /^\d+[\)\.]\s+/.test(line));
+        const numberedLines = lines.filter(line => /^\d+[).]\s+/.test(line));
         if (numberedLines.length >= 2 && numberedLines.length >= Math.ceil(lines.length * 0.5)) {
             normalized = numberedLines
-                .map(line => line.replace(/^\d+[\)\.]\s+/, '').trim())
+                .map(line => line.replace(/^\d+[).]\s+/, '').trim())
                 .filter(Boolean)
                 .join('. ');
         }
