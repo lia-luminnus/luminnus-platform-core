@@ -76,6 +76,14 @@ const CONTENT_SIGNALS = [
     /(?:pegue|pega|usa|use)\s*(?:esse|essa|este|esta)\s*(?:print|trecho|arquivo)/i,
 ];
 
+const IMAGE_DIRECT_ANALYSIS_SIGNALS = [
+    /(?:quantos|quantas)\b/i,
+    /\bquais\b/i,
+    /(?:o\s*que\s*tem|tem\s*na\s*imagem|tem\s*no\s*print)/i,
+    /(?:identifique|identificar|liste|listar|descreva|descrever)/i,
+    /(?:conte|contar)\s*(?:os|as)?\s*(?:itens|objetos|animais|elementos)?/i,
+];
+
 // ============================================
 // Hybrid Signal Patterns (MODE C Indicators)
 // ============================================
@@ -230,8 +238,18 @@ export function classifyIntent(input: IntentRouterInput): IntentRouterOutput {
     // Step 4: Attachment-based inference (if no explicit signal)
     // ========================================
     if (hasAttachment && templateRequired === null) {
+        const isDirectImageQuestion = attachmentType === 'image' && IMAGE_DIRECT_ANALYSIS_SIGNALS.some(pattern => pattern.test(text));
+
+        if (isDirectImageQuestion) {
+            mode = 'B';
+            reason = 'Imagem com pedido objetivo de leitura/listagem - resposta analítica direta';
+            actionRequired = false;
+            maxResponseLines = 40;
+            templateRequired = 'content';
+        }
+
         // Images with attachments default to MODE A (SSOT § 5.1)
-        if (attachmentType === 'image') {
+        else if (attachmentType === 'image') {
             mode = 'A';
             reason = 'Print/imagem enviado - assumindo incidente (SSOT § 5.1)';
             actionRequired = true;
@@ -299,19 +317,15 @@ export function classifyIntent(input: IntentRouterInput): IntentRouterOutput {
 // ============================================
 
 export function getIncidentTemplateInstruction(): string {
-    return `Responda EXATAMENTE no formato abaixo (MODO A - Incidente):
+    return `Responda de forma técnica e natural (Diagnóstico):
 
-1) **Achado principal** (1 linha): O que está errado.
-2) **Evidência** (1 linha): Trecho literal do arquivo/print que comprova.
-3) **Causa raiz provável** (1 linha): Por que isso acontece.
-4) **Correção mínima** (2-5 bullets): Passos para corrigir.
-5) **Validação** (2-3 bullets): Como confirmar que funcionou.
+1. **O que aconteceu**: Identifique a situação ou erro.
+2. **Causa e evidência**: Explique a origem com base no que você vê.
+3. **Solução**: Forneça o ajuste necessário ou realize a ação se tiver a ferramenta.
 
-⚠️ EXECUTE, DON'T DESCRIBE: Se o pedido envolve um arquivo corrigido ou e-mail, entregue-o pronto.
-⚠️ PROIBIDO: 
-- Começar com "Entendi!", "Na imagem vemos...", descrições longas.
-- USAR PLACEHOLDERS (ex: [LINK]) ou ASSINATURAS (ex: "Equipe Luminnus").
-⚠️ MÁXIMO: 12 linhas.`;
+⚠️ FOCO: Se for um erro, corrija. Se for uma dúvida, responda.
+⚠️ EVITE: Respostas genéricas, placeholders como [LINK], ou assinaturas.
+⚠️ MÁXIMO: 10 linhas de resposta direta.`;
 }
 
 export function getContentTemplateInstruction(): string {

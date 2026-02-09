@@ -1,21 +1,18 @@
 
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import Header from './Header';
 import { LanguageContext } from '../contexts/LanguageContext';
 import { Product } from '../types';
 import toast from 'react-hot-toast';
-
-const initialProducts: Product[] = [
-    { id: '1', name: 'Wireless Headphones', sku: 'WH-001', category: 'Electronics', stock: 45, minStock: 10, price: 129.99, status: 'in_stock', image: 'https://picsum.photos/seed/p1/50' },
-    { id: '2', name: 'Ergonomic Chair', sku: 'EC-202', category: 'Furniture', stock: 5, minStock: 8, price: 249.50, status: 'low_stock', image: 'https://picsum.photos/seed/p2/50' },
-    { id: '3', name: 'Mechanical Keyboard', sku: 'MK-104', category: 'Electronics', stock: 0, minStock: 15, price: 89.00, status: 'out_of_stock', image: 'https://picsum.photos/seed/p3/50' },
-    { id: '4', name: 'USB-C Cable (2m)', sku: 'CB-009', category: 'Accessories', stock: 120, minStock: 20, price: 15.00, status: 'in_stock', image: 'https://picsum.photos/seed/p4/50' },
-    { id: '5', name: 'Monitor Stand', sku: 'MS-300', category: 'Accessories', stock: 8, minStock: 10, price: 45.00, status: 'low_stock', image: 'https://picsum.photos/seed/p5/50' },
-];
+import CustomSelect from './ui/CustomSelect';
+import productService from '../services/productService';
+import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 
 const Stock: React.FC = () => {
     const { t } = useContext(LanguageContext);
-    const [products, setProducts] = useState<Product[]>(initialProducts);
+    const { user, isAdmin } = useDashboardAuth();
+    const [products, setProducts] = useState<Product[]>([]);
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('All');
 
@@ -24,6 +21,31 @@ const Stock: React.FC = () => {
     const [currentProduct, setCurrentProduct] = useState<Partial<Product>>({
         name: '', sku: '', category: '', stock: 0, minStock: 5, price: 0, status: 'in_stock'
     });
+
+    // Helper to get tenant ID (fallback to user ID if not present in metadata)
+    const getTenantId = () => {
+        const metadata = (user as any)?.user_metadata;
+        const tenantId = metadata?.tenant_id || (user as any)?.tenant_id;
+        return tenantId || user?.id || 'default-tenant';
+    };
+
+    // Load products on mount
+    useEffect(() => {
+        loadProducts();
+    }, [user]);
+
+    const loadProducts = async () => {
+        if (!user) return;
+        setLoading(true);
+        try {
+            const data = await productService.listProducts(getTenantId());
+            setProducts(data);
+        } catch (error) {
+            toast.error('Erro ao carregar estoque');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // Calculate Status automatically based on stock levels
     const calculateStatus = (stock: number, min: number): Product['status'] => {
@@ -41,41 +63,57 @@ const Stock: React.FC = () => {
     });
 
     // Actions
-    const handleSave = () => {
-        if (!currentProduct.name || !currentProduct.sku) {
-            toast.error('Preencha os campos obrigatórios');
+    const handleSave = async () => {
+        if (!currentProduct.name) {
+            toast.error('O nome do produto é obrigatório');
             return;
         }
 
         const stockVal = Number(currentProduct.stock);
         const minVal = Number(currentProduct.minStock);
         const status = calculateStatus(stockVal, minVal);
+        const productData = {
+            ...currentProduct,
+            stock: stockVal,
+            minStock: minVal,
+            price: Number(currentProduct.price),
+            status
+        };
 
-        if (currentProduct.id) {
-            // Edit
-            setProducts(prev => prev.map(p => p.id === currentProduct.id ? { ...p, ...currentProduct, stock: stockVal, minStock: minVal, price: Number(currentProduct.price), status } as Product : p));
-            toast.success(t('stockUpdated') || 'Produto atualizado');
-        } else {
-            // Add
-            const newProduct: Product = {
-                ...currentProduct as Product,
-                id: Date.now().toString(),
-                stock: stockVal,
-                minStock: minVal,
-                price: Number(currentProduct.price),
-                status,
-                image: `https://picsum.photos/seed/${Date.now()}/50`
-            };
-            setProducts(prev => [...prev, newProduct]);
-            toast.success(t('stockAdded') || 'Produto adicionado');
+        const toastId = toast.loading('Salvando...');
+
+        try {
+            if (currentProduct.id) {
+                // Edit
+                const updated = await productService.updateProduct(currentProduct.id, productData);
+                if (updated) {
+                    setProducts(prev => prev.map(p => p.id === updated.id ? updated : p));
+                    toast.success(t('stockUpdated') || 'Produto atualizado', { id: toastId });
+                }
+            } else {
+                // Add
+                const created = await productService.createProduct(getTenantId(), productData);
+                if (created) {
+                    setProducts(prev => [created, ...prev]);
+                    toast.success(t('stockAdded') || 'Produto adicionado', { id: toastId });
+                }
+            }
+            setIsModalOpen(false);
+        } catch (error) {
+            toast.error('Erro ao salvar produto', { id: toastId });
         }
-        setIsModalOpen(false);
     };
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: string) => {
         if (confirm('Tem certeza que deseja excluir este produto?')) {
-            setProducts(prev => prev.filter(p => p.id !== id));
-            toast.success('Produto removido');
+            const toastId = toast.loading('Excluindo...');
+            const success = await productService.deleteProduct(id);
+            if (success) {
+                setProducts(prev => prev.filter(p => p.id !== id));
+                toast.success('Produto removido', { id: toastId });
+            } else {
+                toast.error('Erro ao remover produto', { id: toastId });
+            }
         }
     };
 
@@ -106,7 +144,7 @@ const Stock: React.FC = () => {
                             <p className="text-sm text-gray-500 dark:text-gray-400">Total Items</p>
                             <span className="material-symbols-outlined text-brand-primary">inventory_2</span>
                         </div>
-                        <p className="text-3xl font-bold">{products.reduce((acc, p) => acc + p.stock, 0)}</p>
+                        <p className="text-3xl font-bold">{loading ? '-' : products.reduce((acc, p) => acc + p.stock, 0)}</p>
                     </div>
                     <div className="glass-panel bg-white dark:bg-white/5 p-6 rounded-xl border border-gray-200 dark:border-white/5 shadow-sm">
                         <div className="flex justify-between items-start mb-2">
@@ -144,13 +182,15 @@ const Stock: React.FC = () => {
                                 className="w-full bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-brand-primary focus:outline-none text-sm"
                             />
                         </div>
-                        <select
-                            value={categoryFilter}
-                            onChange={(e) => setCategoryFilter(e.target.value)}
-                            className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-primary"
-                        >
-                            {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
+                        <div className="w-48">
+                            <CustomSelect
+                                value={categoryFilter}
+                                onChange={setCategoryFilter}
+                                options={categories}
+                                variant="glass"
+                                placeholder="Filtrar por Categoria"
+                            />
+                        </div>
                     </div>
                     <button
                         onClick={() => openModal()}
@@ -177,60 +217,68 @@ const Stock: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 dark:divide-white/5">
-                                {filteredProducts.map((product) => (
-                                    <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <img src={product.image} alt={product.name} className="w-10 h-10 rounded-lg object-cover bg-gray-100 dark:bg-white/10" />
-                                                <span className="font-medium text-gray-800 dark:text-white">{product.name}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-gray-500 font-mono text-xs">{product.sku}</td>
-                                        <td className="px-6 py-4">
-                                            <span className="px-2 py-1 rounded-md bg-gray-100 dark:bg-white/10 text-xs text-gray-600 dark:text-gray-300">
-                                                {product.category}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 font-medium">
-                                            <div className="flex items-center gap-2">
-                                                {product.stock}
-                                                {product.stock <= product.minStock && (
-                                                    <span className="material-symbols-outlined text-red-500 text-sm" title="Abaixo do mínimo">warning</span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-gray-800 dark:text-gray-200">${product.price.toFixed(2)}</td>
-                                        <td className="px-6 py-4">
-                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${product.status === 'in_stock' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
-                                                    product.status === 'low_stock' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' :
-                                                        'bg-red-500/10 text-red-500 border-red-500/20'
-                                                }`}>
-                                                <span className={`w-1.5 h-1.5 rounded-full ${product.status === 'in_stock' ? 'bg-green-500' :
-                                                        product.status === 'low_stock' ? 'bg-yellow-500' :
-                                                            'bg-red-500'
-                                                    }`}></span>
-                                                {product.status === 'in_stock' ? 'Em Estoque' :
-                                                    product.status === 'low_stock' ? 'Baixo' : 'Esgotado'}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => openModal(product)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-gray-400 hover:text-brand-primary transition-colors">
-                                                    <span className="material-symbols-outlined text-lg">edit</span>
-                                                </button>
-                                                <button onClick={() => handleDelete(product.id)} className="p-2 rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors">
-                                                    <span className="material-symbols-outlined text-lg">delete</span>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {filteredProducts.length === 0 && (
+                                {loading ? (
                                     <tr>
                                         <td colSpan={7} className="text-center py-12 text-gray-500">
-                                            Nenhum produto encontrado.
+                                            <span className="material-symbols-outlined animate-spin text-3xl mb-2">sync</span>
+                                            <p>Carregando estoque...</p>
                                         </td>
                                     </tr>
+                                ) : filteredProducts.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={7} className="text-center py-12 text-gray-500">
+                                            {searchTerm ? 'Nenhum produto encontrado na busca.' : 'Seu estoque está vazio. Adicione um produto!'}
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredProducts.map((product) => (
+                                        <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <img src={product.image} alt={product.name} className="w-10 h-10 rounded-lg object-cover bg-gray-100 dark:bg-white/10" />
+                                                    <span className="font-medium text-gray-800 dark:text-white">{product.name}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-gray-500 font-mono text-xs">{product.sku}</td>
+                                            <td className="px-6 py-4">
+                                                <span className="px-2 py-1 rounded-md bg-gray-100 dark:bg-white/10 text-xs text-gray-600 dark:text-gray-300">
+                                                    {product.category}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 font-medium">
+                                                <div className="flex items-center gap-2">
+                                                    {product.stock}
+                                                    {product.stock <= product.minStock && (
+                                                        <span className="material-symbols-outlined text-red-500 text-sm" title="Abaixo do mínimo">warning</span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-gray-800 dark:text-gray-200">${product.price.toFixed(2)}</td>
+                                            <td className="px-6 py-4">
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${product.status === 'in_stock' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
+                                                    product.status === 'low_stock' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' :
+                                                        'bg-red-500/10 text-red-500 border-red-500/20'
+                                                    }`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${product.status === 'in_stock' ? 'bg-green-500' :
+                                                        product.status === 'low_stock' ? 'bg-yellow-500' :
+                                                            'bg-red-500'
+                                                        }`}></span>
+                                                    {product.status === 'in_stock' ? 'Em Estoque' :
+                                                        product.status === 'low_stock' ? 'Baixo' : 'Esgotado'}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={() => openModal(product)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-gray-400 hover:text-brand-primary transition-colors">
+                                                        <span className="material-symbols-outlined text-lg">edit</span>
+                                                    </button>
+                                                    <button onClick={() => handleDelete(product.id)} className="p-2 rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors">
+                                                        <span className="material-symbols-outlined text-lg">delete</span>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
                                 )}
                             </tbody>
                         </table>
@@ -258,16 +306,18 @@ const Stock: React.FC = () => {
                                         value={currentProduct.name}
                                         onChange={(e) => setCurrentProduct({ ...currentProduct, name: e.target.value })}
                                         className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2 focus:border-brand-primary focus:outline-none"
+                                        placeholder="Ex: Fone de Ouvido Bluetooth"
                                     />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">SKU</label>
+                                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">SKU (Código)</label>
                                         <input
                                             type="text"
                                             value={currentProduct.sku}
                                             onChange={(e) => setCurrentProduct({ ...currentProduct, sku: e.target.value })}
                                             className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2 focus:border-brand-primary focus:outline-none"
+                                            placeholder="Ex: WH-001"
                                         />
                                     </div>
                                     <div>
@@ -278,6 +328,7 @@ const Stock: React.FC = () => {
                                             onChange={(e) => setCurrentProduct({ ...currentProduct, category: e.target.value })}
                                             list="category-options"
                                             className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2 focus:border-brand-primary focus:outline-none"
+                                            placeholder="Ex: Eletrônicos"
                                         />
                                         <datalist id="category-options">
                                             {categories.filter(c => c !== 'All').map(c => <option key={c} value={c} />)}
@@ -295,7 +346,7 @@ const Stock: React.FC = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Estoque Atual</label>
+                                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Estoque</label>
                                         <input
                                             type="number"
                                             value={currentProduct.stock}
@@ -304,7 +355,7 @@ const Stock: React.FC = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Estoque Mínimo</label>
+                                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Mínimo</label>
                                         <input
                                             type="number"
                                             value={currentProduct.minStock}

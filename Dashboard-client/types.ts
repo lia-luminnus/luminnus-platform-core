@@ -35,10 +35,40 @@ export interface Automation {
 
 export interface Transaction {
   id: string;
+  tenantId?: string;
+  type: 'income' | 'expense';
+  category: string;
   description: string;
-  date: string;
   amount: number;
-  status: 'completed' | 'pending' | 'failed' | 'in_progress';
+  date: string;
+  status: 'completed' | 'pending' | 'failed' | 'in_progress' | 'scheduled';
+  relatedOrderId?: string;
+  createdAt?: string;
+}
+
+export interface OrderItem {
+  id?: string;
+  orderId?: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+}
+
+export interface Order {
+  id: string;
+  tenantId: string;
+  customerId?: string;
+  customerName?: string;
+  customerPhone?: string; // WhatsApp number
+  status: 'pending' | 'completed' | 'cancelled' | 'refunded';
+  totalAmount: number;
+  paymentMethod: string;
+  notes?: string;
+  items: OrderItem[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface TeamMember {
@@ -95,8 +125,12 @@ export interface Product {
   stock: number;
   minStock: number;
   price: number;
+  costPrice?: number;
+  description?: string;
   status: 'in_stock' | 'low_stock' | 'out_of_stock';
   image?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface BusinessCategory {
@@ -137,4 +171,19 @@ export interface ModuleDefinition {
   path: string;
   isCore?: boolean; // If true, cannot be disabled (e.g., Dashboard, Settings)
   descriptionKey?: string;
+}
+
+export interface Property {
+  id: string;
+  tenantId: string;
+  address: string;
+  city: string;
+  type: 'House' | 'Apartment' | 'Condo' | 'Office';
+  status: 'For Sale' | 'For Rent' | 'Sold';
+  price: number;
+  bedrooms: number;
+  date: string;
+  images: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }

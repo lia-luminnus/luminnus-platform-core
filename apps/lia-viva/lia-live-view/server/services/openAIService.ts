@@ -108,4 +108,16 @@ export class OpenAIService {
             repairAttempts: repaired.attempts
         };
     }
+
+    /**
+     * Transcrição de áudio via Whisper
+     */
+    static async transcribe(buffer: Buffer, fileName: string = 'audio.mp4') {
+        const file = await OpenAI.toFile(buffer, fileName);
+        const transcription = await this.openai.audio.transcriptions.create({
+            file,
+            model: 'whisper-1',
+        });
+        return transcription.text;
+    }
 }

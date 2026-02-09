@@ -6,6 +6,7 @@ import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { crmService, DealFilters, DealSort } from '../services/crmService';
+import CustomSelect from './ui/CustomSelect';
 
 const emptyDeal: Partial<Deal> = {
     stage: 'lead',
@@ -434,15 +435,13 @@ const CRM: React.FC = () => {
                                                 </div>
                                                 <div>
                                                     <label className="block text-[8px] font-black text-gray-500 uppercase tracking-[0.3em] mb-1 ml-1">{t('salesStatus')}</label>
-                                                    <select
-                                                        value={currentDeal.stage}
-                                                        onChange={(e) => setCurrentDeal({ ...currentDeal, stage: e.target.value as Deal['stage'] })}
-                                                        className="w-full bg-white dark:bg-black/30 border border-gray-200 dark:border-white/20 rounded-xl px-4 py-2.5 text-gray-800 dark:text-white focus:ring-2 focus:ring-brand-primary/20 outline-none transition-all font-semibold text-sm appearance-none cursor-pointer"
-                                                    >
-                                                        {stages.map(s => (
-                                                            <option key={s.key} value={s.key}>{s.label}</option>
-                                                        ))}
-                                                    </select>
+                                                    <CustomSelect
+                                                        value={currentDeal.stage || 'lead'}
+                                                        onChange={(value) => setCurrentDeal({ ...currentDeal, stage: value as Deal['stage'] })}
+                                                        options={stages.map(s => ({ label: s.label, value: s.key }))}
+                                                        variant="glass"
+                                                        className="w-full"
+                                                    />
                                                 </div>
                                             </div>
                                         </div>

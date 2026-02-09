@@ -484,8 +484,9 @@ export function LIAProvider({ children }: LIAProviderProps) {
         if (activeId) {
             setCurrentConversationId(activeId);
             currentIdRef.current = activeId;
-            setActiveScopeState(activeId);
-            activeScopeRef.current = activeId;
+            const modeScopeKey = `${mode}:${activeId}`;
+            setActiveScopeState(modeScopeKey);
+            activeScopeRef.current = modeScopeKey;
         }
         console.log(`🎯 [LIAContext] Modo alterado para: ${mode} (Conv: ${activeId})`);
     }, []);
@@ -498,7 +499,17 @@ export function LIAProvider({ children }: LIAProviderProps) {
     // API DE MENSAGENS E PERSISTÊNCIA
     // ======================================================================
 
-    const getScopeKey = useCallback((_mode: 'chat' | 'multimodal' | 'live', convId: string): string => convId, []);
+    const getScopeKey = useCallback((mode: 'chat' | 'multimodal' | 'live', convId: string): string => {
+        if (!convId) return '';
+        if (convId.includes(':')) return convId;
+        return `${mode}:${convId}`;
+    }, []);
+
+    const getConversationIdFromScopeKey = useCallback((scopeKey: string): string => {
+        if (!scopeKey) return '';
+        const separatorIndex = scopeKey.indexOf(':');
+        return separatorIndex > -1 ? scopeKey.slice(separatorIndex + 1) : scopeKey;
+    }, []);
 
     const getMessagesForScope = useCallback((scopeKey: string): Message[] => messagesByScopeRef.current[scopeKey] || [], []);
 
@@ -536,22 +547,30 @@ export function LIAProvider({ children }: LIAProviderProps) {
     // v4.4: CRITICAL FIX - Atribuir addMessageToScope à ref para os handlers de socket usarem
     useEffect(() => {
         addToScopeRef.current = (message: Message, mode?: 'chat' | 'multimodal' | 'live', convId?: string) => {
-            const scopeKey = convId || activeScopeRef.current || '';
+            const scopeKey = convId && mode
+                ? getScopeKey(mode, convId)
+                : (convId || activeScopeRef.current || '');
             if (scopeKey) {
                 addMessageToScope(scopeKey, message);
             }
         };
-    }, [addMessageToScope]);
+    }, [addMessageToScope, getScopeKey]);
 
 
     const clearScopeMessages = useCallback((scopeKey: string) => {
         setMessagesByScope(prev => {
             const updated = { ...prev };
             delete updated[scopeKey];
-            try { localStorage.removeItem(`lia_scope_${scopeKey}`); } catch (e) { }
+            const curTenantId = (authUser as any)?.user_metadata?.tenant_id || (authUser as any)?.tenant_id || (isAdmin ? '00000000-0000-0000-0000-000000000001' : 'guest');
+            try {
+                localStorage.removeItem(`lia_scope_${curTenantId}_${scopeKey}`);
+                const legacyConversationId = getConversationIdFromScopeKey(scopeKey);
+                localStorage.removeItem(`lia_scope_${scopeKey}`);
+                localStorage.removeItem(`lia_scope_${curTenantId}_${legacyConversationId}`);
+            } catch (e) { }
             return updated;
         });
-    }, []);
+    }, [getConversationIdFromScopeKey]);
 
     const saveToStorage = useCallback(async (
         convs: { [id: string]: Conversation },
@@ -582,7 +601,9 @@ export function LIAProvider({ children }: LIAProviderProps) {
         modes.forEach(m => {
             const convId = activeIds[m];
             if (convId && currentConvs[convId]) {
-                updatedConvs[convId] = { ...currentConvs[convId], messages: msgsByScope[convId] || [], updatedAt: Date.now() };
+                const modeScopeKey = getScopeKey(m, convId);
+                const legacyScopeMessages = msgsByScope[convId] || [];
+                updatedConvs[convId] = { ...currentConvs[convId], messages: msgsByScope[modeScopeKey] || legacyScopeMessages, updatedAt: Date.now() };
                 hasChanges = true;
             }
         });
@@ -592,7 +613,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
             conversationsRef.current = updatedConvs;
             saveToStorage(updatedConvs, currentIdRef.current, activeIds);
         }
-    }, [saveToStorage]);
+    }, [saveToStorage, getScopeKey]);
 
     const hydratedFromBackendRef = useRef<Record<string, boolean>>({});
 
@@ -612,7 +633,11 @@ export function LIAProvider({ children }: LIAProviderProps) {
             // 🔒 SECURITY: Prefix with tenantId
             const curTenantId = (authUser as any)?.user_metadata?.tenant_id || (authUser as any)?.tenant_id || (isAdmin ? '00000000-0000-0000-0000-000000000001' : 'guest');
             try {
-                const stored = localStorage.getItem(`lia_scope_${curTenantId}_${scopeKey}`);
+                const legacyConversationId = getConversationIdFromScopeKey(scopeKey);
+                const stored = localStorage.getItem(`lia_scope_${curTenantId}_${scopeKey}`)
+                    || localStorage.getItem(`lia_scope_${curTenantId}_${legacyConversationId}`)
+                    || localStorage.getItem(`lia_scope_${scopeKey}`)
+                    || localStorage.getItem(`lia_scope_${legacyConversationId}`);
                 if (stored) {
                     const msgs = JSON.parse(stored);
                     setMessagesByScope(prev => ({ ...prev, [scopeKey]: msgs }));
@@ -620,7 +645,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 }
             } catch (e) { }
         }
-    }, []);
+    }, [getConversationIdFromScopeKey]);
 
     const ensureConversationExists = useCallback(async (modeForConv: 'chat' | 'multimodal' | 'live'): Promise<string | null> => {
         const activeIds = activeIdsByModeRef.current;
@@ -669,7 +694,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 return next;
             });
             socketService.registerConversation(newId);
-            setActiveScope(newId);
+            setActiveScope(getScopeKey(modeForConv, newId));
             saveToStorage(updated, currentIdRef.current, activeIdsByModeRef.current);
             return newId;
         } catch (e: any) {
@@ -677,7 +702,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
             toast.error('Erro de conexão com o servidor. Verifique sua internet.');
             return null;
         }
-    }, [setActiveScope, saveToStorage]);
+    }, [setActiveScope, saveToStorage, getScopeKey]);
 
     const refreshConversations = useCallback(async () => {
         // v4.7: TIMING FIX - Garantir ID em Dev Mode
@@ -725,7 +750,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 // v4.3: PERSISTÊNCIA - Carregar mensagens das conversas ativas após o refresh
                 const loadPromises = Object.entries(activeIds).map(async ([mode, convId]) => {
                     if (!convId) return;
-                    const scopeKey = convId; // getScopeKey simplificado
+                    const scopeKey = getScopeKey(mode as 'chat' | 'multimodal' | 'live', convId);
                     try {
                         const msgs = await backendService.getMessages(convId);
                         if (msgs?.length > 0) {
@@ -763,7 +788,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
             return 0;
         }
         finally { setIsInitialLoadDone(true); }
-    }, [userId]);
+    }, [userId, getScopeKey]);
 
 
     const createConversation = useCallback(async (mode: 'chat' | 'multimodal' | 'live') => {
@@ -820,7 +845,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
             });
 
             socketService.registerConversation(newId);
-            setActiveScope(newId);
+            setActiveScope(getScopeKey(mode, newId));
             saveToStorage(updated, newId, activeIdsByModeRef.current);
 
             creatingRef.current[mode] = false;
@@ -831,7 +856,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
             creatingRef.current[mode] = false;
             return undefined;
         }
-    }, [saveCurrentConversation, userId, setActiveScope, saveToStorage]);
+    }, [saveCurrentConversation, userId, setActiveScope, saveToStorage, getScopeKey]);
 
 
     const switchConversation = useCallback(async (id: string, mode?: 'chat' | 'multimodal' | 'live') => {
@@ -1631,10 +1656,10 @@ export function LIAProvider({ children }: LIAProviderProps) {
             // v9.5: FIX GHOST MESSAGES - Usar a sessão ativa ou o escopo atual para garantir visibilidade
             const activeSession = geminiLiveService.getSession();
             const convId = activeSession?.id || currentIdRef.current || activeIdsByModeRef.current.live || 'default';
-            const scopeKey = convId;
             // v9.6: Usar o modo ativo do contexto para garantir que mensagens apareçam na aba atual
             // Se estivermos em Live mas visualizando Multi-Modal, queremos ver as mensagens lá
             const mode = activeModeRef.current || 'live';
+            const scopeKey = getScopeKey(mode, convId);
 
             console.log(`📡 [LIAContext] Evento Gemini: ${event.type} | Escopo Ativo: ${scopeKey} | Modo: ${mode}`);
 
@@ -1831,12 +1856,12 @@ export function LIAProvider({ children }: LIAProviderProps) {
             if (activeSession.id && activeSession.id.startsWith('conv_')) {
                 setCurrentConversationId(activeSession.id);
                 currentIdRef.current = activeSession.id;
-                setActiveScope(activeSession.id);
+                setActiveScope(getScopeKey('live', activeSession.id));
             }
         }
 
         return () => geminiLiveService.removeEventListener(handleGeminiEvent);
-    }, [setActiveScope]);
+    }, [setActiveScope, getScopeKey]);
 
     // ======================================================================
     // MÉTODOS DE MENSAGEM
@@ -1983,7 +2008,11 @@ export function LIAProvider({ children }: LIAProviderProps) {
         // Garantir que conversa exista e obter scopeKey
         const targetMode = mode || 'multimodal';
         const convId = await ensureConversationExists(targetMode);
-        const scopeKey = getScopeKey(targetMode, convId!);
+        if (!convId) {
+            console.error('❌ [LIAContext] Falha ao obter conversationId. Abortando análise multimodal.');
+            return;
+        }
+        const scopeKey = getScopeKey(targetMode, convId);
 
         const file = files[0];
         const prompt = text.trim() || 'Analise estes arquivos em detalhes.';
@@ -2009,9 +2038,20 @@ export function LIAProvider({ children }: LIAProviderProps) {
         try {
             console.log(`📤 Enviando ${files.length} arquivo(s) para análise`);
 
-            const convId = scopeKey.split(':')[1] || '';
-            const formData = new FormData();
+            if (!scopeKey) {
+                console.error('❌ [LIAContext] Falha ao obter scopeKey (convId). Abortando análise.');
+                setIsProcessingUpload(false);
+                setIsThinking(false);
+                return;
+            }
 
+            const conversationId = convId;
+
+            // Lógica de persistência condicional - Sincronizada com analyzeFile
+            // v15.0: SSOT - Frontend upload removed. Backend (vision.ts) handles persistence.
+            // This prevents duplication and race conditions.
+
+            const formData = new FormData();
             files.forEach(f => {
                 formData.append('files', f.file);
             });
@@ -2031,12 +2071,12 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 const instruction = intentOutput.mode === 'A'
                     ? getIncidentTemplateInstruction()
                     : getHybridTemplateInstruction();
-                finalPrompt = `${prompt}\n\n[SISTEMA: PROTOCOLO DE LEITURA DE ARQUIVO ATIVADO]\n${instruction}`;
+                finalPrompt = `${instruction}\n\n=== PEDIDO DO USUÁRIO ===\n${prompt}`;
                 console.log(`🛡️ [IntentRouter] Mode ${intentOutput.mode} (Vision) ativado para ${scopeKey}`);
             }
 
             formData.append('prompt', finalPrompt);
-            formData.append('conversationId', convId);
+            formData.append('conversationId', conversationId);
             formData.append('messageId', userMessage.id);
 
             // v2.6: MENTE ÚNICA - Incluir credenciais explicitamente
@@ -2058,7 +2098,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
             setIsProcessingUpload(false);
             setTypingForScope(scopeKey, true);
 
-            const response = await fetch('/api/vision/analyze', {
+            // v9.7: REPORTE DE 404 - SEMPRE usar getApiUrl() para evitar bater na porta 3001
+            const response = await fetch(`${getApiUrl()}/api/vision/analyze`, {
                 method: 'POST',
                 headers: authHeaders,
                 body: formData,
@@ -2093,7 +2134,13 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
             // v2.1: Atualizar a mensagem do usuário com as URLs persistentes
             const returnedAttachments = result.analysis?.detailPayload?.attachments;
-            if (returnedAttachments && Array.isArray(returnedAttachments)) {
+
+            // v9.7: Sincronizar attachments (prioridade para o que a API retornou, senão o que persistimos localmente)
+            const finalAttachments = (returnedAttachments && Array.isArray(returnedAttachments))
+                ? returnedAttachments
+                : null;
+
+            if (finalAttachments) {
                 setMessagesByScope(prev => {
                     const scopeMessages = [...(prev[scopeKey] || [])];
                     const userMsgIndex = scopeMessages.findIndex(m => m.id === userMessage.id);
@@ -2109,7 +2156,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
                         };
                     }
                     try {
-                        localStorage.setItem(`lia_scope_${scopeKey}`, JSON.stringify(scopeMessages));
+                        const curTenantId = (authUser as any)?.user_metadata?.tenant_id || (authUser as any)?.tenant_id || (isAdmin ? '00000000-0000-0000-0000-000000000001' : 'guest');
+                        localStorage.setItem(`lia_scope_${curTenantId}_${scopeKey}`, JSON.stringify(scopeMessages));
                     } catch (e) { }
                     return { ...prev, [scopeKey]: scopeMessages };
                 });
@@ -2130,7 +2178,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
                         };
                     }
                     try {
-                        localStorage.setItem(`lia_scope_${scopeKey}`, JSON.stringify(scopeMessages));
+                        const curTenantId = (authUser as any)?.user_metadata?.tenant_id || (authUser as any)?.tenant_id || (isAdmin ? '00000000-0000-0000-0000-000000000001' : 'guest');
+                        localStorage.setItem(`lia_scope_${curTenantId}_${scopeKey}`, JSON.stringify(scopeMessages));
                     } catch (e) { }
                     return { ...prev, [scopeKey]: scopeMessages };
                 });
@@ -2210,7 +2259,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
             formData.append('file', audioBlob, 'audio.webm');
 
             // Enviar para backend (que tem a chave OpenAI)
-            const response = await fetch('/api/transcribe', {
+            // v9.7: FIX 404 - Absolute URL
+            const response = await fetch(`${getApiUrl()}/api/transcribe`, {
                 method: 'POST',
                 body: formData,
             });
@@ -2303,15 +2353,15 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 authStorageKey: 'sb-dashboard-auth'
             });
 
-            // v5.8: Mente Única - O escopo é apenas o ID
-            setActiveScope(activeId);
+            // v5.8: Mente Única - Escopo por modo + conversa
+            setActiveScope(getScopeKey('live', activeId));
 
             await geminiLiveService.startSession();
         } catch (error: any) {
             console.error('❌ Erro ao iniciar Gemini Live:', error);
             alert(`Erro ao iniciar Live Mode: ${error.message}`);
         }
-    }, [createConversation, setActiveScope]);
+    }, [createConversation, setActiveScope, getScopeKey]);
 
     const stopLiveMode = useCallback(async () => {
         try {
@@ -2468,7 +2518,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
             }
 
             // Enviar para API
-            const response = await fetch('/api/vision/analyze', {
+            // v9.7: FIX 404 - Absolute URL
+            const response = await fetch(`${getApiUrl()}/api/vision/analyze`, {
                 method: 'POST',
                 headers: authHeaders,
                 body: formData,

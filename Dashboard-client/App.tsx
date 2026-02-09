@@ -163,7 +163,7 @@ const AppContent: React.FC = () => {
 
       // CRÍTICO: Limpar a sessão do admin para forçar o reset do onboarding
       const userId = (user as any)?.id || 'unknown';
-      sessionStorage.removeItem(`admin_session_${userId}`);
+      sessionStorage.removeItem(`onboarding_session_done:${userId}`);
 
       // Limpar o parâmetro da URL (suporta ?admin_access e &admin_access)
       const cleanHash = hash

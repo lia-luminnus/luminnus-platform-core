@@ -47,6 +47,11 @@ export function sanitizeForTTS(text: string): string {
         .replace(/Should\s*Speak[,:]?\s*\w+[.,]?\s*/gi, '')
         .replace(/Should\s*Blink[,:]?\s*\w+[.,]?\s*/gi, '');
 
+    // 6.1 Remove rótulos rígidos de template para evitar fala engessada
+    sanitized = sanitized
+        .replace(/\*\*\s*PARTE\s*\d+\s*-[^*]+\*\*/gi, '')
+        .replace(/\b(Achado principal|Evid[eê]ncia|Causa raiz(?: prov[aá]vel)?|Corre[cç][aã]o m[ií]nima|Valida[cç][aã]o)\s*[:\-]\s*/gi, '');
+
     // 7. Remove emojis unicode
     sanitized = sanitized.replace(/[\u{1F600}-\u{1F64F}]/gu, ''); // Emoticons
     sanitized = sanitized.replace(/[\u{1F300}-\u{1F5FF}]/gu, ''); // Misc Symbols

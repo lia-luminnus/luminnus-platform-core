@@ -8,14 +8,16 @@
  * Toda IA roda no backend LIA (porta 3000).
  */
 
+import { getApiUrl } from '../config/api';
+
 /**
  * Envia mensagem para LIA via backend
  * Endpoint: POST /api/lia/chat → backend porta 3000
  */
 export const sendMessageToGemini = async (message: string): Promise<string> => {
   try {
-    // Chamada via proxy Vite → backend LIA
-    const response = await fetch('/api/lia/chat', {
+    // Chamada via absolute URL -> backend LIA
+    const response = await fetch(`${getApiUrl()}/api/lia/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

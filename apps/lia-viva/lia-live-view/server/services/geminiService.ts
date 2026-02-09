@@ -15,7 +15,7 @@ export class GeminiService {
     static async analyzeFile(
         file: { mimetype: string; data: string; name: string },
         prompt: string,
-        model: string = 'gemini-2.0-flash',
+        model: string = 'gemini-2.5-flash',
         tools: any[] = []
     ) {
         if (!this.API_KEY) throw new Error('GEMINI_API_KEY não configurada');

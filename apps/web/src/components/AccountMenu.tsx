@@ -112,7 +112,7 @@ const AccountMenu = () => {
                   <span>Painel Admin</span>
                 </Link>
                 <Link
-                  to="/dashboard"
+                  to="/dashboard?admin_access=true"
                   onClick={handleMenuClick}
                   className="flex items-center gap-3 px-4 py-3 text-white hover:bg-white/10 transition-colors duration-200"
                 >

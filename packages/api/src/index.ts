@@ -7,6 +7,7 @@ import { versionRouter } from './routes/version.js';
 import { meRouter } from './routes/me.js';
 import { authRouter } from './routes/auth.js';
 import { integrationsRouter } from './routes/integrations.js';
+import { visionRouter } from './routes/vision.js';
 import dashboardRouter from './routes/dashboardRoutes.js';
 import metricsRouter from './routes/metricsRoutes.js';
 import briefingRoutes from './routes/briefingRoutes.js';
@@ -32,6 +33,7 @@ const allowedOrigins = [
   'https://luminnus-dashboard.onrender.com',
   'https://luminnus.ai',
   'http://localhost:3000',
+  'http://localhost:3001',
   'http://localhost:5173'
 ];
 
@@ -70,6 +72,7 @@ app.use('/api/integrations/whatsapp', whatsappIntegrationsRouter); // Client BYO
 app.use('/api/whatsapp/embedded', whatsappEmbeddedRouter); // Embedded Signup flow
 app.use('/api/memory', assistantRouter);
 app.use('/api/location', assistantRouter);
+app.use('/api/vision', visionRouter);
 app.use('/api/admin/whatsapp', whatsappAdminRouter);
 app.use('/api/admin', adminRouter);
 

@@ -5,6 +5,7 @@
 import { supabase } from '../config/supabase.js';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import { getSalesSnapshot } from './salesData.js';
 
 dotenv.config();
 
@@ -156,9 +157,10 @@ export async function savePersistentMemory(userId, type, content) {
  * @param {string} userId 
  */
 export async function getUnifiedContext(conversationId, userId) {
-    const [history, memories] = await Promise.all([
+    const [history, memories, salesInfo] = await Promise.all([
         loadConversation(conversationId, 20),
-        loadPersistentMemory(userId)
+        loadPersistentMemory(userId),
+        getSalesSnapshot(userId)
     ]);
 
     let memoryBlock = "";
@@ -169,11 +171,21 @@ export async function getUnifiedContext(conversationId, userId) {
         });
     }
 
+    let salesBlock = "";
+    if (salesInfo) {
+        salesBlock = "\n📊 RESUMO DE VENDAS E ESTOQUE (Informação em tempo real):\n";
+        if (salesInfo.lowStock.length > 0) {
+            salesBlock += `- ⚠️ ESTOQUE BAIXO: ${salesInfo.lowStock.join(', ')}\n`;
+        }
+        salesBlock += `- 💰 Volume recente (últimas 10 vendas): ${salesInfo.recentSalesVolume.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}\n`;
+        salesBlock += `- 📦 Pedidos recentes: ${salesInfo.recentOrdersCount}\n`;
+    }
+
     return {
         history,
         memories,
-        memoryBlock,
-        systemInstruction: memoryBlock,
+        memoryBlock: memoryBlock + salesBlock,
+        systemInstruction: memoryBlock + salesBlock,
         previousMessages: history.map(msg => ({
             role: msg.role,
             content: msg.content

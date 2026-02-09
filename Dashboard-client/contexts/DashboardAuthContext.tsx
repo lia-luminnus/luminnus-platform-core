@@ -1,52 +1,139 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase, configError } from '../lib/supabase';
-import { getOrCreateProfile, UserProfile } from '../services/profileService';
+import { supabase } from '../lib/supabase';
 import { useAppStore } from '../store/useAppStore';
-import { UpdateService, UpdateAvailableEvent } from '../components/lia/services/geminiLiveService';
+export type PlanType = 'start' | 'pro' | 'plus';
 
-interface AuthContextType {
+interface UserProfile {
+    id: string;
+    email: string;
+    full_name?: string;
+    avatar_url?: string;
+    onboarding_completed: boolean;
+    onboarding_integrations_done?: boolean;
+    segment?: string; // Startup, Agência, Creator, etc.
+    modules?: string[]; // Módulos ativados
+    plan_type?: PlanType; // v9.5: Campo de plano no perfil
+    role?: 'admin' | 'client'; // v6.1: Role based access
+    company_name?: string;
+    company_logo_url?: string;
+    company_primary_color?: string;
+    company_secondary_color?: string;
+}
+
+interface DashboardAuthContextProps {
     user: User | null;
     session: Session | null;
-    plan: any | null;
+    plan: { name: string; id: string } | null;
     loading: boolean;
     initialized: boolean;
     profile: UserProfile | null;
-    isAdmin: boolean; // SSOT: Admin sempre passa pelo onboarding, cliente só 1x
-    onboardingCompleted: boolean;
-    refreshProfile: (initialUser?: User | null, force?: boolean) => Promise<void>;
+    isAdmin: boolean;
+    onboardingCompleted: boolean; // Atalho para profile.onboarding_completed
+    refreshProfile: (user?: User | null) => Promise<void>;
     signOut: () => Promise<void>;
-    setPlanName: (name: 'Start' | 'Plus' | 'Pro') => void;
+    setPlanName: (name: 'Start' | 'Plus' | 'Pro') => Promise<void>; // v9.5: Função exposta
+    completeSessionOnboarding: () => void; // v12.0: SSOT State Action
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<DashboardAuthContextProps | undefined>(undefined);
 
-export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// Cache simples em memória para evitar requests repetidos na mesma sessão
+const profileCache: { [key: string]: UserProfile } = {};
+
+/**
+ * 🛠️ Serviço desacoplado para buscar perfil
+ * (Evita poluir o componente com lógica de fetch repetitiva)
+ */
+async function getOrCreateProfile(userId: string, email: string): Promise<UserProfile> {
+    if (profileCache[userId]) {
+        console.log('[DashboardAuth] ⚡ Cache hit para perfil:', userId);
+        return profileCache[userId];
+    }
+
+    // 1. Tentar buscar perfil existente
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+    if (error) {
+        console.error('[DashboardAuth] Erro ao buscar perfil:', error);
+        throw error;
+    }
+
+    if (data) {
+        profileCache[userId] = data;
+
+        // v9.7: Salvar no localStorage também para resiliência entre refreshes
+        try {
+            const cacheKey = `profile_cache_${userId}`;
+            localStorage.setItem(cacheKey, JSON.stringify({
+                data,
+                timestamp: Date.now()
+            }));
+        } catch (e) { console.warn('Falha ao salvar cache key', e); }
+
+        return data;
+    }
+
+    // 2. Se não existe, criar perfil básico (Silent Onboarding Start)
+    console.log('[DashboardAuth] Perfil não encontrado. Criando novo...');
+
+    // v9.8: Tentar recuperar dados do app_metadata (se houver migração)
+    const { error: insertError } = await supabase
+        .from('profiles')
+        .insert([{
+            id: userId,
+            email: email,
+            onboarding_completed: false, // Default: false
+            plan_type: 'start' // Default plan
+        }]);
+
+    if (insertError) {
+        console.error('[DashboardAuth] Erro ao criar perfil:', insertError);
+        throw insertError;
+    }
+
+    // Retornar o objeto recém-criado (mock para evitar novo select)
+    return {
+        id: userId,
+        email: email,
+        onboarding_completed: false,
+        plan_type: 'start'
+    };
+}
+
+export const DashboardAuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [session, setSession] = useState<Session | null>(null);
-    const [plan, setPlan] = useState<any | null>(null);
+    const [profile, setProfile] = useState<UserProfile | null>(null);
+    const [plan, setPlan] = useState<{ name: string; id: string } | null>(null);
     const [loading, setLoading] = useState(true);
     const [initialized, setInitialized] = useState(false);
-    const [profile, setProfile] = useState<UserProfile | null>(null);
-    const [showUpdateBanner, setShowUpdateBanner] = useState(false);
-    const [newVersion, setNewVersion] = useState('');
     const [isAdmin, setIsAdmin] = useState(false);
-    const [dismissedVersion, setDismissedVersion] = useState<string | null>(localStorage.getItem('luminnus_update_dismissed'));
+    const [adminOnboardingDone, setAdminOnboardingDone] = useState(false); // v12.0: Internal State Machine
 
-    // 🔒 SSOT: Controlar se já carregamos um plano real (evitar regressão para Start)
-    const planLoadedRef = React.useRef<boolean>(false);
-    const refreshInProgressRef = React.useRef<boolean>(false);
-    const lastPlanRef = React.useRef<{ name: string; id: string } | null>(null);
+    // SSOT: O estado do onboarding vem do perfil
+    // v12.0: Máquina de Estado para SSOT (Admin = Session, Client = DB)
+    const localOnboardingCompleted = useAppStore((s) => s.onboarding_completed);
 
-    // Verificar onboarding também no estado local (permite funcionar sem autenticação)
-    const localOnboardingCompleted = useAppStore((state) => state.onboarding_completed);
-
-    // 🔑 SSOT: Lógica de Onboarding CORRIGIDA
-    // - Admin: Passa pelo onboarding UMA vez por sessão (resetado no refreshProfile)
-    // - Cliente: Passa APENAS UMA VEZ na vida - respeita o banco de dados (profile) ou localStorage
+    // v12.0: Lógica centralizada de conclusão (SSOT: Protocolo Onboarding)
     const onboardingCompleted = isAdmin
-        ? localOnboardingCompleted  // Admin respeita apenas o estado local (que resetamos por sessão)
-        : (profile?.onboarding_completed || localOnboardingCompleted || false);  // Cliente respeita DB
+        // Para Admin: Só é true se tiver a flag de sessão (resetado a cada login via url admin_access)
+        ? adminOnboardingDone
+        // Para Client: DB é a verdade absoluta. Se o DB diz que completou, ignoramos o local.
+        : (profile?.onboarding_completed || localOnboardingCompleted || false);
+
+    const refreshInProgressRef = useRef(false);
+    // v9.9: Refs para evitar loops de atualização de plano
+    const lastPlanRef = useRef<{ name: string; id: string } | null>(null);
+    const planLoadedRef = useRef(false);
+    // v13.0: Timestamp de última atualização de plano - bloqueia refreshProfile por 10s após setPlanName
+    const planUpdateTimestampRef = useRef<number>(0);
+
+
 
     const refreshProfile = async (initialUser?: User | null) => {
         console.log('[DashboardAuth] Iniciando refreshProfile...');
@@ -80,146 +167,159 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
             // 🛡️ GUARDRAIL CRÍTICO (CORRIGIDO): 
             // Agora comparamos strings reais, não Promises. Isso evita o loop infinito de requests.
-            if (profile && profile.id === currentUser.id) {
-                console.log('[DashboardAuth] 🛑 Perfil já carregado para este usuário. Ignorando refresh.');
-                refreshInProgressRef.current = false;
-                return;
-            }
+            let userProfile = profile;
+            let profileLoadedFromDb = false;
 
+            if (profile && profile.id === currentUser.id) {
+                console.log('[DashboardAuth] 🛑 Perfil já carregado para este usuário. Reutilizando dados.');
+                profileLoadedFromDb = true;
+            }
 
             // ⚡ DETECÇÃO PRECOCE DE ADMIN (evita loops de onboarding)
             const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
             const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
             const isAdminByEmail = adminEmails.includes(currentUser.email?.toLowerCase() || '');
+
             if (isAdminByEmail) {
                 console.log('[DashboardAuth] ⚡ Admin detectado precocemente via email');
                 setIsAdmin(true);
 
-                // Reset imediato do onboarding para admins
-                const sessionKey = `admin_session_${currentUser.id}`;
-                if (!sessionStorage.getItem(sessionKey)) {
+                // Reset imediato do onboarding para admins APENAS se não houver flag de sessão
+                const sessionKey = `onboarding_session_done:${currentUser.id}`;
+                const sessionDone = sessionStorage.getItem(sessionKey) === 'true';
+
+                // v13.0: Verificar também se admin_access está na URL - forçar onboarding nesse caso
+                const hash = window.location.hash;
+                const search = window.location.search;
+                const hasAdminAccessInUrl = hash.includes('admin_access=true') || search.includes('admin_access=true');
+
+                if (hasAdminAccessInUrl) {
+                    console.log('[DashboardAuth] 🔐 admin_access na URL - forçando reset de onboarding');
+                    sessionStorage.removeItem(sessionKey); // Limpar imediatamente
+                    useAppStore.getState().resetOnboarding();
+                    setAdminOnboardingDone(false);
+                } else if (sessionDone) {
+                    setAdminOnboardingDone(true);
+                    // Sincronizar store local também
+                    useAppStore.getState().completeOnboarding();
+                } else {
                     console.log('[DashboardAuth] 🔄 Admin - Resetando onboarding (Sincronamente)');
                     useAppStore.getState().resetOnboarding();
-                    sessionStorage.setItem(sessionKey, 'active');
+                    setAdminOnboardingDone(false);
                 }
             }
 
-            console.log('[DashboardAuth] Carregando perfil do banco...');
+            // SÓ buscar se não tiver perfil carregado
+            if (!profileLoadedFromDb) {
+                console.log('[DashboardAuth] Carregando perfil do banco...');
 
-            let userProfile;
-            let profileLoadedFromDb = false;
-            let attempts = 0;
-            const MAX_ATTEMPTS = 1; // v7.1: Reduzido para 1 (cache + timeout menor = não precisa retry)
+                let attempts = 0;
+                const MAX_ATTEMPTS = 1; // v7.1: Reduzido para 1 (cache + timeout menor = não precisa retry)
 
-            while (attempts < MAX_ATTEMPTS && !profileLoadedFromDb) {
-                attempts++;
-                try {
-                    console.log(`[DashboardAuth] Tentativa ${attempts}/${MAX_ATTEMPTS}...`);
+                while (attempts < MAX_ATTEMPTS && !profileLoadedFromDb) {
+                    attempts++;
+                    try {
+                        console.log(`[DashboardAuth] Tentativa ${attempts}/${MAX_ATTEMPTS}...`);
 
-                    // v7.1: Timeout reduzido para 10s (profileService já tem 8s)
-                    const profilePromise = getOrCreateProfile(currentUser.id, currentUser.email || '');
-                    const timeoutPromise = new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), 10000)
-                    );
+                        // v7.1: Timeout reduzido para 10s (profileService já tem 8s)
+                        const profilePromise = getOrCreateProfile(currentUser.id, currentUser.email || '');
+                        const timeoutPromise = new Promise((_, reject) =>
+                            setTimeout(() => reject(new Error('PROFILE_TIMEOUT')), 10000)
+                        );
 
-                    userProfile = await Promise.race([profilePromise, timeoutPromise]) as UserProfile;
-                    profileLoadedFromDb = true;
-                    console.log('[DashboardAuth] Perfil carregado com sucesso do banco');
-                } catch (pErr: any) {
-                    console.warn(`[DashboardAuth] Falha na tentativa ${attempts}:`, pErr.message);
+                        userProfile = await Promise.race([profilePromise, timeoutPromise]) as UserProfile;
+                        profileLoadedFromDb = true;
+                        console.log('[DashboardAuth] Perfil carregado com sucesso do banco');
+                    } catch (pErr: any) {
+                        console.warn(`[DashboardAuth] Falha na tentativa ${attempts}:`, pErr.message);
 
-                    // Se falhou por timeout ou erro, mas já sabemos que é admin pelo email, setar flag antecipadamente
-                    const isAdminByEmail = adminEmails.includes(currentUser.email?.toLowerCase() || '');
-                    if (isAdminByEmail && !isAdmin) {
-                        console.log('[DashboardAuth] ⚡ Admin detectado via email durante falha de carga');
-                        setIsAdmin(true);
-                    }
-
-                    if (attempts >= MAX_ATTEMPTS) {
-                        console.error('[DashboardAuth] Máximo de tentativas atingido. Usando fallback de resiliência.');
-
-                        // 🔒 CRÍTICO: Respeitar o estado REAL do localStorage E cache (evitar regressão de onboarding)
-                        let isCompletedLocally = localOnboardingCompleted || false;
-                        let storedSegment = null;
-                        let storedModules = null;
-                        let storedPlan = null;
-
-                        try {
-                            // 1. Verificar localStorage (Zustand persists)
-                            const storedData = localStorage.getItem('luminnus-storage');
-                            if (storedData) {
-                                const parsed = JSON.parse(storedData);
-                                if (parsed?.state?.onboarding_completed) {
-                                    isCompletedLocally = true;
-                                    console.log('[DashboardAuth] ✅ Onboarding encontrado no localStorage');
-                                }
-                                storedSegment = parsed?.state?.businessType || null;
-                                storedModules = parsed?.state?.activeModules || null;
-                                storedPlan = parsed?.state?.planType || null; // v9.8: Recuperar plano do storage
-                            }
-
-                            // 2. Verificar cache de perfil (pode ter dados mais recentes que localStorage)
-                            const cacheKey = `profile_cache_${currentUser.id}`;
-                            const cachedProfile = localStorage.getItem(cacheKey);
-                            if (cachedProfile) {
-                                const { data, timestamp } = JSON.parse(cachedProfile);
-                                const age = Date.now() - timestamp;
-                                const TTL = 2 * 60 * 1000; // 2min
-
-                                if (age < TTL && data?.onboarding_completed) {
-                                    isCompletedLocally = true;
-                                    storedSegment = storedSegment || data.segment;
-                                    storedModules = storedModules || data.modules;
-                                    storedPlan = storedPlan || data.plan_type; // v9.8: Recuperar plano do cache
-                                    console.log('[DashboardAuth] ✅ Onboarding encontrado no cache de perfil');
-                                }
-                            }
-                        } catch (parseErr) {
-                            console.warn('[DashboardAuth] Erro ao ler localStorage/cache:', parseErr);
+                        if (isAdminByEmail && !isAdmin) {
+                            console.log('[DashboardAuth] ⚡ Admin detectado via email durante falha de carga');
+                            setIsAdmin(true);
                         }
 
-                        userProfile = {
-                            id: currentUser.id,
-                            email: currentUser.email || '',
-                            onboarding_completed: isCompletedLocally, // Respeita localStorage
-                            onboarding_integrations_done: isCompletedLocally, // Se onboarding ok, integrações tb
-                            segment: storedSegment,
-                            modules: storedModules,
-                            plan_type: storedPlan, // v9.8: Injetar plano recuperado
-                            role: isAdminByEmail ? 'admin' : 'client' // v6.1: Fallback deve respeitar Admin por email!
-                        } as any;
+                        if (attempts >= MAX_ATTEMPTS) {
+                            console.error('[DashboardAuth] Máximo de tentativas atingido. Usando fallback de resiliência.');
 
-                        console.log('[DashboardAuth] 📦 Usando perfil de fallback:', {
-                            id: userProfile.id,
-                            onboarding: isCompletedLocally,
-                            plan: userProfile.plan_type
-                        });
-                    } else {
-                        // Backoff exponencial (2s, 4s, 8s...)
-                        const delay = Math.min(Math.pow(2, attempts) * 1000, 10000);
-                        console.log(`[DashboardAuth] Aguardando ${delay}ms antes da próxima tentativa...`);
-                        await new Promise(resolve => setTimeout(resolve, delay));
+                            // 🔒 CRÍTICO: Respeitar o estado REAL do localStorage E cache
+                            let isCompletedLocally = localOnboardingCompleted || false;
+                            let storedSegment = null;
+                            let storedModules = null;
+                            let storedPlan = null;
+
+                            try {
+                                const storedData = localStorage.getItem('luminnus-storage');
+                                if (storedData) {
+                                    const parsed = JSON.parse(storedData);
+                                    if (parsed?.state?.onboarding_completed) {
+                                        isCompletedLocally = true;
+                                        console.log('[DashboardAuth] ✅ Onboarding encontrado no localStorage');
+                                    }
+                                    storedSegment = parsed?.state?.businessType || null;
+                                    storedModules = parsed?.state?.activeModules || null;
+                                    storedPlan = parsed?.state?.planType || null;
+                                }
+
+                                const cacheKey = `profile_cache_${currentUser.id}`;
+                                const cachedProfile = localStorage.getItem(cacheKey);
+                                if (cachedProfile) {
+                                    const { data, timestamp } = JSON.parse(cachedProfile);
+                                    const age = Date.now() - timestamp;
+                                    const TTL = 2 * 60 * 1000;
+
+                                    if (age < TTL && data?.onboarding_completed) {
+                                        isCompletedLocally = true;
+                                        storedSegment = storedSegment || data.segment;
+                                        storedModules = storedModules || data.modules;
+                                        storedPlan = storedPlan || data.plan_type;
+                                        console.log('[DashboardAuth] ✅ Onboarding encontrado no cache de perfil');
+                                    }
+                                }
+                            } catch (parseErr) {
+                                console.warn('[DashboardAuth] Erro ao ler localStorage/cache:', parseErr);
+                            }
+
+                            userProfile = {
+                                id: currentUser.id,
+                                email: currentUser.email || '',
+                                onboarding_completed: isCompletedLocally,
+                                onboarding_integrations_done: isCompletedLocally,
+                                segment: storedSegment,
+                                modules: storedModules,
+                                plan_type: storedPlan,
+                                role: isAdminByEmail ? 'admin' : 'client'
+                            } as any;
+
+                            console.log('[DashboardAuth] 📦 Usando perfil de fallback:', {
+                                id: userProfile.id,
+                                onboarding: isCompletedLocally,
+                                plan: userProfile.plan_type
+                            });
+                        } else {
+                            const delay = Math.min(Math.pow(2, attempts) * 1000, 10000);
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        }
                     }
                 }
             }
 
             setProfile(userProfile);
 
-            // 🔄 ADMIN ONBOARDING: Apenas admins passam pelo onboarding TODA sessão
-            // Clientes (não-admin) passam APENAS UMA VEZ - valor resgatado do banco ou localStorage
+            // 🔄 ADMIN ONBOARDING (Check secundário)
             if (isAdmin) {
-                const sessionKey = `admin_session_${currentUser.id}`;
-                const currentSession = sessionStorage.getItem(sessionKey);
-                if (!currentSession) {
+                const sessionKey = `onboarding_session_done:${currentUser.id}`;
+                const sessionDone = sessionStorage.getItem(sessionKey) === 'true';
+
+                if (sessionDone) {
+                    setAdminOnboardingDone(true);
+                } else if (!useAppStore.getState().onboarding_completed) {
                     console.log('[DashboardAuth] 🔄 Admin - Resetando onboarding para esta sessão');
                     useAppStore.getState().resetOnboarding();
-                    sessionStorage.setItem(sessionKey, 'active');
                 }
             }
 
-            // 🔑 SSOT: Sincronizar estado completo do onboarding e perfil para o localStorage
+            // 🔑 SSOT: Sincronizar estado
             if (profileLoadedFromDb && userProfile) {
-                // v9.6: Usar a nova action inteligente syncWithProfile
                 useAppStore.getState().syncWithProfile(userProfile);
             }
 
@@ -231,9 +331,16 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             setPlan((prev: any) => {
                 let newPlan: { name: string; id: string } | null = null;
 
-                // 1. Admin: manter Pro ou override
+                // 1. Admin: manter Pro ou override do banco
                 if (isAdmin) {
-                    const adminPlan = prev?.name || "Pro";
+                    // v13.0: Se houve uma atualização de plano nos últimos 10s, NÃO sobrescrever
+                    const timeSinceUpdate = Date.now() - planUpdateTimestampRef.current;
+                    if (timeSinceUpdate < 10000 && planUpdateTimestampRef.current > 0) {
+                        console.log('[DashboardAuth] 🔒 Plano atualizado recentemente, protegendo contra override');
+                        return prev;
+                    }
+                    const planFromDb = dbPlanType ? (dbPlanType.charAt(0).toUpperCase() + dbPlanType.slice(1).toLowerCase()) : null;
+                    const adminPlan = planFromDb || prev?.name || "Pro";
                     newPlan = { name: adminPlan, id: adminPlan.toLowerCase() + "-plan" };
                 }
                 // 2. Perfil real do DB (ou fallback recuperado) carregou: usar ele
@@ -265,7 +372,8 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 // 🚫 APENAS ATUALIZAR SE REALMENTE MUDOU (evitar re-renders desnecessários)
                 if (newPlan && JSON.stringify(newPlan) === JSON.stringify(lastPlanRef.current)) {
                     console.log('[DashboardAuth] ⏭️ Plano não mudou, mantendo estado atual');
-                    return prev;
+                    // v13.1: Retornar lastPlanRef em vez de prev, pois prev pode estar desatualizado
+                    return lastPlanRef.current;
                 }
 
                 lastPlanRef.current = newPlan;
@@ -280,12 +388,82 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
     };
 
-    const setPlanName = (name: 'Start' | 'Plus' | 'Pro') => {
-        setPlan({
-            name: name,
-            id: name.toLowerCase() + "-plan"
-        });
-        console.log('[DashboardAuth] Plano alterado manualmente para:', name);
+    const setPlanName = async (name: 'Start' | 'Plus' | 'Pro') => {
+        if (!user?.id) {
+            console.error('[DashboardAuth] setPlanName: user ID inválido');
+            return;
+        }
+
+        try {
+            console.log('[DashboardAuth] 🔄 Alterando plano para:', name);
+
+            // v13.0: Marcar timestamp para bloquear refreshProfile por 10s
+            planUpdateTimestampRef.current = Date.now();
+
+            // ✅ 1. Atualizar state local imediatamente (otimistic UI)
+            setPlan({
+                name: name,
+                id: name.toLowerCase() + "-plan"
+            });
+
+            // ✅ 2. Persistir no Supabase
+            const { error } = await supabase
+                .from('profiles')
+                .update({ plan_type: name.toLowerCase() })
+                .eq('id', user.id);
+
+            if (error) {
+                console.error('[DashboardAuth] Erro ao persistir plano:', error);
+                throw error;
+            }
+
+            console.log('[DashboardAuth] ✅ Plano persistido no Supabase:', name);
+
+            // ✅ 3. CRÍTICO: Invalidar TODOS os caches antes de refresh
+            // Limpar cache em memória
+            delete profileCache[user.id];
+
+            // Limpar cache do localStorage
+            const cacheKey = `profile_cache_${user.id}`;
+            localStorage.removeItem(cacheKey);
+
+            console.log('[DashboardAuth] 🧹 Caches invalidados');
+
+            // ✅ 4. Atualizar profile local diretamente (sem esperar refresh)
+            setProfile(prev => prev ? { ...prev, plan_type: name.toLowerCase() as PlanType } : prev);
+
+            // ✅ 5. Atualizar ref para evitar regressão no próximo refreshProfile
+            lastPlanRef.current = { name, id: name.toLowerCase() + "-plan" };
+            planLoadedRef.current = true;
+
+            console.log('[DashboardAuth] ✅ Plano alterado com sucesso para:', name);
+        } catch (err) {
+            console.error('[DashboardAuth] ⚠️ Falha ao salvar plano:', err);
+            // Reverter UI se falhar - buscar valor real do banco
+            delete profileCache[user.id];
+            await refreshProfile();
+        }
+    };
+
+
+    // v12.0: Ação de máquina de estado para finalizar onboarding
+    const completeSessionOnboarding = () => {
+        if (!user) return;
+
+        console.log('[DashboardAuth] 🏁 Finalizando sessão de onboarding (State Machine Action)');
+
+        // 1. Atualizar Estado Interno
+        setAdminOnboardingDone(true); // Se for admin, isso libera o guard
+
+        // 2. Persistir na Sessão (SSOT para Admin)
+        const sessionKey = `onboarding_session_done:${user.id}`;
+        sessionStorage.setItem(sessionKey, 'true');
+
+        // 3. Persistir no Store Global (para garantir consistência em redirects)
+        useAppStore.getState().completeOnboarding();
+
+        // 4. Se for Client, o `refreshProfile` cuidará de buscar do banco depois, 
+        // mas setamos o local state para evitar flicker
     };
 
     useEffect(() => {
@@ -325,12 +503,20 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
             // Método 1: HashRouter com query após a rota (ex: /#/?access_token=...)
             if (hash.includes('access_token=')) {
-                const searchPart = hash.includes('?') ? hash.split('?')[1] : hash.substring(1);
+                // v11.3: Limpeza robusta. Remove tudo antes do primeiro '?' ou antes de 'access_token='
+                let searchPart = hash;
+                if (hash.includes('?')) {
+                    searchPart = hash.split('?')[1];
+                } else {
+                    const index = hash.indexOf('access_token=');
+                    searchPart = hash.substring(index);
+                }
+
                 const params = new URLSearchParams(searchPart);
                 accessToken = params.get('access_token');
                 refreshToken = params.get('refresh_token');
                 redirectTo = params.get('redirect_to');
-                console.log('[DashboardAuth] 📌 Tokens encontrados no hash');
+                console.log('[DashboardAuth] 📌 Tokens encontrados no hash. Valid format:', !!accessToken);
             }
 
             // Método 2: Query string normal (ex: ?access_token=...)
@@ -426,12 +612,13 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
                     await refreshProfile(initialSession.user);
                 }
 
-                // Se tinha tokens na URL mas o sync falhou (urlSession null), limpamos mesmo assim
+                // Se tinha tokens na URL mas o sync falhou (urlSession null), 
+                // NÃO limpar tokens imediatamente - deixar SubscriptionGate tentar
+                // com seu próprio timeout de 8s para evitar redirect prematuro
                 const hash = window.location.hash;
                 const search = window.location.search;
                 if (hash.includes('access_token=') || search.includes('access_token=')) {
-                    console.warn('[DashboardAuth] 🧼 Falha na sincronização, limpando tokens da URL para evitar hang...');
-                    cleanUrlAfterSync();
+                    console.warn('[DashboardAuth] ⚠️ Sync falhou, mas tokens mantidos na URL para retry do SubscriptionGate');
                 }
             } else if (urlSession) {
                 // Garantir que o estado local seja atualizado com a sessão da URL
@@ -518,55 +705,16 @@ export const DashboardAuthProvider: React.FC<{ children: React.ReactNode }> = ({
             onboardingCompleted,
             refreshProfile,
             signOut,
-            setPlanName
+            setPlanName,
+            completeSessionOnboarding // v12.0: Exposed Logic
         }}>
             {children}
-            {showUpdateBanner && (
-                <UpdateBanner
-                    version={newVersion}
-                    onClose={() => {
-                        setShowUpdateBanner(false);
-                        localStorage.setItem('luminnus_update_dismissed', newVersion);
-                    }}
-                    onUpdate={() => UpdateService.forceUpdate()}
-                />
-            )}
         </AuthContext.Provider>
+
     );
 };
 
-/**
- * 📢 Componente de Banner de Atualização
- */
-function UpdateBanner({ version, onClose, onUpdate }: { version: string; onClose: () => void; onUpdate: () => void }) {
-    return (
-        <div className="fixed top-6 right-6 z-[9999] animate-in fade-in slide-in-from-top-4 duration-500">
-            <div className="bg-slate-900 border border-slate-700 rounded-2xl p-4 shadow-2xl flex items-center gap-4 max-w-sm">
-                <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" x2="12" y1="15" y2="3" /></svg>
-                </div>
-                <div className="flex-1">
-                    <h4 className="text-white font-semibold text-sm">Atualização disponível!</h4>
-                    <p className="text-slate-400 text-xs mt-1">Versão {version} pronta para uso.</p>
-                </div>
-                <div className="flex flex-col gap-2">
-                    <button
-                        onClick={onUpdate}
-                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition-colors"
-                    >
-                        Atualizar
-                    </button>
-                    <button
-                        onClick={onClose}
-                        className="text-slate-500 hover:text-white text-[10px] uppercase font-bold text-center"
-                    >
-                        Depois
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}
+
 
 export const useDashboardAuth = () => {
     const context = useContext(AuthContext);

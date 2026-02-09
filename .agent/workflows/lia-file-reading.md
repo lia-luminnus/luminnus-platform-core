@@ -149,7 +149,16 @@ Use o **contexto** (texto do usuário + tipo de arquivo + histórico) para infer
 
 - **Nunca exponha:** tokens, keys, credenciais, tenant_ids em logs
 - **Sempre respeite:** `tenant_id`, `user_id`, scopes de acesso
-- Se detectar leak: eleve como **P0** e proponha mitigação imediata
+- **Se detectar leak:** eleve como **P0** e proponha mitigação imediata
+
+### 5. **PROTOCOLO DE PERSISTÊNCIA (STORAGE) V9.7**
+A persistência de arquivos na LIA é condicionada ao local de envio:
+- **Aba ARQUIVOS (`/files`)**: 
+  - **Ação**: O arquivo DEVE ser salvo no Supabase Storage via `fileService` ANTES da análise.
+  - **Vantagem**: O arquivo fica disponível na lista permanente de documentos do usuário.
+- **Outras Abas (Chat comum)**:
+  - **Ação**: O arquivo é enviado apenas como anexo da conversa.
+  - **Nota**: A persistência no Storage é opcional ou realizada pela API se necessário para análise profunda.
 
 ---
 

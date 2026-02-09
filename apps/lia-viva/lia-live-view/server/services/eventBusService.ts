@@ -196,7 +196,7 @@ export async function emitMessageReceived(
     tenantId: string,
     conversationId: string,
     contactId: string,
-    message: { type: string; body?: string; mediaId?: string }
+    message: { type: string; body?: string; mediaId?: string; interactive?: any }
 ): Promise<void> {
     await emitEvent({
         type: 'message_received',

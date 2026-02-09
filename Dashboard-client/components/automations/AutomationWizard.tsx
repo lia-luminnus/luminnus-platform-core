@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Sparkles, Clock, Zap, Globe, Save } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { getApiUrl } from '../../config/api';
 
 interface AutomationWizardProps {
     isOpen: boolean;
@@ -27,7 +28,7 @@ const AutomationWizard: React.FC<AutomationWizardProps> = ({ isOpen, onClose, on
                 { id: '5', type: 'log', data: { message: 'Fluxo concluído com sucesso.' } }
             ];
 
-            const res = await fetch('/api/automations', {
+            const res = await fetch(`${getApiUrl()}/api/automations`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -58,7 +59,7 @@ const AutomationWizard: React.FC<AutomationWizardProps> = ({ isOpen, onClose, on
 
     return (
         <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md">
-            <motion.div 
+            <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className="w-full max-w-lg bg-white dark:bg-[#0D111C] rounded-3xl shadow-2xl overflow-hidden border border-gray-200 dark:border-white/10"
@@ -77,7 +78,7 @@ const AutomationWizard: React.FC<AutomationWizardProps> = ({ isOpen, onClose, on
                     {/* Step 1: Name */}
                     <div className="space-y-4">
                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Nome da Automação</label>
-                        <input 
+                        <input
                             type="text"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
@@ -99,10 +100,10 @@ const AutomationWizard: React.FC<AutomationWizardProps> = ({ isOpen, onClose, on
                                 <button
                                     key={trigger.id}
                                     onClick={() => setTriggerType(trigger.id)}
-                                    className={`flex items-center gap-3 p-4 rounded-2xl border transition-all ${triggerType === trigger.id 
-                                        ? 'bg-brand-primary/10 border-brand-primary text-brand-primary shadow-sm' 
+                                    className={`flex items-center gap-3 p-4 rounded-2xl border transition-all ${triggerType === trigger.id
+                                        ? 'bg-brand-primary/10 border-brand-primary text-brand-primary shadow-sm'
                                         : 'bg-white dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-500 hover:border-gray-300 dark:hover:border-white/20'
-                                    }`}
+                                        }`}
                                 >
                                     {trigger.icon}
                                     <span className="text-xs font-bold uppercase tracking-tighter">{trigger.label}</span>
@@ -111,7 +112,7 @@ const AutomationWizard: React.FC<AutomationWizardProps> = ({ isOpen, onClose, on
                         </div>
                     </div>
 
-                    <button 
+                    <button
                         onClick={handleSubmit}
                         disabled={!name || loading}
                         className="w-full py-4 rounded-2xl bg-brand-primary text-white font-black uppercase tracking-widest shadow-xl shadow-brand-primary/30 hover:opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-2"

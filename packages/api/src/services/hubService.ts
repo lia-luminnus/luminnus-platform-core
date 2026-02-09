@@ -163,6 +163,90 @@ export class HubService {
         return data;
     }
 
+    // --- Synchronization & Ingestion ---
+    static async findKeyByToken(token: string) {
+        const { data, error } = await supabase
+            .from('hub_keys')
+            .select('*')
+            .eq('api_key', token)
+            .eq('status', 'active')
+            .maybeSingle();
+
+        if (error) throw error;
+        return data;
+    }
+
+    static async processSync(tenantId: string, type: string, externalData: any) {
+        try {
+            // 1. Log the incoming sync request
+            const { data: logEntry, error: logError } = await supabase
+                .from('hub_logs')
+                .insert([{
+                    tenant_id: tenantId,
+                    source: 'webhook',
+                    event_type: `sync_${type}`,
+                    payload: externalData,
+                    status: 'pending'
+                }])
+                .select()
+                .single();
+
+            if (logError) throw logError;
+
+            // 2. Resolve Mapping (Optional: check if there's a custom mapping)
+            const { data: mapping } = await supabase
+                .from('hub_mappings')
+                .select('*')
+                .eq('tenant_id', tenantId)
+                .eq('model_type', type)
+                .maybeSingle();
+
+            const finalData = mapping ? this.normalizeData(externalData, mapping) : externalData;
+
+            // 3. Update Database based on type
+            let result;
+            if (type === 'product' || type === 'products') {
+                const products = Array.isArray(finalData) ? finalData : [finalData];
+                const dbData = products.map(p => ({
+                    ...p,
+                    tenant_id: tenantId,
+                    updated_at: new Date().toISOString()
+                }));
+
+                const { error } = await supabase
+                    .from('products')
+                    .upsert(dbData, { onConflict: 'id' });
+                if (error) throw error;
+                result = { count: dbData.length };
+            } else if (type === 'property' || type === 'properties') {
+                const properties = Array.isArray(finalData) ? finalData : [finalData];
+                const dbData = properties.map(p => ({
+                    ...p,
+                    tenant_id: tenantId,
+                    updated_at: new Date().toISOString()
+                }));
+
+                const { error } = await supabase
+                    .from('properties')
+                    .upsert(dbData, { onConflict: 'id' });
+                if (error) throw error;
+                result = { count: dbData.length };
+            }
+
+            // 4. Update Log status
+            await supabase
+                .from('hub_logs')
+                .update({ status: 'success' })
+                .eq('id', logEntry.id);
+
+            return { success: true, result };
+
+        } catch (error: any) {
+            console.error(`❌ [HubService] Sync Error:`, error.message);
+            return { success: false, error: error.message };
+        }
+    }
+
     // --- Data Normalization Logic ---
     static normalizeData(externalData: any, mapping: HubMapping) {
         const normalized: any = {};

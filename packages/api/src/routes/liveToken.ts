@@ -6,6 +6,7 @@ export const liveTokenRouter: Router = Router();
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
+const CORE_BACKEND_URL = process.env.LIA_CORE_API_URL || process.env.CORE_API_URL || 'http://127.0.0.1:3000';
 
 /**
  * GET /api/live-token
@@ -39,31 +40,43 @@ liveTokenRouter.get('/', async (req: Request, res: Response) => {
 
         console.log(`[LiveToken] Gerando token para user=${userId}, conv=${conversationId}`);
 
-        // Buscar a chave do Gemini das variáveis de ambiente
-        const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+        const search = new URLSearchParams();
+        if (conversationId) search.set('conversationId', conversationId);
 
-        if (!geminiKey) {
-            console.error('[LiveToken] ❌ GEMINI_API_KEY não configurada!');
-            return res.status(500).json({
+        const upstreamUrl = `${CORE_BACKEND_URL}/api/live-token${search.toString() ? `?${search.toString()}` : ''}`;
+        const upstreamRes = await fetch(upstreamUrl, {
+            method: 'GET',
+            headers: {
+                'Authorization': req.headers.authorization || '',
+                'X-User-Id': userId,
+            },
+        });
+
+        const upstreamPayload: any = await upstreamRes.json().catch(() => ({}));
+
+        if (!upstreamRes.ok) {
+            console.error('[LiveToken] ❌ Falha no backend core:', upstreamPayload);
+            return res.status(upstreamRes.status).json({
                 ok: false,
-                error: 'Gemini API key not configured on server'
+                error: upstreamPayload?.error || 'Failed to generate ephemeral token from core backend',
             });
         }
 
-        // Gerar token efêmero (formato compatível com o frontend)
-        const ephemeralToken = {
-            token: geminiKey, // Retornar a chave real para o frontend
-            expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hora
-            conversationId: conversationId || null,
-            userId: userId
-        };
+        if (!upstreamPayload?.token) {
+            return res.status(502).json({
+                ok: false,
+                error: 'Core backend returned invalid live token payload',
+            });
+        }
 
-        console.log('[LiveToken] ✅ Token gerado com sucesso');
+        console.log('[LiveToken] ✅ Token efêmero recebido do backend core');
 
         return res.json({
             ok: true,
-            ...ephemeralToken,
-            apiKey: geminiKey // Também retornar como apiKey para compatibilidade
+            token: upstreamPayload.token,
+            expiresAt: upstreamPayload.expiresAt || null,
+            conversationId: conversationId || upstreamPayload.conversationId || null,
+            userId,
         });
     } catch (err) {
         console.error('[LiveToken] Exception:', err);

@@ -58,9 +58,7 @@ export function QuickActionsBar({ actions, onActionClick, isLoading = false }: Q
             transition={{ delay: 0.3 }}
             className="mt-4 pt-3 border-t border-white/10"
         >
-            <p className="text-xs text-gray-400 mb-2 font-medium uppercase tracking-wider">
-                ⚡ Próximas Ações
-            </p>
+
             <div className="flex flex-wrap gap-2">
                 {actions.map((action, index) => (
                     <motion.button

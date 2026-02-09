@@ -5,7 +5,8 @@
 
 import fetch from 'node-fetch';
 import crypto from 'crypto';
-import { supabase } from '../config/supabase.js';
+import { WhatsAppRepository } from '../repositories/WhatsAppRepository.js';
+import { logAction, logError } from '../utils/logger.js';
 
 interface MetaCredentials {
     phone_number_id: string;
@@ -21,17 +22,11 @@ export const WhatsAppService = {
      */
     async getCredentials(tenantId: string): Promise<MetaCredentials | null> {
         try {
-            const { data, error } = await supabase
-                .from('whatsapp_connections')
-                .select('config_json')
-                .eq('tenant_id', tenantId)
-                .eq('provider', 'meta')
-                .single();
-
-            if (error || !data) return null;
-            return data.config_json as unknown as MetaCredentials;
+            const connection = await WhatsAppRepository.getConnection(tenantId, 'meta');
+            if (!connection) return null;
+            return connection.config_json as unknown as MetaCredentials;
         } catch (err) {
-            console.error(`❌ [WhatsAppService] Erro ao buscar credenciais para ${tenantId}:`, err);
+            logError('WhatsAppService', err, `Erro ao buscar credenciais para ${tenantId}`);
             return null;
         }
     },
@@ -67,14 +62,56 @@ export const WhatsAppService = {
 
             if (!response.ok) {
                 const errorData = await response.json() as any;
+                logError('WhatsAppService', errorData, 'Erro ao enviar mensagem via Meta API');
                 throw new Error(errorData.error?.message || response.statusText);
             }
 
             const data = await response.json() as any;
-            console.log(`✅ [WhatsAppService] Mensagem enviada para ${to}: ${data.messages[0].id}`);
+            logAction('WhatsAppService', 'sendMessage', 'Mensagem enviada com sucesso', { to, messageId: data.messages?.[0]?.id });
             return data;
         } catch (error: any) {
-            console.error(`❌ [WhatsAppService] Erro ao enviar mensagem:`, error.message);
+            logError('WhatsAppService', error, 'Falha no envio de mensagem');
+            throw new Error(`Erro Meta API: ${error.message}`);
+        }
+    },
+
+    /**
+     * Envia mensagem interativa (botões ou listas) via Meta API
+     */
+    async sendInteractiveMessage(tenantId: string, to: string, interactivePayload: any) {
+        const creds = await this.getCredentials(tenantId);
+        if (!creds || !creds.phone_number_id || !creds.access_token) {
+            throw new Error('Credenciais do WhatsApp não configuradas para este tenant');
+        }
+
+        const url = `https://graph.facebook.com/v21.0/${creds.phone_number_id}/messages`;
+
+        const payload = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: to,
+            type: 'interactive',
+            interactive: interactivePayload
+        };
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${creds.access_token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json() as any;
+                throw new Error(errorData.error?.message || response.statusText);
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            logError('WhatsAppService', error, 'Erro ao enviar mensagem interativa');
             throw new Error(`Erro Meta API: ${error.message}`);
         }
     },
@@ -128,7 +165,7 @@ export const WhatsAppService = {
                 mimeType
             };
         } catch (error) {
-            console.error(`❌ [WhatsAppService] Erro ao baixar mídia ${mediaId}:`, error);
+            logError('WhatsAppService', error, `Erro ao baixar mídia ${mediaId}`);
             return null;
         }
     }

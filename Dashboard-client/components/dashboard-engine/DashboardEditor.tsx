@@ -12,6 +12,7 @@ import { useDashboard } from './DashboardContext';
 import { WIDGET_METADATA, getWidgetsByCategory, isWidgetAvailableForPlan } from './WidgetRegistry';
 import { WidgetType, WidgetConfig, LayoutItem } from './types';
 import { LanguageContext } from '../../contexts/LanguageContext';
+import CustomSelect from '../ui/CustomSelect';
 
 
 // ============================================
@@ -213,15 +214,13 @@ function EditWidgetPanel({ widgetId, onClose, onRemove }: { widgetId: string; on
                             <BarChart3 className="w-4 h-4 inline mr-2" />
                             {t('widgetMetric')}
                         </label>
-                        <select
+                        <CustomSelect
                             value={metric}
-                            onChange={(e) => setMetric(e.target.value)}
-                            className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-brand-primary/50"
-                        >
-                            {supportedMetrics.map(m => (
-                                <option key={m} value={m} className="bg-gray-900">{t(`metric_${m}` as any)}</option>
-                            ))}
-                        </select>
+                            onChange={(value) => setMetric(value)}
+                            options={supportedMetrics.map(m => ({ label: t(`metric_${m}` as any), value: m }))}
+                            variant="glass"
+                            className="w-full"
+                        />
                     </div>
                 )}
 

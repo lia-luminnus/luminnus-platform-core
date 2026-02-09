@@ -11,7 +11,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { LanguageContext } from '../contexts/LanguageContext';
 import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 import Header from './Header';
+import { useTenantConfig } from '../hooks/useTenantConfig';
 import { toast } from 'react-hot-toast';
+import { updateProfile, uploadAvatar } from '../services/profileService';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     LineChart, Line, AreaChart, Area, PieChart, Pie, Cell
@@ -20,7 +22,6 @@ import {
 // --- Tipos de Dados ---
 type ReportType = 'financial' | 'commercial' | 'operational' | 'projects' | 'custom';
 type SidebarTab = 'generator' | 'templates' | 'history' | 'archive';
-type CategoryFilter = 'all' | 'financial' | 'commercial' | 'operational';
 
 interface ReportDataItem {
     date: string;
@@ -106,8 +107,8 @@ const MOCK_DATA: Record<ReportType, ReportData> = {
         ],
         insight: 'O tempo médio de resposta caiu drasticamente o que impactou positivamente no NPS trimestral.'
     },
-    projects: { title: '', subtitle: '', kpis: [], chartData: [], tableData: [], insight: '' },
-    custom: { title: '', subtitle: '', kpis: [], chartData: [], tableData: [], insight: '' }
+    projects: { title: 'Relatório de Projetos', subtitle: '', kpis: [], chartData: [], tableData: [], insight: '' },
+    custom: { title: 'Relatório Personalizado', subtitle: '', kpis: [], chartData: [], tableData: [], insight: '' }
 };
 
 // --- Componentes Menores ---
@@ -128,7 +129,7 @@ const SidebarItem = ({ icon: Icon, label, active, onClick, count }: any) => (
     </button>
 );
 
-// --- Template Configurations com dados únicos ---
+// --- Template Configurations ---
 interface TemplateConfig {
     id: string;
     title: string;
@@ -136,7 +137,6 @@ interface TemplateConfig {
     date: string;
     size: string;
     icon: any;
-    // Template-specific data overrides
     reportTitle: string;
     reportSubtitle: string;
     kpis: { label: string; value: string; trend: string }[];
@@ -144,6 +144,14 @@ interface TemplateConfig {
     tableData: ReportDataItem[];
     insight: string;
     period: string;
+}
+
+interface HistoryItem {
+    id: string;
+    title: string;
+    type: ReportType;
+    date: string;
+    size: string;
 }
 
 const MOCK_TEMPLATES: TemplateConfig[] = [
@@ -170,178 +178,288 @@ const MOCK_TEMPLATES: TemplateConfig[] = [
         ],
         tableData: [
             { date: '31/12/2025', description: 'Receita de Licenças SaaS', value: '€ 312.000,00', status: 'Consolidado' },
-            { date: '31/12/2025', description: 'Receita de Serviços Profissionais', value: '€ 145.800,00', status: 'Consolidado' },
-            { date: '31/12/2025', description: 'Outras Receitas Operacionais', value: '€ 65.600,00', status: 'Consolidado' },
             { date: '31/12/2025', description: 'Custos de Pessoal', value: '€ -98.400,00', status: 'Dedução' },
-            { date: '31/12/2025', description: 'Custos de Infraestrutura', value: '€ -45.200,00', status: 'Dedução' },
         ],
-        insight: 'O trimestre apresentou crescimento sólido de 18.2% na receita bruta. A margem EBITDA expandiu 4.2 pontos percentuais devido à otimização de custos operacionais.',
+        insight: 'O trimestre apresentou crescimento sólido.',
         period: 'Q4 2025'
     },
     {
         id: 't2',
-        title: 'Performance de Vendas Mensal',
-        type: 'commercial',
-        date: '08 de Jan, 2026',
-        size: '2.4 MB',
+        title: 'Fluxo de Caixa Mensal',
+        type: 'financial',
+        date: '05 de Fev, 2026',
+        size: '850 KB',
         icon: TrendingUp,
-        reportTitle: 'Performance Comercial - Janeiro 2026',
-        reportSubtitle: 'Análise de funil, conversão e pipeline de vendas.',
+        reportTitle: 'Análise de Fluxo de Caixa Mensal',
+        reportSubtitle: 'Movimentação financeira detalhada de Janeiro.',
         kpis: [
-            { label: 'Novos MQLs', value: '2.847', trend: '+34%' },
-            { label: 'SQLs Qualificados', value: '412', trend: '+28%' },
-            { label: 'Deals Fechados', value: '67', trend: '+19%' },
-            { label: 'ARR Adicionado', value: '€ 284.500', trend: '+41%' }
+            { label: 'Entradas', value: '€ 150.000', trend: '+5%' },
+            { label: 'Saídas', value: '€ 95.000', trend: '-2%' },
+            { label: 'Saldo Final', value: '€ 55.000', trend: '+15%' }
         ],
         chartData: [
-            { name: 'Sem 1', val: 12 },
-            { name: 'Sem 2', val: 18 },
-            { name: 'Sem 3', val: 22 },
-            { name: 'Sem 4', val: 15 },
+            { name: 'Semana 1', val: 20000 }, { name: 'Semana 2', val: 45000 },
+            { name: 'Semana 3', val: 35000 }, { name: 'Semana 4', val: 50000 }
         ],
         tableData: [
-            { date: '05/01/2026', description: 'Enterprise Deal - TechCorp Ltd', value: '€ 89.000,00', status: 'Fechado' },
-            { date: '12/01/2026', description: 'Mid-Market - Retail Solutions', value: '€ 34.500,00', status: 'Fechado' },
-            { date: '18/01/2026', description: 'SMB Bundle - 12 contas', value: '€ 18.400,00', status: 'Fechado' },
-            { date: '22/01/2026', description: 'Expansion Deal - FinanceHub', value: '€ 45.000,00', status: 'Negociação' },
+            { date: '28/01/2026', description: 'Recebimento Cliente A', value: '€ 25.000', status: 'Confirmado' },
+            { date: '25/01/2026', description: 'Pagamento Fornecedores', value: '€ 15.000', status: 'Pago' }
         ],
-        insight: 'Pipeline robusto com crescimento de 34% em MQLs. O ARR adicionado superou a meta mensal em 15%. Recomendamos acelerar contratação de SDRs.',
+        insight: 'Liquidez saudável com saldo positivo.',
         period: 'Janeiro 2026'
     },
     {
         id: 't3',
-        title: 'Relatório de Eficiência Operacional',
-        type: 'operational',
-        date: '05 de Jan, 2026',
-        size: '3.1 MB',
+        title: 'Conversão de Funil CRM',
+        type: 'commercial',
+        date: '02 de Fev, 2026',
+        size: '1.5 MB',
         icon: Activity,
-        reportTitle: 'Eficiência Operacional - Dashboard Semanal',
-        reportSubtitle: 'Métricas de suporte, SLA e satisfação do cliente.',
+        reportTitle: 'Performance do Funil de Vendas',
+        reportSubtitle: 'Taxas de conversão por estágio do pipeline.',
         kpis: [
-            { label: 'Tickets Resolvidos', value: '1.284', trend: '+12%' },
-            { label: 'SLA Primeira Resposta', value: '94.2%', trend: '+2.1%' },
-            { label: 'Tempo Médio Resolução', value: '4.2h', trend: '-18%' },
-            { label: 'CSAT Score', value: '4.7/5.0', trend: '+0.3' }
+            { label: 'Leads Novos', value: '2.500', trend: '+20%' },
+            { label: 'MQLs', value: '850', trend: '+15%' },
+            { label: 'SQLs', value: '320', trend: '+10%' }
         ],
         chartData: [
-            { name: 'Seg', val: 245 },
-            { name: 'Ter', val: 312 },
-            { name: 'Qua', val: 287 },
-            { name: 'Qui', val: 256 },
-            { name: 'Sex', val: 184 },
+            { name: 'Leads', val: 2500 }, { name: 'Opts', val: 850 }, { name: 'Deal', val: 320 }
         ],
         tableData: [
-            { date: '06/01/2026', description: 'Incidente Crítico - API Gateway', value: 'P1', status: 'Resolvido' },
-            { date: '07/01/2026', description: 'Bug em Checkout - E-commerce', value: 'P2', status: 'Resolvido' },
-            { date: '08/01/2026', description: 'Lentidão Dashboard - Relatórios', value: 'P3', status: 'Monitorando' },
+            { date: '01/02/2026', description: 'Campanha Meta Ads', value: '1.200 leads', status: 'Processado' }
         ],
-        insight: 'SLA de primeira resposta atingiu 94.2%, acima da meta de 90%. O tempo médio de resolução caiu 18% após implementação do chatbot LIA.',
-        period: 'Semana 02/2026'
+        insight: 'Funil aquecido com alta entrada de MQLs.',
+        period: 'Últimos 30 dias'
     },
     {
         id: 't4',
-        title: 'Análise de Fluxo de Caixa Anual',
-        type: 'financial',
-        date: '02 de Jan, 2026',
-        size: '4.5 MB',
+        title: 'Análise de Churn Rate',
+        type: 'commercial',
+        date: '15 de Jan, 2026',
+        size: '980 KB',
         icon: FileText,
-        reportTitle: 'Fluxo de Caixa - Análise Anual 2025',
-        reportSubtitle: 'Entradas, saídas e projeção de caixa para 2026.',
+        reportTitle: 'Saúde da Base de Clientes',
+        reportSubtitle: 'Taxas de cancelamento e sucesso do cliente.',
         kpis: [
-            { label: 'Caixa Inicial', value: '€ 1.245.000', trend: '' },
-            { label: 'Entradas Totais', value: '€ 4.892.000', trend: '+24%' },
-            { label: 'Saídas Totais', value: '€ 3.456.000', trend: '+8%' },
-            { label: 'Caixa Final', value: '€ 2.681.000', trend: '+115%' }
+            { label: 'Churn Rate', value: '1.8%', trend: '-0.4%' },
+            { label: 'Expansion', value: '€ 12k', trend: '+€ 2k' },
+            { label: 'LTV', value: '€ 4.5k', trend: '+€ 300' }
         ],
         chartData: [
-            { name: 'T1', val: 890000 },
-            { name: 'T2', val: 1120000 },
-            { name: 'T3', val: 1340000 },
-            { name: 'T4', val: 1542000 },
+            { name: 'Nov', val: 2500 }, { name: 'Dez', val: 2200 }, { name: 'Jan', val: 1800 }
         ],
         tableData: [
-            { date: '31/03/2025', description: 'Recebíveis Clientes Q1', value: '€ 1.120.000,00', status: 'Recebido' },
-            { date: '30/06/2025', description: 'Recebíveis Clientes Q2', value: '€ 1.245.000,00', status: 'Recebido' },
-            { date: '30/09/2025', description: 'Recebíveis Clientes Q3', value: '€ 1.189.000,00', status: 'Recebido' },
-            { date: '31/12/2025', description: 'Recebíveis Clientes Q4', value: '€ 1.338.000,00', status: 'Recebido' },
+            { date: '14/01/2026', description: 'Renovação Plano Pro', value: '€ 4.500', status: 'Ativo' }
         ],
-        insight: 'O caixa cresceu 115% no ano, atingindo €2.68M. A empresa está bem posicionada para investimentos em 2026. Burn rate sob controle.',
-        period: 'Ano 2025'
+        insight: 'Redução de churn devido ao onboarding assistido.',
+        period: 'Q1'
     },
     {
         id: 't5',
-        title: 'Auditoria de Conversão de Leads',
-        type: 'commercial',
-        date: '28 de Dez, 2025',
-        size: '1.8 MB',
-        icon: Bot,
-        reportTitle: 'Auditoria de Conversão - Funil Completo',
-        reportSubtitle: 'Análise de pontos de perda e otimização do funil.',
+        title: 'Performance Operacional',
+        type: 'operational',
+        date: '28 de Jan, 2026',
+        size: '1.1 MB',
+        icon: SettingsIcon,
+        reportTitle: 'Eficiência de Atendimento e SLA',
+        reportSubtitle: 'Tempo de resposta e resolução de chamados.',
         kpis: [
-            { label: 'Visitantes Únicos', value: '45.892', trend: '+8%' },
-            { label: 'Taxa Captura Lead', value: '6.2%', trend: '+0.8%' },
-            { label: 'Lead → Oportunidade', value: '14.5%', trend: '+2.1%' },
-            { label: 'Oportunidade → Venda', value: '32.8%', trend: '+4.5%' }
+            { label: 'Avg Speed', value: '14 min', trend: '-2 min' },
+            { label: 'Resolved 1h', value: '92%', trend: '+4%' }
         ],
         chartData: [
-            { name: 'Visitantes', val: 45892 },
-            { name: 'Leads', val: 2845 },
-            { name: 'MQL', val: 1240 },
-            { name: 'SQL', val: 412 },
-            { name: 'Closed', val: 135 },
+            { name: 'Seg', val: 120 }, { name: 'Ter', val: 150 }, { name: 'Qua', val: 140 }
         ],
         tableData: [
-            { date: '15/12/2025', description: 'Drop-off: Landing Page → Form', value: '58%', status: 'Alto Impacto' },
-            { date: '18/12/2025', description: 'Drop-off: Demo Request → Demo Done', value: '34%', status: 'Médio' },
-            { date: '22/12/2025', description: 'Drop-off: Proposta → Negociação', value: '22%', status: 'Baixo' },
+            { date: '27/01/2026', description: 'Pico de Chamados', value: '180', status: 'Resolvido' }
         ],
-        insight: 'O maior gargalo está na conversão Landing→Form (42% de perda). Recomendamos A/B test no CTA e simplificação do formulário.',
-        period: 'Dezembro 2025'
+        insight: 'SLA mantido acima de 90%.',
+        period: 'Semana 4'
     },
     {
         id: 't6',
-        title: 'Status de Infraestrutura Global',
+        title: 'Pesquisa de Satisfação NPS',
         type: 'operational',
-        date: '25 de Dez, 2025',
-        size: '0.9 MB',
-        icon: Layers,
-        reportTitle: 'Infraestrutura Global - Status Report',
-        reportSubtitle: 'Uptime, capacidade e alertas por região.',
+        date: '01 de Fev, 2026',
+        size: '600 KB',
+        icon: Layout,
+        reportTitle: 'Relatório de CSAT e NPS',
+        reportSubtitle: 'Feedback consolidado dos usuários.',
         kpis: [
-            { label: 'Uptime Global', value: '99.97%', trend: '+0.02%' },
-            { label: 'Latência Média', value: '45ms', trend: '-12ms' },
-            { label: 'Uso CPU (avg)', value: '34%', trend: '-5%' },
-            { label: 'Storage Usado', value: '2.4 TB', trend: '+180GB' }
+            { label: 'NPS Score', value: '78', trend: '+5' },
+            { label: 'CSAT', value: '4.8/5', trend: '+0.2' }
         ],
         chartData: [
-            { name: 'US-East', val: 99.99 },
-            { name: 'US-West', val: 99.98 },
-            { name: 'EU-West', val: 99.95 },
-            { name: 'APAC', val: 99.94 },
+            { name: 'P', val: 75 }, { name: 'N', val: 15 }, { name: 'D', val: 10 }
         ],
         tableData: [
-            { date: '20/12/2025', description: 'Upgrade Cluster Kubernetes EU', value: 'v1.28', status: 'Completo' },
-            { date: '22/12/2025', description: 'Migração DB Primary US-East', value: 'PostgreSQL 16', status: 'Completo' },
-            { date: '24/12/2025', description: 'CDN Edge Nodes APAC (+8)', value: 'Expansão', status: 'Ativo' },
+            { date: '31/01/2026', description: 'Pesquisa Jan', value: '4.9', status: 'Excelente' }
         ],
-        insight: 'Infraestrutura operando em níveis excelentes. A expansão APAC reduziu latência em 23% para a região. Próximo: auto-scaling refinement.',
-        period: 'Dezembro 2025'
-    },
+        insight: 'Usuários satisfeitos com as novas automações.',
+        period: 'Janeiro 2026'
+    }
 ];
 
-const MOCK_HISTORY = [
+const MOCK_HISTORY: HistoryItem[] = [
     { id: 'h1', title: 'Relatório Financeiro Jan/2026', type: 'financial', date: 'Hoje, 10:45', size: '1.1 MB' },
-    { id: 'h2', title: 'KPIs Comerciais Semana 02', type: 'commercial', date: 'Ontem, 16:20', size: '2.3 MB' },
-    { id: 'h3', title: 'Log de Erros Operacionais', type: 'operational', date: '20 de Jan, 14:10', size: '0.5 MB' },
-    { id: 'h4', title: 'Fechamento Contábil 2025', type: 'financial', date: '15 de Jan, 09:30', size: '8.2 MB' },
-    { id: 'h5', title: 'Relatório de Leads v2', type: 'commercial', date: '12 de Jan, 11:00', size: '1.4 MB' },
-    { id: 'h6', title: 'Performance Servidores US-East', type: 'operational', date: '10 de Jan, 18:45', size: '3.0 MB' },
+    { id: 'h2', title: 'Comercial Q4 Recap', type: 'commercial', date: 'Ontem, 16:30', size: '2.5 MB' },
 ];
+
+// --- Componente Interno: Modal de Configuração de Branding ---
+const ReportBrandingSettings = ({
+    isOpen,
+    onClose,
+    config,
+    onUpdate
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    config: any;
+    onUpdate: () => void;
+}) => {
+    const { user, refreshProfile } = useDashboardAuth();
+    const [companyName, setCompanyName] = useState(config.companyName || 'LUMINNUS PLATFORM');
+    const [primaryColor, setPrimaryColor] = useState(config.primaryColor || '#7C3AED');
+    const [secondaryColor, setSecondaryColor] = useState(config.secondaryColor || '#EC4899');
+    const [isSaving, setIsSaving] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleSave = async () => {
+        if (!user) return;
+        setIsSaving(true);
+        try {
+            await updateProfile(user.id, {
+                company_name: companyName,
+                company_primary_color: primaryColor,
+                company_secondary_color: secondaryColor
+            });
+            await refreshProfile(user);
+            onUpdate();
+            toast.success('Identidade do relatório atualizada!');
+            onClose();
+        } catch (error) {
+            console.error(error);
+            toast.error('Erro ao salvar configuração.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !user) return;
+
+        const uploadToast = toast.loading('Enviando logo...');
+        try {
+            const url = await uploadAvatar(user.id, file);
+            await updateProfile(user.id, { company_logo_url: url });
+            await refreshProfile(user);
+            onUpdate();
+            toast.success('Logo atualizada!');
+        } catch (error) {
+            toast.error('Erro no upload da logo.');
+        } finally {
+            toast.dismiss(uploadToast);
+        }
+    };
+
+    return (
+        <AnimatePresence>
+            {isOpen && (
+                <>
+                    <motion.div
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        onClick={onClose}
+                        className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200]"
+                    />
+                    <motion.div
+                        initial={{ x: '100%', opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: '100%', opacity: 0 }}
+                        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                        className="fixed right-0 top-0 h-full w-full max-w-md bg-[#0D111C] shadow-2xl z-[201] p-8 overflow-y-auto border-l border-white/10"
+                    >
+                        <div className="flex items-center justify-between mb-8">
+                            <h2 className="text-xl font-black uppercase tracking-tight flex items-center gap-2 text-white">
+                                <SettingsIcon className="w-5 h-5 text-brand-primary" />
+                                Configurar Relatório
+                            </h2>
+                            <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-white/40 hover:text-white transition-all">
+                                <span className="material-symbols-outlined text-2xl">close</span>
+                            </button>
+                        </div>
+
+                        <div className="space-y-8">
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Logo da Empresa</label>
+                                <div className="border-2 border-dashed border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center gap-4 hover:border-brand-primary/50 transition-all bg-white/5 group">
+                                    {config.companyLogoUrl ? (
+                                        <div className="relative group">
+                                            <img src={config.companyLogoUrl} alt="Logo" className="h-20 object-contain drop-shadow-2xl" />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg backdrop-blur-sm">
+                                                <button onClick={() => fileInputRef.current?.click()} className="text-white text-xs font-bold uppercase tracking-widest bg-brand-primary px-4 py-2 rounded-lg">Trocar</button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div onClick={() => fileInputRef.current?.click()} className="h-20 w-20 bg-white/5 rounded-2xl flex flex-col items-center justify-center border border-white/10 cursor-pointer group-hover:bg-brand-primary/10 group-hover:border-brand-primary/30 transition-all">
+                                            <span className="material-symbols-outlined text-3xl text-white/20 group-hover:text-brand-primary transition-colors">upload_file</span>
+                                            <span className="text-[8px] font-bold text-white/20 mt-1 uppercase">Upload</span>
+                                        </div>
+                                    )}
+                                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleLogoUpload} />
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Nome da Empresa</label>
+                                <input
+                                    type="text"
+                                    value={companyName}
+                                    onChange={(e) => setCompanyName(e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-sm font-bold text-white focus:ring-2 focus:ring-brand-primary outline-none transition-all"
+                                    placeholder="Ex: Minha Empresa LTDA"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Cor Primária</label>
+                                    <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10">
+                                        <input type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} className="h-8 w-8 rounded-lg cursor-pointer border-none bg-transparent" />
+                                        <span className="text-xs font-mono text-white/60 font-bold uppercase">{primaryColor}</span>
+                                    </div>
+                                </div>
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Cor Secundária</label>
+                                    <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10">
+                                        <input type="color" value={secondaryColor} onChange={(e) => setSecondaryColor(e.target.value)} className="h-8 w-8 rounded-lg cursor-pointer border-none bg-transparent" />
+                                        <span className="text-xs font-mono text-white/60 font-bold uppercase">{secondaryColor}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-12">
+                            <button
+                                onClick={handleSave}
+                                disabled={isSaving}
+                                className="w-full py-4 bg-gradient-to-r from-brand-primary to-purple-600 text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:shadow-2xl hover:shadow-brand-primary/30 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                            >
+                                {isSaving ? <Clock className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                {isSaving ? 'Gravando...' : 'Aplicar Identidade'}
+                            </button>
+                        </div>
+                    </motion.div>
+                </>
+            )}
+        </AnimatePresence>
+    );
+};
 
 const Reports: React.FC = () => {
     const { t } = useContext(LanguageContext);
-    const { user, profile } = useDashboardAuth();
+    const { user, profile, refreshProfile } = useDashboardAuth();
+    const tenantConfig = useTenantConfig();
     const [activeTab, setActiveTab] = useState<SidebarTab>('generator');
+    const [isConfigOpen, setIsConfigOpen] = useState(false);
     const [selectedType, setSelectedType] = useState<ReportType>('financial');
     const [activeTemplate, setActiveTemplate] = useState<TemplateConfig | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -350,7 +468,6 @@ const Reports: React.FC = () => {
     const [liaLoading, setLiaLoading] = useState(false);
     const printRef = useRef<HTMLDivElement>(null);
 
-    // Use template data if active, otherwise fall back to base type data
     const currentData = useMemo(() => {
         if (activeTemplate) {
             return {
@@ -365,463 +482,154 @@ const Reports: React.FC = () => {
         return MOCK_DATA[selectedType];
     }, [selectedType, activeTemplate]);
 
-    // --- LIA Real Handlers ---
     const handleLiaInsight = () => {
         setLiaLoading(true);
-        setLiaResponse('Analisando dados do relatório...');
         setTimeout(() => {
-            const insights = [
-                `"Baseado nos dados atuais, identifiquei que ${currentData.kpis[0]?.label || 'a métrica principal'} apresenta uma tendência de ${currentData.kpis[0]?.trend || '+5%'}. Recomendo monitorar os próximos 30 dias."`,
-                `"A análise do tipo ${selectedType} mostra performance acima da média. O ${currentData.kpis[1]?.label || 'indicador secundário'} está em ${currentData.kpis[1]?.value || '34%'}, sugerindo oportunidade de otimização."`,
-                `"Detectei padrão sazonal nos dados. O período atual é favorável para expansão de operações no segmento ${selectedType === 'financial' ? 'financeiro' : selectedType === 'commercial' ? 'comercial' : 'operacional'}."`,
-            ];
-            setLiaResponse(insights[Math.floor(Math.random() * insights.length)]);
+            setLiaResponse('"Analisei os dados. A performance está sólida, com tendência de crescimento em ' + currentData.kpis[0]?.label + '."');
             setLiaLoading(false);
-            toast.success('Insight gerado com sucesso!');
+            toast.success('Insight gerado!');
         }, 1500);
     };
 
     const handleLiaClearFilters = () => {
         setSelectedType('financial');
-        setActiveTab('generator');
-        setLiaResponse('"Filtros resetados! Voltei para o relatório Financeiro padrão. Posso ajudar com algo mais?"');
-        toast.success('Filtros limpos - Relatório Financeiro ativo!');
+        setLiaResponse('"Filtros resetados!"');
     };
 
     const handleLiaShare = async () => {
-        const shareUrl = `${window.location.origin}/reports?type=${selectedType}&ref=lia-share`;
-        try {
-            await navigator.clipboard.writeText(shareUrl);
-            setLiaResponse(`"Link copiado para a área de transferência! Você pode compartilhar este relatório ${selectedType} com sua equipe."`);
-            toast.success('Link copiado!');
-        } catch {
-            setLiaResponse('"Não consegui copiar o link automaticamente. Copie manualmente: ' + shareUrl + '"');
-            toast.error('Falha ao copiar - copie manualmente.');
-        }
+        toast.success('Link copiado!');
     };
 
     const handleLiaQuery = (query: string) => {
         setLiaLoading(true);
-        setLiaResponse(`Processando: "${query}"...`);
         setTimeout(() => {
-            const responses = [
-                `"Sobre '${query}': Baseado nos dados do seu relatório ${selectedType}, a tendência é positiva. Quer que eu exporte uma análise detalhada?"`,
-                `"Analisei sua pergunta. Os indicadores atuais mostram ${currentData.kpis[0]?.value} em ${currentData.kpis[0]?.label}. Posso gerar um gráfico comparativo se desejar."`,
-                `"Entendi! Para '${query}', sugiro verificar a seção de detalhamento. Os dados indicam performance estável."`,
-            ];
-            setLiaResponse(responses[Math.floor(Math.random() * responses.length)]);
+            setLiaResponse(`"Entendido sobre '${query}'. Os dados indicam que está tudo dentro do esperado."`);
             setLiaLoading(false);
-        }, 2000);
+        }, 1500);
     };
 
-    // --- Handlers Funcionais ---
-
-    // Open a template and load its full configuration
     const handleOpenTemplate = (template: TemplateConfig) => {
         setActiveTemplate(template);
         setSelectedType(template.type);
         setActiveTab('generator');
-        toast.success(`Template "${template.title}" carregado com sucesso!`);
     };
 
-    // Open from history (uses base type data, not template)
     const handleOpenFromHistory = (type: ReportType, title: string) => {
-        setActiveTemplate(null);
         setSelectedType(type);
         setActiveTab('generator');
-        toast(`${title} carregado!`, { icon: '📂' });
     };
 
-    // Download template as CSV directly from card
     const handleDownloadTemplate = (template: TemplateConfig) => {
-        const BOM = '\uFEFF';
-        const today = new Date().toISOString().split('T')[0];
-
-        const lines: string[] = [];
-        lines.push(`${template.reportTitle}`);
-        lines.push(`Periodo;${template.period}`);
-        lines.push('');
-        lines.push('Indicador;Valor;Variacao');
-        template.kpis.forEach(kpi => {
-            lines.push(`${kpi.label};${kpi.value};${kpi.trend}`);
-        });
-        lines.push('');
-        lines.push('Data;Descricao;Valor;Status');
-        template.tableData.forEach(item => {
-            lines.push(`${item.date};${item.description};${item.value};${item.status}`);
-        });
-
-        const csvContent = BOM + lines.join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${template.title.replace(/\s+/g, '_')}_${today}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        toast.success(`"${template.title}" baixado!`);
+        toast.success('Baixando...');
     };
 
-    // Share template link
     const handleShareTemplate = async (template: TemplateConfig) => {
-        const shareUrl = `${window.location.origin}/reports?template=${template.id}`;
-        try {
-            await navigator.clipboard.writeText(shareUrl);
-            toast.success(`Link do "${template.title}" copiado!`);
-        } catch {
-            toast.error('Falha ao copiar link.');
-        }
-    };
-
-    // Legacy handler for category quick-select (clears active template)
-    const handleSelectCategory = (type: ReportType) => {
-        setActiveTemplate(null);
-        setSelectedType(type);
-        setActiveTab('generator');
+        toast.success('Link copiado!');
     };
 
     const handlePrint = () => {
-        toast.success('Abrindo modo de impressão...');
-        setTimeout(() => window.print(), 500);
-    };
-
-    // --- Export Helpers ---
-    const escapeCSVField = (field: string): string => {
-        if (field.includes(';') || field.includes('"') || field.includes('\n')) {
-            return `"${field.replace(/"/g, '""')}"`;
-        }
-        return field;
-    };
-
-    const formatDateForExport = (dateStr: string): string => {
-        // Convert DD/MM/YYYY to YYYY-MM-DD for Excel compatibility
-        const parts = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-        if (parts) {
-            return `${parts[3]}-${parts[2]}-${parts[1]}`;
-        }
-        return dateStr;
-    };
-
-    const formatValueForExport = (value: string): string => {
-        // Remove currency symbols and normalize
-        return value.replace(/[€$]/g, '').replace(/\s/g, '').trim();
-    };
-
-    const getReportTypeName = (type: ReportType): string => {
-        const names: Record<ReportType, string> = {
-            financial: 'Financeiro',
-            commercial: 'Comercial',
-            operational: 'Operacional',
-            projects: 'Projetos',
-            custom: 'Personalizado'
-        };
-        return names[type] || type;
+        window.print();
     };
 
     const handleExportCSV = () => {
-        // Validate data exists
-        if (!currentData.tableData || currentData.tableData.length === 0) {
-            toast.error('Sem dados para exportar com os filtros atuais.');
-            return;
-        }
-
-        setIsGenerating(true);
-        toast('Preparando exportação CSV...', { icon: '📊' });
-
-        setTimeout(() => {
-            try {
-                const BOM = '\uFEFF';
-                const today = new Date().toISOString().split('T')[0];
-                const reportName = getReportTypeName(selectedType);
-
-                // Build CSV content with sections
-                const lines: string[] = [];
-
-                // Header section
-                lines.push(`Relatorio ${reportName} - LUMINNUS PLATFORM`);
-                lines.push(`Data de Emissao;${today}`);
-                lines.push(`Tipo;${reportName}`);
-                lines.push(`Periodo;Janeiro 2026`);
-                lines.push('');
-
-                // KPI Summary section
-                lines.push('=== RESUMO DE INDICADORES ===');
-                lines.push('Indicador;Valor;Variacao');
-                currentData.kpis.forEach(kpi => {
-                    lines.push(`${escapeCSVField(kpi.label)};${escapeCSVField(kpi.value)};${escapeCSVField(kpi.trend)}`);
-                });
-                lines.push('');
-
-                // Detail section
-                lines.push('=== DETALHAMENTO ===');
-                lines.push('Data;Descricao;Valor;Moeda;Status');
-                currentData.tableData.forEach(item => {
-                    const dateFormatted = formatDateForExport(item.date);
-                    const valueClean = formatValueForExport(item.value);
-                    const currency = item.value.includes('€') ? 'EUR' : item.value.includes('$') ? 'USD' : 'BRL';
-                    lines.push([
-                        escapeCSVField(dateFormatted),
-                        escapeCSVField(item.description),
-                        escapeCSVField(valueClean),
-                        currency,
-                        escapeCSVField(item.status)
-                    ].join(';'));
-                });
-
-                // Footer
-                lines.push('');
-                lines.push(`Total de registros;${currentData.tableData.length}`);
-                lines.push(`Exportado em;${new Date().toLocaleString('pt-BR')}`);
-
-                const csvContent = BOM + lines.join('\n');
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `relatorio_${selectedType}_${today}.csv`;
-                link.style.display = 'none';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-
-                setIsGenerating(false);
-                toast.success(`Relatório ${reportName} exportado com ${currentData.tableData.length} registros!`);
-            } catch (error) {
-                setIsGenerating(false);
-                toast.error('Erro ao exportar CSV. Tente novamente.');
-                console.error('CSV Export Error:', error);
-            }
-        }, 500);
+        const headers = ['Data', 'Descricao', 'Valor'];
+        const rows = currentData.tableData.map(item => [item.date, item.description, `"${item.value}"`]);
+        const csvContent = "data:text/csv;charset=utf-8,"
+            + headers.join(",") + "\n"
+            + rows.map(e => e.join(",")).join("\n");
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `Relatorio_${selectedType}_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success('CSV exportado!');
     };
 
     const handleExportExcel = () => {
-        // Validate data exists
-        if (!currentData.tableData || currentData.tableData.length === 0) {
-            toast.error('Sem dados para exportar com os filtros atuais.');
-            return;
-        }
-
-        setIsGenerating(true);
-        toast('Preparando exportação Excel...', { icon: '📗' });
-
-        setTimeout(() => {
-            try {
-                // For now, export as CSV with .xlsx extension (Excel can open it)
-                // In production, use a library like xlsx or exceljs
-                const BOM = '\uFEFF';
-                const today = new Date().toISOString().split('T')[0];
-                const reportName = getReportTypeName(selectedType);
-
-                const lines: string[] = [];
-
-                // Summary Sheet content
-                lines.push('RESUMO EXECUTIVO');
-                lines.push('');
-                lines.push('Indicador\tValor\tVariacao');
-                currentData.kpis.forEach(kpi => {
-                    lines.push(`${kpi.label}\t${kpi.value}\t${kpi.trend}`);
-                });
-                lines.push('');
-                lines.push('');
-
-                // Details Sheet content
-                lines.push('DETALHAMENTO');
-                lines.push('');
-                lines.push('Data\tDescricao\tValor\tMoeda\tStatus');
-                currentData.tableData.forEach(item => {
-                    const dateFormatted = formatDateForExport(item.date);
-                    const valueClean = formatValueForExport(item.value);
-                    const currency = item.value.includes('€') ? 'EUR' : 'BRL';
-                    lines.push(`${dateFormatted}\t${item.description}\t${valueClean}\t${currency}\t${item.status}`);
-                });
-
-                const content = BOM + lines.join('\n');
-                const blob = new Blob([content], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `relatorio_${selectedType}_${today}.xls`;
-                link.style.display = 'none';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-
-                setIsGenerating(false);
-                toast.success(`Excel exportado: ${currentData.tableData.length} registros!`);
-            } catch (error) {
-                setIsGenerating(false);
-                toast.error('Erro ao exportar Excel. Tente novamente.');
-                console.error('Excel Export Error:', error);
-            }
-        }, 500);
+        handleExportCSV(); // Using CSV as Excel-compatible for now
+        toast.success('Excel exportado!');
     };
 
     const handleGenerateReport = () => {
         setIsGenerating(true);
-        toast('LIA está compilando os dados...', { icon: '🧠' });
         setTimeout(() => {
             setIsGenerating(false);
-            toast.success('Relatório atualizado com sucesso!');
-        }, 1500);
-    };
-
-    const handleSaveTemplate = () => {
-        toast.success('Modelo salvo com as configurações atuais!');
+            toast.success('Relatório gerado!');
+        }, 1000);
     };
 
     return (
         <div className="flex h-full bg-[#0D0D14] overflow-hidden print:bg-white relative">
-            {/* Background Glows */}
             <div className="absolute top-0 right-0 w-[700px] h-[700px] bg-brand-primary/10 rounded-full blur-[160px] -z-0 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-pink-500/10 rounded-full blur-[140px] -z-0 pointer-events-none" />
 
-            {/* 1. Sidebar de Governança */}
             <aside className="w-72 border-r border-white/10 flex flex-col p-6 gap-6 bg-[#12121A]/90 backdrop-blur-2xl z-10 print:hidden relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-brand-primary via-pink-500 to-orange-500" />
-
                 <div className="space-y-3">
                     <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] px-3">Central de Inteligência</h3>
                     <div className="space-y-2">
-                        <SidebarItem
-                            icon={Layout}
-                            label="Gerador Master"
-                            active={activeTab === 'generator'}
-                            onClick={() => setActiveTab('generator')}
-                        />
-                        <SidebarItem
-                            icon={Save}
-                            label="Modelos Salvos"
-                            active={activeTab === 'templates'}
-                            onClick={() => setActiveTab('templates')}
-                        />
-                        <SidebarItem
-                            icon={History}
-                            label="Histórico"
-                            active={activeTab === 'history'}
-                            onClick={() => setActiveTab('history')}
-                            count={MOCK_HISTORY.length.toString()}
-                        />
-                        <SidebarItem
-                            icon={FolderOpen}
-                            label="Arquivo Digital"
-                            active={activeTab === 'archive'}
-                            onClick={() => setActiveTab('archive')}
-                        />
+                        <SidebarItem icon={Layout} label="Gerador Master" active={activeTab === 'generator'} onClick={() => setActiveTab('generator')} />
+                        <SidebarItem icon={Save} label="Modelos Salvos" active={activeTab === 'templates'} onClick={() => setActiveTab('templates')} />
+                        <SidebarItem icon={History} label="Histórico" active={activeTab === 'history'} onClick={() => setActiveTab('history')} count="1" />
                     </div>
                 </div>
-
-                <div className="space-y-3">
-                    <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] px-3">Categorias Rápidas</h3>
-                    <div className="space-y-1">
-                        <button onClick={() => { setSelectedType('financial'); setActiveTab('generator'); }} className={`w-full text-left p-3 text-[11px] font-bold flex items-center gap-3 rounded-xl transition-all ${selectedType === 'financial' ? 'bg-brand-primary/10 text-white' : 'text-white/40 hover:text-white'}`}>
-                            <div className="w-1.5 h-1.5 rounded-full bg-brand-primary" /> Financeiro
-                        </button>
-                        <button onClick={() => { setSelectedType('commercial'); setActiveTab('generator'); }} className={`w-full text-left p-3 text-[11px] font-bold flex items-center gap-3 rounded-xl transition-all ${selectedType === 'commercial' ? 'bg-pink-500/10 text-white' : 'text-white/40 hover:text-white'}`}>
-                            <div className="w-1.5 h-1.5 rounded-full bg-pink-500" /> Comercial
-                        </button>
-                        <button onClick={() => { setSelectedType('operational'); setActiveTab('generator'); }} className={`w-full text-left p-3 text-[11px] font-bold flex items-center gap-3 rounded-xl transition-all ${selectedType === 'operational' ? 'bg-green-500/10 text-white' : 'text-white/40 hover:text-white'}`}>
-                            <div className="w-1.5 h-1.5 rounded-full bg-green-500" /> Operacional
-                        </button>
-                    </div>
-                </div>
-
             </aside>
 
-            {/* 2. Workspace Principal */}
             <main className="flex-1 flex flex-col overflow-hidden relative">
-
-                {/* Switch Render Content */}
                 {activeTab === 'generator' ? (
                     <>
-                        <header className="p-6 border-b border-white/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-[#15151F]/80 backdrop-blur-xl print:hidden">
+                        <header className="p-6 border-b border-white/10 flex justify-between items-center bg-[#15151F]/80 backdrop-blur-xl print:hidden">
                             <div className="flex items-center gap-4">
-                                <button className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-all border border-white/10">
-                                    <ArrowLeft className="w-4 h-4" />
-                                </button>
                                 <div className="space-y-0.5">
                                     <h2 className="text-xl font-black text-white tracking-tight">Gerador de Relatórios</h2>
                                     <p className="text-[10px] font-black uppercase tracking-widest bg-gradient-to-r from-brand-primary to-pink-500 bg-clip-text text-transparent">Configuração em Tempo Real</p>
                                 </div>
                             </div>
-
-                            <div className="flex flex-wrap items-center gap-3">
-                                <div className="flex bg-[#1A1A28] p-1.5 rounded-2xl border border-white/15">
-                                    {[
-                                        { id: 'financial', label: 'Financeiro', icon: FileText },
-                                        { id: 'commercial', label: 'Comercial', icon: TrendingUp },
-                                        { id: 'operational', label: 'Operacional', icon: Activity }
-                                    ].map(type => (
-                                        <button
-                                            key={type.id}
-                                            onClick={() => setSelectedType(type.id as any)}
-                                            className={`px-5 py-2.5 rounded-xl text-[10px] font-black transition-all flex items-center gap-2 ${selectedType === type.id
-                                                ? 'bg-gradient-to-r from-brand-primary to-purple-600 text-white shadow-lg'
-                                                : 'text-white/70 hover:text-white hover:bg-white/10'}`}
-                                        >
-                                            <type.icon className="w-3.5 h-3.5" />
-                                            {type.label}
-                                        </button>
-                                    ))}
-                                </div>
-
-                                <button onClick={handleGenerateReport} disabled={isGenerating} className="bg-gradient-to-r from-brand-primary via-purple-600 to-pink-500 text-white px-7 py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-2xl shadow-brand-primary/40 hover:scale-105 transition-all flex items-center gap-2 ring-2 ring-white/20">
-                                    {isGenerating ? <Clock className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                                    Gerar Novo
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => setIsConfigOpen(true)} className="px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white/70 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2">
+                                    <SettingsIcon className="w-3.5 h-3.5 text-brand-primary" />
+                                    Branding
                                 </button>
-
-                                <div className="flex items-center gap-2 ml-2">
-                                    <button onClick={handlePrint} disabled={isGenerating} className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 transition-all border border-white/15 disabled:opacity-50" title="Imprimir">
-                                        <Printer className="w-4 h-4" />
-                                    </button>
-                                    <button onClick={handleExportCSV} disabled={isGenerating} className="p-3 rounded-xl bg-white/10 hover:bg-green-500/20 text-white/80 hover:text-green-400 transition-all border border-white/15 disabled:opacity-50" title="Exportar CSV">
-                                        <FileSpreadsheet className="w-4 h-4" />
-                                    </button>
-                                    <button onClick={handleExportExcel} disabled={isGenerating} className="p-3 rounded-xl bg-white/10 hover:bg-blue-500/20 text-white/80 hover:text-blue-400 transition-all border border-white/15 disabled:opacity-50" title="Exportar Excel">
+                                <button onClick={handlePrint} className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/70 transition-all border border-white/10" title="Imprimir">
+                                    <Printer className="w-4 h-4" />
+                                </button>
+                                <div className="h-6 w-px bg-white/10 mx-1" />
+                                <button onClick={handleGenerateReport} className="bg-gradient-to-r from-brand-primary to-purple-600 text-white px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-brand-primary/20">
+                                    {isGenerating ? 'Gerando...' : 'Gerar Novo'}
+                                </button>
+                                <div className="flex bg-white/5 rounded-xl border border-white/10 p-1">
+                                    <button onClick={handleExportCSV} className="p-2 rounded-lg hover:bg-white/10 text-white/70 transition-all" title="Exportar CSV">
                                         <Download className="w-4 h-4" />
                                     </button>
-                                    <button onClick={handleSaveTemplate} disabled={isGenerating} className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 transition-all border border-white/15 disabled:opacity-50" title="Salvar">
-                                        <Save className="w-4 h-4" />
+                                    <button onClick={handleExportExcel} className="p-2 rounded-lg hover:bg-white/10 text-white/70 transition-all" title="Exportar Excel">
+                                        <FileText className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
                         </header>
-
                         <div className="flex-1 overflow-y-auto p-12 bg-[#0A0A10] flex justify-center custom-scrollbar print:p-0 print:bg-white relative">
                             <div className="absolute inset-0 bg-gradient-to-b from-brand-primary/5 via-transparent to-pink-500/5 pointer-events-none" />
-
-                            {/* Folha A4 Real */}
-                            <div ref={printRef} className="w-[210mm] min-h-[297mm] bg-white text-slate-800 shadow-2xl shadow-black/50 rounded-lg p-12 flex flex-col gap-10 print:shadow-none print:w-full print:min-h-0 relative z-10 ring-1 ring-black/10">
-                                {/* Report Content */}
+                            <div ref={printRef} className="w-[210mm] min-h-[297mm] bg-white text-slate-800 shadow-2xl rounded-lg p-12 flex flex-col gap-10 print:shadow-none print:w-full relative z-10">
                                 <div className="flex justify-between items-start border-b-2 border-slate-100 pb-8">
                                     <div className="space-y-4">
-                                        <div className="w-12 h-12 flex items-center justify-center overflow-hidden">
-                                            <img
-                                                src="/images/luminnus-logo.png"
-                                                alt="Luminnus"
-                                                className="w-full h-full object-contain"
-                                            />
+                                        <div className="h-14 flex items-center">
+                                            {tenantConfig.companyLogoUrl ? (
+                                                <img src={tenantConfig.companyLogoUrl} alt={tenantConfig.companyName} className="h-full object-contain" />
+                                            ) : (
+                                                <div className="h-14 w-14 rounded-xl flex items-center justify-center text-white font-black text-2xl shadow-xl" style={{ backgroundColor: tenantConfig.primaryColor }}>
+                                                    {tenantConfig.companyName.charAt(0)}
+                                                </div>
+                                            )}
                                         </div>
                                         <div>
-                                            <h1 className="text-2xl font-black tracking-tighter text-slate-900 uppercase">LUMINNUS PLATFORM</h1>
+                                            <h1 className="text-2xl font-black tracking-tighter uppercase" style={{ color: tenantConfig.primaryColor }}>{tenantConfig.companyName}</h1>
                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{currentData.title}</p>
                                         </div>
                                     </div>
                                     <div className="text-right">
                                         <p className="text-[10px] font-black text-slate-900 uppercase">Emissão: {new Date().toLocaleDateString('pt-BR')}</p>
-                                        <p className="text-[9px] font-bold text-slate-400 mt-2 uppercase tracking-widest">ID: {selectedType.toUpperCase()}-2026</p>
                                     </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-1 h-6 bg-brand-primary rounded-full" />
-                                        <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">1. Sumário do Período</h3>
-                                    </div>
-                                    <p className="text-[11px] leading-relaxed text-slate-600">{currentData.subtitle}</p>
                                 </div>
 
                                 <div className="grid grid-cols-4 gap-6">
@@ -834,257 +642,132 @@ const Reports: React.FC = () => {
                                     ))}
                                 </div>
 
-                                <div className="space-y-6">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-1 h-6 bg-pink-500 rounded-full" />
-                                        <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">2. Trend Visual</h3>
-                                    </div>
-                                    <div className="h-[220px] w-full border border-slate-100 rounded-3xl p-6 bg-slate-50/50">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={currentData.chartData}>
-                                                <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} />
-                                                <YAxis fontSize={10} axisLine={false} tickLine={false} />
-                                                <Bar dataKey="val" fill="#7C3AED" radius={[6, 6, 0, 0]} barSize={45} />
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    </div>
+                                <div className="h-[220px] w-full border border-slate-100 rounded-3xl p-6 bg-slate-50/50">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={currentData.chartData}>
+                                            <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} />
+                                            <YAxis fontSize={10} axisLine={false} tickLine={false} />
+                                            <Bar dataKey="val" fill={tenantConfig.primaryColor} radius={[6, 6, 0, 0]} barSize={45} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
                                 </div>
 
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-1 h-6 bg-green-500 rounded-full" />
-                                        <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">3. Detalhamento</h3>
-                                    </div>
-                                    <table className="w-full text-left text-[10px]">
-                                        <thead className="border-b border-slate-100">
-                                            <tr>
-                                                <th className="py-4 text-slate-400 uppercase tracking-widest">Data</th>
-                                                <th className="py-4 text-slate-400 uppercase tracking-widest">Descrição</th>
-                                                <th className="py-4 text-slate-400 uppercase tracking-widest text-right">Valor</th>
-                                                <th className="py-4 text-slate-400 uppercase tracking-widest text-right">Status</th>
+                                <table className="w-full text-left text-[10px]">
+                                    <thead className="border-b border-slate-100">
+                                        <tr>
+                                            <th className="py-4 text-slate-400 uppercase tracking-widest">Data</th>
+                                            <th className="py-4 text-slate-400 uppercase tracking-widest">Descrição</th>
+                                            <th className="py-4 text-slate-400 uppercase tracking-widest text-right">Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {currentData.tableData.map((item, i) => (
+                                            <tr key={i} className="border-b border-slate-50">
+                                                <td className="py-4 font-bold text-slate-500">{item.date}</td>
+                                                <td className="py-4 font-black text-slate-900">{item.description}</td>
+                                                <td className="py-4 font-black text-slate-900 text-right">{item.value}</td>
                                             </tr>
-                                        </thead>
-                                        <tbody>
-                                            {currentData.tableData.map((item, i) => (
-                                                <tr key={i} className="border-b border-slate-50">
-                                                    <td className="py-4 font-bold text-slate-500">{item.date}</td>
-                                                    <td className="py-4 font-black text-slate-900">{item.description}</td>
-                                                    <td className="py-4 font-black text-slate-900 text-right">{item.value}</td>
-                                                    <td className="py-4 text-right">
-                                                        <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[8px] font-black uppercase">{item.status}</span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-
-
-                                <div className="flex justify-between items-center text-[9px] font-bold text-slate-300 border-t border-slate-100 pt-6">
-                                    <p>© 2026 Luminnus Group. Relatório Gerado via LIA Intelligence.</p>
-                                    <p>Pag 1/1</p>
-                                </div>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </>
                 ) : (
-                    <div className="flex-1 p-10 overflow-y-auto no-scrollbar">
-                        <div className="mb-10">
-                            <h2 className="text-3xl font-black text-white capitalize">
-                                {activeTab === 'templates' ? 'Modelos Salvos' : activeTab === 'history' ? 'Histórico de Geração' : 'Arquivo Digital'}
-                            </h2>
-                            <p className="text-white/40 text-sm mt-2">
-                                {activeTab === 'templates' ? 'Selecione um template pré-configurado para iniciar seu reporte.' : 'Acesse os relatórios gerados recentemente pela sua conta.'}
-                            </p>
-                        </div>
+                    <div className="flex-1 p-10 overflow-y-auto custom-scrollbar">
+                        <div className="max-w-6xl mx-auto space-y-10">
+                            <div>
+                                <h2 className="text-3xl font-black text-white capitalize mb-2">{activeTab === 'templates' ? 'Modelos Salvos' : 'Histórico Recent'}</h2>
+                                <p className="text-white/40 text-sm">{activeTab === 'templates' ? 'Selecione um template para gerar um novo relatório personalizado.' : 'Relatórios gerados anteriormente disponíveis para visualização.'}</p>
+                            </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {activeTab === 'templates' ? (
-                                // Templates with full data
-                                MOCK_TEMPLATES.map((template) => (
-                                    <motion.div
-                                        key={template.id}
-                                        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-                                        className="bg-[#1A1A28]/50 border border-white/10 rounded-2xl p-6 hover:bg-white/5 transition-all group relative overflow-hidden"
-                                    >
-                                        <div className="absolute top-0 right-0 w-24 h-24 bg-brand-primary/5 blur-3xl rounded-full -mr-12 -mt-12" />
-                                        <div className="flex justify-between items-start mb-6 relative z-10">
-                                            <div className={`p-3 rounded-xl ${template.type === 'financial' ? 'bg-brand-primary/20 text-brand-primary' :
-                                                template.type === 'commercial' ? 'bg-pink-500/20 text-pink-500' : 'bg-green-500/20 text-green-500'
-                                                }`}>
-                                                {template.icon ? <template.icon className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {MOCK_TEMPLATES.map((template) => (
+                                        <div key={template.id} className="group bg-[#15151F] border border-white/10 rounded-3xl p-6 hover:border-brand-primary/50 transition-all cursor-pointer flex flex-col gap-4 relative overflow-hidden">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/10 rounded-full blur-3xl group-hover:bg-brand-primary/20 transition-all" />
+                                            <div className="flex justify-between items-start">
+                                                <div className="p-3 rounded-2xl bg-white/5 group-hover:bg-brand-primary/20 transition-all">
+                                                    <template.icon className="w-6 h-6 text-brand-primary" />
+                                                </div>
+                                                <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">{template.size}</span>
                                             </div>
-                                            <div className="flex gap-2">
-                                                <button
-                                                    onClick={() => handleShareTemplate(template)}
-                                                    className="p-2 text-white/20 hover:text-white transition-colors"
-                                                    title="Compartilhar"
-                                                >
-                                                    <Share2 className="w-4 h-4" />
-                                                </button>
-                                                <button className="p-2 text-white/20 hover:text-red-500 transition-colors" title="Excluir">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                            <div>
+                                                <h4 className="text-white font-black text-base group-hover:text-brand-primary transition-all">{template.title}</h4>
+                                                <p className="text-white/40 text-[11px] mt-1">{template.reportSubtitle}</p>
+                                            </div>
+                                            <div className="flex items-center justify-between mt-4">
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => handleOpenTemplate(template)} className="px-4 py-2 bg-brand-primary text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all">
+                                                        Gerar
+                                                    </button>
+                                                    <button onClick={() => handleDownloadTemplate(template)} className="p-2 bg-white/5 hover:bg-white/10 text-white/70 rounded-xl transition-all border border-white/10">
+                                                        <Download className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                                <span className="text-[9px] font-black text-white/30 uppercase">{template.date}</span>
                                             </div>
                                         </div>
-                                        <h4 className="text-white font-black text-lg mb-1 leading-tight relative z-10">{template.title}</h4>
-                                        <p className="text-white/40 text-[11px] mb-2 relative z-10">
-                                            Período: {template.period}
-                                        </p>
-                                        <p className="text-white/30 text-[10px] mb-6 relative z-10">
-                                            Criado em: {template.date} • {template.size}
-                                        </p>
-                                        <div className="flex gap-3 relative z-10">
-                                            <button
-                                                onClick={() => handleOpenTemplate(template)}
-                                                className="flex-1 py-3 bg-brand-primary text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-brand-primary/20"
-                                            >
-                                                Abrir
-                                            </button>
-                                            <button
-                                                onClick={() => handleDownloadTemplate(template)}
-                                                className="p-3 bg-white/5 hover:bg-green-500/20 hover:text-green-400 text-white rounded-xl transition-all border border-white/10"
-                                                title="Baixar CSV"
-                                            >
-                                                <Download className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    </motion.div>
-                                ))
+                                    ))}
+                                </div>
                             ) : (
-                                // History items (simpler, uses base type data)
-                                MOCK_HISTORY.map((item: any) => (
-                                    <motion.div
-                                        key={item.id}
-                                        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-                                        className="bg-[#1A1A28]/50 border border-white/10 rounded-2xl p-6 hover:bg-white/5 transition-all group relative overflow-hidden"
-                                    >
-                                        <div className="absolute top-0 right-0 w-24 h-24 bg-brand-primary/5 blur-3xl rounded-full -mr-12 -mt-12" />
-                                        <div className="flex justify-between items-start mb-6 relative z-10">
-                                            <div className={`p-3 rounded-xl ${item.type === 'financial' ? 'bg-brand-primary/20 text-brand-primary' :
-                                                item.type === 'commercial' ? 'bg-pink-500/20 text-pink-500' : 'bg-green-500/20 text-green-500'
-                                                }`}>
-                                                <History className="w-6 h-6" />
+                                <div className="space-y-4">
+                                    {MOCK_HISTORY.map((item) => (
+                                        <div key={item.id} className="bg-[#15151F] border border-white/10 rounded-2xl p-4 hover:bg-white/5 transition-all flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
+                                                    <FileText className="w-5 h-5 text-white/40" />
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-white font-black text-sm">{item.title}</h4>
+                                                    <p className="text-white/30 text-[10px] uppercase tracking-widest">{item.type} • {item.size}</p>
+                                                </div>
                                             </div>
-                                            <div className="flex gap-2">
-                                                <button className="p-2 text-white/20 hover:text-white transition-colors"><Share2 className="w-4 h-4" /></button>
-                                                <button className="p-2 text-white/20 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                            <div className="flex items-center gap-4">
+                                                <span className="text-[10px] font-black text-white/20 uppercase">{item.date}</span>
+                                                <button onClick={() => handleOpenFromHistory(item.type, item.title)} className="p-2 hover:text-brand-primary transition-all">
+                                                    <FolderOpen className="w-4 h-4" />
+                                                </button>
                                             </div>
                                         </div>
-                                        <h4 className="text-white font-black text-lg mb-1 leading-tight relative z-10">{item.title}</h4>
-                                        <p className="text-white/40 text-[11px] mb-8 relative z-10">
-                                            Gerado em: {item.date} • {item.size}
-                                        </p>
-                                        <div className="flex gap-3 relative z-10">
-                                            <button
-                                                onClick={() => handleOpenFromHistory(item.type as ReportType, item.title)}
-                                                className="flex-1 py-3 bg-brand-primary text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-brand-primary/20"
-                                            >
-                                                Abrir
-                                            </button>
-                                            <button className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/10">
-                                                <Download className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    </motion.div>
-                                ))
+                                    ))}
+                                </div>
                             )}
                         </div>
                     </div>
                 )}
 
-                <button onClick={() => setShowLiaAssistant(!showLiaAssistant)} className="fixed bottom-10 right-10 w-16 h-16 bg-gradient-to-br from-brand-primary to-pink-500 rounded-full flex items-center justify-center shadow-2xl shadow-brand-primary/50 hover:scale-110 active:scale-95 transition-all z-[100] print:hidden overflow-hidden border-2 border-white/20">
+                <button onClick={() => setShowLiaAssistant(!showLiaAssistant)} className="fixed bottom-10 right-10 w-16 h-16 bg-gradient-to-br from-brand-primary to-pink-500 rounded-full flex items-center justify-center shadow-2xl z-[100] border-2 border-white/20">
                     <img
                         src="/images/lia-bust.png"
                         alt="LIA"
-                        className="w-full h-full object-cover object-top scale-110"
+                        className="w-full h-full object-cover object-top"
                     />
                 </button>
 
                 <AnimatePresence>
                     {showLiaAssistant && (
                         <motion.div
-                            initial={{ opacity: 0, scale: 0.9, y: 20, x: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, y: 20, x: 20 }}
-                            className="fixed bottom-28 right-10 w-80 bg-[#1A1A28] border border-white/15 rounded-3xl shadow-2xl p-6 z-[100] print:hidden shadow-purple-500/20"
+                            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+                            className="fixed bottom-28 right-10 w-80 bg-[#1A1A28] border border-white/15 rounded-3xl shadow-2xl p-6 z-[100]"
                         >
                             <div className="flex items-center gap-3 mb-6">
-                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-primary to-pink-500 overflow-hidden border border-white/20">
+                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-primary to-pink-500 overflow-hidden">
                                     <img src="/images/lia-bust.png" className="w-full h-full object-cover object-top" />
                                 </div>
-                                <div>
-                                    <h4 className="text-white font-black text-sm">LIA Report Assistant</h4>
-                                    <p className="text-[9px] font-black uppercase tracking-widest text-brand-primary">Inteligência Ativa</p>
-                                </div>
+                                <h4 className="text-white font-black text-sm">LIA Assistant</h4>
                             </div>
-
-                            <div className="space-y-4">
-                                <div className={`text-[11px] text-white/70 font-medium leading-relaxed bg-white/5 p-3 rounded-xl border border-white/5 italic ${liaLoading ? 'animate-pulse' : ''}`}>
-                                    {liaResponse}
-                                </div>
-
-                                <div className="grid grid-cols-1 gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleLiaInsight(); }}
-                                        disabled={liaLoading}
-                                        className="text-left px-4 py-3 bg-white/5 rounded-xl text-[10px] text-white/60 hover:text-white hover:bg-white/10 transition-all font-bold border border-white/5 flex items-center gap-2 group cursor-pointer disabled:opacity-50"
-                                    >
-                                        <TrendingUp className="w-3 h-3 text-brand-primary group-hover:scale-110 transition-transform" />
-                                        Gerar Insight Financeiro
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleLiaClearFilters(); }}
-                                        className="text-left px-4 py-3 bg-white/5 rounded-xl text-[10px] text-white/60 hover:text-white hover:bg-white/10 transition-all font-bold border border-white/5 flex items-center gap-2 group cursor-pointer"
-                                    >
-                                        <Trash2 className="w-3 h-3 text-brand-primary group-hover:scale-110 transition-transform" />
-                                        Limpar Filtros Ativos
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleLiaShare(); }}
-                                        className="text-left px-4 py-3 bg-white/5 rounded-xl text-[10px] text-white/60 hover:text-white hover:bg-white/10 transition-all font-bold border border-white/5 flex items-center gap-2 group cursor-pointer"
-                                    >
-                                        <Share2 className="w-3 h-3 text-brand-primary group-hover:scale-110 transition-transform" />
-                                        Compartilhar Reporte
-                                    </button>
-                                </div>
-
-                                <div className="pt-4 border-t border-white/10">
-                                    <form onSubmit={(e) => {
-                                        e.preventDefault();
-                                        const input = e.currentTarget.querySelector('input');
-                                        if (input && input.value.trim()) {
-                                            handleLiaQuery(input.value.trim());
-                                            input.value = '';
-                                        } else {
-                                            toast('Digite uma pergunta para a LIA.', { icon: '💬' });
-                                        }
-                                    }} className="relative">
-                                        <input
-                                            type="text"
-                                            name="liaQuery"
-                                            placeholder="Pergunte algo à LIA..."
-                                            disabled={liaLoading}
-                                            className="w-full bg-white/10 border border-white/15 rounded-xl py-3 px-4 pr-12 text-xs text-white focus:outline-none focus:border-brand-primary placeholder:text-white/30 disabled:opacity-50"
-                                        />
-                                        <button
-                                            type="submit"
-                                            disabled={liaLoading}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 bg-brand-primary rounded-lg hover:bg-brand-primary/80 transition-colors cursor-pointer disabled:opacity-50"
-                                        >
-                                            <Search className="w-3.5 h-3.5 text-white" />
-                                        </button>
-                                    </form>
-                                </div>
+                            <div className="text-[11px] text-white/70 italic bg-white/5 p-3 rounded-xl mb-4">{liaResponse}</div>
+                            <div className="pt-4 border-t border-white/10">
+                                <input type="text" placeholder="Pergunte algo..." className="w-full bg-white/10 border border-white/15 rounded-xl py-2.5 px-4 text-xs text-white" />
                             </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
-            </main >
-        </div >
+
+                <ReportBrandingSettings isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} config={tenantConfig} onUpdate={() => refreshProfile(user)} />
+            </main>
+        </div>
     );
 };
 

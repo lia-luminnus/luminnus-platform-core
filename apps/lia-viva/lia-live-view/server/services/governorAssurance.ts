@@ -44,30 +44,42 @@ export class GovernorAssurance {
 
         // 2. Verificar Consistência de Intenção vs Ferramentas
         // v9.0: Ferramentas de busca/análise são permitidas para qualquer intenção
-        const researchTools = ['searchWeb', 'getWeather', 'getLocation', 'getDirections', 'listGmailMessages', 'searchGmail', 'listCalendarEvents', 'getBusinessMetrics'];
-        const workspaceTools = context.toolsCalled.filter(t => 
-            (t.startsWith('createGoogle') || t.startsWith('updateGoogle')) && 
+        const researchTools = [
+            'searchWeb', 'getWeather', 'getLocation', 'getDirections',
+            'listGmailMessages', 'searchGmail', 'getGmailMessage',
+            'listCalendarEvents', 'getBusinessMetrics', 'saveMemory'
+        ];
+        const workspaceTools = context.toolsCalled.filter(t =>
+            (t.startsWith('createGoogle') || t.startsWith('updateGoogle') || t.startsWith('createProFinancialSheet')) &&
             !researchTools.includes(t)
         );
 
-        if (context.intent === 'CREATE' || context.intent === 'CORRECT') {
+        // v13.0: CRITICAL FIX - Permitir respostas diagnósticas SEM chamada de ferramentas
+        // Se a Lia decidiu que apenas explicar é suficiente (não chamou ferramentas), isso NÃO é violação
+        // Apenas bloquear se ela chamou ferramentas ERRADAS (não-workspace e não-research)
+        if (context.intent === 'CREATE' || context.intent === 'CORRECT' || context.intent === 'HYBRID') {
             const hasWorkspaceTool = workspaceTools.length > 0;
+            const calledAnyTool = context.toolsCalled.length > 0;
 
-            if (!hasWorkspaceTool && context.toolsCalled.length > 0) {
-                // Se chamou apenas ferramentas de pesquisa/análise, não é violação
+            // Apenas penalizar se ela CHAMOU ferramentas mas não incluiu workspace tools
+            if (calledAnyTool && !hasWorkspaceTool) {
+                // v12.0: Se chamou apenas ferramentas de pesquisa/análise, não é violação
                 const onlyResearchTools = context.toolsCalled.every(t => researchTools.includes(t));
-                
+
                 if (!onlyResearchTools) {
                     riskScore += 30;
-                    violations.push(`CONFORMIDADE: Intenção '${context.intent}' sem chamada de ferramenta correspondente.`);
+                    violations.push(`CONFORMIDADE: Intenção '${context.intent}' sem chamada de ferramenta correspondente (Workspace).`);
                 }
             }
+            // v13.0: Se não chamou NENHUMA ferramenta, assumir que é diagnóstico técnico
+            // e permitir a resposta passar (sem penalidade)
         }
 
         // 3. Verificar se a resposta está vazia
+        // v13.0: Reduzir penalidade - resposta vazia é um sinal, mas não automaticamente crítico
         if (!context.response || context.response.trim().length < 5) {
             violations.push(`INTEGRIDADE: Resposta excessivamente curta ou vazia.`);
-            riskScore += 50;
+            riskScore += 35; // Reduzido de 50 para 35
         }
 
         const passed = riskScore < 70;

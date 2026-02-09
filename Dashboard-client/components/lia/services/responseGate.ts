@@ -215,31 +215,27 @@ function generateRerouteInstruction(
     const missingList = missingElements.map(e => `- ${e}`).join('\n');
 
     if (mode === 'A') {
-        return `⚠️ RESPOSTA INVÁLIDA - REESCREVA NO TEMPLATE MODO A
+        return `⚠️ RESPOSTA INCOMPLETA - REFAÇA COM FOCO EM SOLUÇÃO
 
 **Elementos faltando:**
 ${missingList}
 
 **Contexto original do usuário:** "${originalUserText}"
 
-**Template obrigatório (MODO A - Incidente):**
-1) **Achado principal** (1 linha): O que está errado.
-2) **Evidência** (1 linha): Trecho literal do arquivo/print que comprova.
-3) **Causa raiz provável** (1 linha): Por que isso acontece.
-4) **Correção mínima** (2-5 bullets):
-   - Passo 1: [ação concreta]
-   - Passo 2: [ação concreta]
-5) **Validação** (2-3 bullets):
-   - Verifique se [condição]
-   - Confirme que [resultado esperado]
+**Como responder (MODO A - Diagnóstico):**
+Seja um engenheiro sênior explicando de forma natural:
+1. Identifique o problema claramente.
+2. Explique a causa com base na evidência (print, log, código).
+3. Forneça a correção exata ou execute a ferramenta se disponível.
+4. Indique como validar que funcionou.
 
-⚠️ PROIBIDO:
-- Começar com "Entendi!" ou explicações longas
-- Descrever o que o print mostra sem correção
-- Resposta maior que 12 linhas
-- USAR PLACEHOLDERS (ex: [LINK]) ou ASSINATURAS (ex: "Equipe Luminnus") em diagnósticos.
+⚠️ EVITE:
+- Começar com "Entendi!" ou descrições longas.
+- Labels rígidos como "**Achado principal**", "**Evidência**".
+- Placeholders como [LINK] ou assinaturas corporativas.
+- Respostas maiores que 10 linhas.
 
-REESCREVA AGORA seguindo o template acima.`;
+REFAÇA AGORA de forma natural e executiva.`;
     }
 
     if (mode === 'C') {

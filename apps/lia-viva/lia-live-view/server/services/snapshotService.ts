@@ -42,7 +42,23 @@ export const SnapshotService = {
                 .eq('tenant_id', profile.id)
                 .maybeSingle();
 
-            // 4. Montar o snapshot baseado no Product Catalog Manifest
+            // 4. Buscar Imóveis
+            const { data: properties } = await supabase
+                .from('properties')
+                .select('*')
+                .eq('tenant_id', profile.id)
+                .order('updated_at', { ascending: false })
+                .limit(planLimits.max_items || 20);
+
+            // 5. Buscar Logs do Hub (Sincronização Recente)
+            const { data: hubLogs } = await supabase
+                .from('hub_logs')
+                .select('*')
+                .eq('tenant_id', profile.id)
+                .order('created_at', { ascending: false })
+                .limit(5);
+
+            // 6. Montar o snapshot baseado no Product Catalog Manifest
             const planId = profile.plan_level || 'start';
             const planLimits = systemManifest.PLANS[planId];
 
@@ -56,6 +72,17 @@ export const SnapshotService = {
                     id: i.provider,
                     status: i.status,
                     lastSync: i.last_sync_at
+                })),
+                properties: (properties || []).map(p => ({
+                    id: p.id,
+                    address: p.address,
+                    status: p.status,
+                    price: p.price
+                })),
+                recentSync: (hubLogs || []).map(l => ({
+                    event: l.event_type,
+                    status: l.status,
+                    time: l.created_at
                 })),
                 whatsappState: whatsapp ? {
                     connected: whatsapp.status === 'connected',

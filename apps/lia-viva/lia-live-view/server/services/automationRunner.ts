@@ -1,5 +1,15 @@
 import { supabase } from '../config/supabase.js';
 import { ToolService } from './toolService.js';
+import { OpenAIService } from './openAIService.js';
+import { getContext } from './memoryService.js';
+import { WhatsAppService } from './whatsappService.js';
+
+export interface ExecutionContext {
+    vars: Record<string, any>;
+    system: Record<string, any>;
+    context: Record<string, any>;
+    metadata: Record<string, any>;
+}
 
 export interface AutomationRun {
     id: string;
@@ -55,19 +65,62 @@ export class AutomationRunner {
                 throw new Error('Automation not found or disabled');
             }
 
-            const flow = automation.flow_definition || [];
-            let currentPayload = run.input_payload || {};
+            const flow = automation.flow_definition || { nodes: [], edges: [] };
 
-            // Sort nodes by order if applicable, or follow edges
-            // MVP: Simple sequential execution of nodes in flow_definition array
-            for (const node of flow) {
-                await this.log(runId, tenantId, 'info', `Executing node: ${node.type} (${node.id})`, node.data);
+            // Standardized Execution Context
+            const execContext: ExecutionContext = {
+                vars: run.input_payload?.vars || {},
+                system: {
+                    tenantId,
+                    automationId: automation.id,
+                    runId,
+                    now: new Date().toISOString()
+                },
+                context: run.input_payload?.context || {},
+                metadata: {
+                    steps: 0,
+                    start_time: startTime
+                }
+            };
+
+            // Support both old array-style and new graph-style
+            const nodes = Array.isArray(flow) ? flow : (flow.nodes || []);
+            const edges = Array.isArray(flow) ? [] : (flow.edges || []);
+
+            // Start node finding
+            let currentNode = nodes.find((n: any) => n.id === 'start') || nodes[0];
+
+            while (currentNode) {
+                execContext.metadata.steps++;
+                await this.log(runId, tenantId, 'info', `Executing node: ${currentNode.type} (${currentNode.id})`, currentNode.data);
 
                 try {
-                    const result = await this.executeNode(node, currentPayload, tenantId);
-                    currentPayload = { ...currentPayload, ...result };
+                    const result = await this.executeNode(currentNode, execContext, tenantId);
+
+                    // Update vars with node result
+                    if (result && typeof result === 'object') {
+                        execContext.vars = { ...execContext.vars, ...result };
+                    }
+
+                    // Find next node
+                    if (currentNode.type === 'decide') {
+                        // Decide node logic: result is expected to be the label of the edge to follow
+                        const edge = edges.find((e: any) => e.source === currentNode.id && e.label === result);
+                        currentNode = edge ? nodes.find((n: any) => n.id === edge.target) : null;
+                    } else {
+                        // Linear node: follow 'next' edge or next in array (compat)
+                        const edge = edges.find((e: any) => e.source === currentNode.id);
+                        if (edge) {
+                            currentNode = nodes.find((n: any) => n.id === edge.target);
+                        } else if (Array.isArray(flow)) {
+                            const index = nodes.indexOf(currentNode);
+                            currentNode = nodes[index + 1];
+                        } else {
+                            currentNode = null;
+                        }
+                    }
                 } catch (nodeError: any) {
-                    await this.log(runId, tenantId, 'error', `Node ${node.id} failed: ${nodeError.message}`, { error: nodeError.stack });
+                    await this.log(runId, tenantId, 'error', `Node ${currentNode.id} failed: ${nodeError.message}`, { error: nodeError.stack });
                     throw nodeError;
                 }
             }
@@ -78,7 +131,7 @@ export class AutomationRunner {
                 status: 'success',
                 finished_at: new Date().toISOString(),
                 duration_ms: duration,
-                output_payload: currentPayload
+                output_payload: execContext.vars
             }).eq('id', runId);
 
             // Update automation last run
@@ -96,13 +149,18 @@ export class AutomationRunner {
                 duration_ms: duration,
                 error_message: err.message
             }).eq('id', runId);
-            
+
             await supabase.from('automations').update({ status: 'error' }).eq('id', runId);
         }
     }
 
-    private static async executeNode(node: any, payload: any, tenantId: string) {
+    private static async executeNode(node: any, execContext: ExecutionContext, tenantId: string) {
+        const payload = { ...execContext.vars, ...execContext.context };
+
         switch (node.type) {
+            case 'start':
+                return {};
+
             case 'log':
                 console.log(`[Flow Log] ${node.data?.message || 'Empty log'}`);
                 return { log: 'ok' };
@@ -111,6 +169,20 @@ export class AutomationRunner {
                 const ms = (node.data?.seconds || 1) * 1000;
                 await new Promise(resolve => setTimeout(resolve, ms));
                 return { waited: ms };
+
+            case 'decide':
+                // logic to evaluate conditions
+                if (node.data?.conditions) {
+                    for (const condition of node.data.conditions) {
+                        // Simple equality check for now
+                        const val = payload[condition.variable];
+                        if (val === condition.value) {
+                            return condition.label;
+                        }
+                    }
+                    return node.data.default_label || 'default';
+                }
+                return 'next';
 
             case 'http_request':
                 const resp = await fetch(node.data.url, {
@@ -122,19 +194,49 @@ export class AutomationRunner {
                 return await resp.json();
 
             case 'whatsapp_send':
-                // Integration with existing WhatsAppService
-                // Placeholder: call tool service
                 return await ToolService.execute('whatsappSendMessage', {
                     to: node.data.to || payload.phone,
                     message: node.data.message
                 }, { tenantId, userId: 'system' } as any);
 
+            case 'whatsapp_interactive':
+                return await WhatsAppService.sendInteractiveMessage(tenantId, node.data.to || payload.phone, node.data.interactive);
+
             case 'crm_update':
                 return await ToolService.execute('crmUpdateLead', node.data, { tenantId, userId: 'system' } as any);
 
-            case 'lia_task':
-                // Logic for LIA intelligence
-                return { lia_insight: "LIA processed this step." };
+            case 'agent':
+                const prompt = node.data?.prompt || "Responda como LIA assistants.";
+                const model = node.data?.model || 'gpt-4o-mini';
+
+                // Get memory context if conversation_id is available
+                let history: any[] = [];
+                if (execContext.context.conversationId) {
+                    const memContext = await getContext(execContext.context.conversationId, tenantId, payload.message || '');
+                    history = memContext.history;
+                }
+
+                const response = await OpenAIService.chat(
+                    prompt,
+                    history,
+                    model,
+                    node.data?.tools_enabled ? ToolService.getTools() : []
+                );
+
+                if (response.function_call) {
+                    const toolResult = await ToolService.execute(
+                        response.function_call.name,
+                        JSON.parse(response.function_call.arguments),
+                        { tenantId, userId: 'system' } as any
+                    );
+                    return {
+                        agent_response: response.text,
+                        tool_result: toolResult,
+                        last_action: response.function_call.name
+                    };
+                }
+
+                return { agent_response: response.text };
 
             default:
                 console.warn(`[AutomationRunner] Unknown node type: ${node.type}`);

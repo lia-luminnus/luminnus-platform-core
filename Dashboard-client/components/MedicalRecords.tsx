@@ -1,6 +1,7 @@
 
 import React, { useState, useContext, useRef, useMemo } from 'react';
 import Header from './Header';
+import CustomSelect from './ui/CustomSelect';
 import { LanguageContext } from '../contexts/LanguageContext';
 import toast from 'react-hot-toast';
 
@@ -303,9 +304,13 @@ const MedicalRecords: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-2 print:hidden">
-              <select className="bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 text-xs font-bold px-3 py-1.5 rounded-lg outline-none text-gray-500">
-                <option>GestãoDS - Clínica Teste</option>
-              </select>
+              <CustomSelect
+                value="GestãoDS - Clínica Teste"
+                onChange={() => { }}
+                options={['GestãoDS - Clínica Teste']}
+                variant="glass"
+                className="min-w-[200px]"
+              />
             </div>
           </div>
 
@@ -316,8 +321,8 @@ const MedicalRecords: React.FC = () => {
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`py-4 px-8 text-sm font-black transition-all relative whitespace-nowrap uppercase tracking-widest ${activeTab === tab
-                    ? 'text-brand-primary bg-white dark:bg-white/10'
-                    : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  ? 'text-brand-primary bg-white dark:bg-white/10'
+                  : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
               >
                 {tab}

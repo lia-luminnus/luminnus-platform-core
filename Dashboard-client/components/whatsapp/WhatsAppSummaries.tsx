@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import CustomSelect from '../ui/CustomSelect';
 
 interface WhatsAppSummariesProps {
     onOpenChat?: () => void;
@@ -68,31 +69,31 @@ const WhatsAppSummaries: React.FC<WhatsAppSummariesProps> = ({ onOpenChat }) => 
                             <span className="material-symbols-outlined text-lg">auto_awesome</span>
                         </div>
                     </div>
-                    <div className="flex gap-1.5">
-                        <div className="relative group">
-                            <select
-                                value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
-                                className="bg-gray-100 dark:bg-white/5 border border-transparent dark:border-white/5 rounded-lg px-3 pr-7 py-1.5 text-[9px] font-black uppercase tracking-widest outline-none focus:ring-1 focus:ring-brand-primary transition-all appearance-none cursor-pointer"
-                            >
-                                <option value="todos" className="dark:bg-[#0a0d14]">Todos os Status</option>
-                                <option value="waiting_human" className="dark:bg-[#0a0d14]">Novos</option>
-                                <option value="resolved" className="dark:bg-[#0a0d14]">Resolvidos</option>
-                            </select>
-                            <span className="material-symbols-outlined absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 pointer-events-none group-hover:text-brand-primary transition-colors">expand_more</span>
-                        </div>
-                        <div className="relative group">
-                            <select
-                                value={typeFilter}
-                                onChange={(e) => setTypeFilter(e.target.value)}
-                                className="bg-gray-100 dark:bg-white/5 border border-transparent dark:border-white/5 rounded-lg px-3 pr-7 py-1.5 text-[9px] font-black uppercase tracking-widest outline-none focus:ring-1 focus:ring-brand-primary transition-all appearance-none cursor-pointer"
-                            >
-                                <option value="todos" className="dark:bg-[#0a0d14]">Todos os Tipos</option>
-                                <option value="operational" className="dark:bg-[#0a0d14]">Operacional</option>
-                                <option value="executive" className="dark:bg-[#0a0d14]">Executivo</option>
-                            </select>
-                            <span className="material-symbols-outlined absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 pointer-events-none group-hover:text-brand-primary transition-colors">expand_more</span>
-                        </div>
+                    <div className="flex gap-1.5 w-full max-w-[240px]">
+                        <CustomSelect
+                            value={statusFilter}
+                            onChange={setStatusFilter}
+                            options={[
+                                { label: 'Todos os Status', value: 'todos' },
+                                { label: 'Novos', value: 'waiting_human' },
+                                { label: 'Resolvidos', value: 'resolved' }
+                            ]}
+                            variant="glass"
+                            placeholder="Status"
+                            className="flex-1 min-w-[100px]"
+                        />
+                        <CustomSelect
+                            value={typeFilter}
+                            onChange={setTypeFilter}
+                            options={[
+                                { label: 'Todos os Tipos', value: 'todos' },
+                                { label: 'Operacional', value: 'operational' },
+                                { label: 'Executivo', value: 'executive' }
+                            ]}
+                            variant="glass"
+                            placeholder="Tipo"
+                            className="flex-1 min-w-[100px]"
+                        />
                     </div>
                 </div>
 

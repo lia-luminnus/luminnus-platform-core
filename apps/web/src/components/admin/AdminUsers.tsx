@@ -129,20 +129,33 @@ export const AdminUsers = () => {
   // Mutation: Alterar plano do usuário
   const changePlanMutation = useMutation({
     mutationFn: async ({ userId, newPlan }: { userId: string; newPlan: string }) => {
+      console.log('[AdminUsers] Changing plan for user:', userId, 'to:', newPlan);
       const { error } = await (supabase as any)
         .from("profiles")
         .update({ plan_type: newPlan } as any)
         .eq("id", userId);
-      if (error) throw error;
+      if (error) {
+        console.error('[AdminUsers] Error changing plan:', error);
+        throw error;
+      }
+      console.log('[AdminUsers] Plan changed successfully');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       toast({
-        title: "Plano alterado",
+        title: "✅ Plano alterado",
         description: "O plano do usuário foi atualizado com sucesso.",
       });
     },
+    onError: (error: any) => {
+      toast({
+        title: "❌ Erro ao alterar plano",
+        description: error.message || "Verifique as permissões de RLS no Supabase.",
+        variant: "destructive",
+      });
+    },
   });
+
 
   // Mutation: Resetar conta do usuário (via Edge Function)
   const resetAccountMutation = useMutation({

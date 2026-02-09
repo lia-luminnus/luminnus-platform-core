@@ -8,6 +8,7 @@ import { OutputFormatter } from './outputFormatter.js';
 import { supabase, getUserProfile } from '../config/supabase.js';
 import { ToolService } from './toolService.js';
 import mammoth from 'mammoth';
+import crypto from 'crypto';
 import {
     IntentMode,
     inferIntentMode,
@@ -237,6 +238,9 @@ Detectei que você quer **${effectiveRequest.action.replace('_', ' ')}**. Esta e
     private static async hybridPipeline(req: AIRequest): Promise<AIResponse> {
         console.log(`[AIRouter] Pipeline Híbrido v7.0: MultimodalOrchestrator (SSOT v7.0)`);
 
+        // v17.0: TraceId para observabilidade end-to-end
+        const traceId = crypto.randomUUID();
+
         // v7.1: Processar e PERSISTIR arquivos para garantir histórico (SSOT v7.1)
         // v7.1: Processar e PERSISTIR arquivos para garantir histórico (SSOT v7.1)
         const processedFiles = [];
@@ -304,7 +308,27 @@ Detectei que você quer **${effectiveRequest.action.replace('_', ' ')}**. Esta e
             }
         }
 
-        const images = processedFiles.filter(f => f.mimetype.startsWith('image/')).map(f => ({ mimeType: f.mimetype, base64: f.data }));
+        console.log(`🔍 [AIRouter] Iniciando Pipeline Híbrido | TraceID: ${traceId}`);
+
+        const images = processedFiles.filter(f => f.mimetype.startsWith('image/')).map(f => {
+            // v7.5: Sanitização de Base64 (SSOT) - Remover prefixo se existir
+            const base64Clean = f.data.replace(/^data:image\/\w+;base64,/, '');
+            return {
+                mimeType: f.mimetype,
+                base64: base64Clean
+            };
+        });
+
+        // v7.5: Observabilidade e Contrato de Payload
+        if (images.length > 0) {
+            console.log(`👁️ [AIRouter] Payload de Visão Preparado [TraceID: ${traceId}]`, {
+                event: 'VISION_PAYLOAD_READY',
+                imagesCount: images.length,
+                mimeTypes: images.map(i => i.mimeType),
+                sampleSize: images[0].base64.length
+            });
+        }
+
         const documents = processedFiles.filter(f => !f.mimetype.startsWith('image/')).map(f => ({ mimeType: f.mimetype, base64: f.data, name: f.name }));
 
         // Registrar início do processamento no FileService (para o primeiro arquivo como referência principal)
@@ -326,6 +350,20 @@ Detectei que você quer **${effectiveRequest.action.replace('_', ' ')}**. Esta e
         }
 
         // v7.0: Delegar para o Orquestrador Multimodal (que já implementa o fluxo de 2 turnos e intent routing)
+        console.log(JSON.stringify({
+            timestamp: new Date().toISOString(),
+            component: 'MULTIMODAL',
+            stage: 'ROUTED',
+            traceId,
+            conversationId: req.conversationId,
+            userId: req.userId,
+            tenantId: req.tenantId,
+            hasImages: images.length > 0,
+            imagesCount: images.length,
+            hasDocuments: documents.length > 0,
+            documentsCount: documents.length
+        }));
+
         const orchestratorResponse = await processarRequisicaoMultimodal({
             message: req.prompt,
             images,
@@ -346,6 +384,36 @@ Detectei que você quer **${effectiveRequest.action.replace('_', ' ')}**. Esta e
         const toolResults = orchestratorResponse.toolResults || [];
         let finalResponseText = orchestratorResponse.content;
 
+        // v17.0: LOG CRÍTICO - Verificar se resposta está vazia
+        console.log(JSON.stringify({
+            timestamp: new Date().toISOString(),
+            component: 'MULTIMODAL',
+            stage: 'ORCHESTRATOR_RESPONSE',
+            traceId,
+            conversationId: req.conversationId,
+            userId: req.userId,
+            tenantId: req.tenantId,
+            hasContent: !!finalResponseText,
+            contentLength: finalResponseText?.length || 0,
+            toolResultsCount: toolResults.length
+        }));
+
+        // v17.0: CRITICAL - Nunca permitir resposta vazia silenciosa
+        if (!finalResponseText || finalResponseText.trim().length === 0) {
+            const errorMsg = `[CRITICAL ERROR] multimodalOrchestrator retornou conteúdo vazio. TraceId: ${traceId}`;
+            console.error(JSON.stringify({
+                timestamp: new Date().toISOString(),
+                component: 'MULTIMODAL',
+                stage: 'ERROR',
+                traceId,
+                conversationId: req.conversationId,
+                userId: req.userId,
+                tenantId: req.tenantId,
+                error: errorMsg
+            }));
+            throw new Error(errorMsg);
+        }
+
         // v7.0: Se houver links verificados, garantir que eles estão em destaque (Fallback extra)
         if (toolResults.length > 0) {
             toolResults.forEach(tr => {
@@ -361,7 +429,7 @@ Detectei que você quer **${effectiveRequest.action.replace('_', ' ')}**. Esta e
             userId: req.userId,
             tenantId: req.tenantId,
             provider: 'hybrid',
-            model: `gemini-2.0-flash-v7.1`,
+            model: `gemini-2.0-flash-v17.5`,
             inputTokens: 0,
             outputTokens: 0,
             toolCallsCount: toolResults.length,
@@ -374,7 +442,7 @@ Detectei que você quer **${effectiveRequest.action.replace('_', ' ')}**. Esta e
         // 5. Finalizar metadados de TODOS os arquivos
         const allFileIds: string[] = [];
         for (const file of processedFiles) {
-            const dbStatus = 'active';
+            const dbStatus = 'parsed'; // Fix type error: 'active' -> 'parsed'
             const fileRecord = await FileService.saveMetadata({
                 id: (file as any).id,
                 tenant_id: req.tenantId,

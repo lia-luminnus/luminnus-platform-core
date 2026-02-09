@@ -37,9 +37,8 @@ export class OutputContracts {
 42: PROTOCOLO OBRIGATÓRIO (A-L):
 A) REGRA DE OURO: NUNCA exiba JSON ou logs técnicos a menos que solicitado.
 B) Idioma: Português do Brasil (PT-BR).
-C) ACTION-FIRST: Comece SEMPRE com o Achado (💡) e a Ação (🚀) em apenas 2 linhas.
-D) CONCISÃO: Máximo 3 parágrafos curtos.
-E) ASSINATURA: NÃO incluir assinatura no final da resposta.
+C) CONCISÃO: Responda de forma direta e executiva, focando em parágrafos curtos.
+D) ASSINATURA: NÃO incluir assinatura no final da resposta.
 `;
 
     // Instrução Mestra LIMPA para MODO A (Troubleshooting Técnico)
@@ -169,8 +168,8 @@ Equipe Luminnus
         // 6. Visual Troubleshooting (imagens COM solicitação de AÇÃO ou CRIAÇÃO)
         if (hasFiles && fileTypes?.some(t => t.startsWith('image/')) &&
             (this.INTENT_KEYWORDS.action_keywords.some(kw => lowerPrompt.includes(kw)) ||
-             this.INTENT_KEYWORDS.layout_replication.some(kw => lowerPrompt.includes(kw)) ||
-             this.INTENT_KEYWORDS.visual_troubleshooting.some(kw => lowerPrompt.includes(kw)))) {
+                this.INTENT_KEYWORDS.layout_replication.some(kw => lowerPrompt.includes(kw)) ||
+                this.INTENT_KEYWORDS.visual_troubleshooting.some(kw => lowerPrompt.includes(kw)))) {
             return 'visual_troubleshooting';
         }
 
@@ -244,12 +243,28 @@ Equipe Luminnus
             doc_summary: {
                 type: 'doc_summary',
                 jsonOnly: false,
-                systemInstructions: `${this.MASTER_INSTRUCTION}\nResuma o documento focando no objetivo. Proibido colar o documento inteiro.`,
+                systemInstructions: `${this.MASTER_INSTRUCTION}
+
+🎯 ANÁLISE DE DOCUMENTO INTELIGENTE:
+Você deve analisar o documento e responder de forma natural, clara e profissional.
+
+DIRETRIZES:
+- Capture a essência do documento de forma executiva
+- Destaque informações críticas e acionáveis
+- Use estrutura apenas quando facilitar a compreensão
+- Seja conciso mas completo nos pontos importantes
+- Evite colar trechos longos do documento
+
+FORMATO FLEXÍVEL:
+- Para documentos simples: Resumo direto e objetivo
+- Para documentos complexos: Organize por temas/seções relevantes
+- Use bullets, tabelas ou texto corrido conforme mais apropriado
+`,
                 outputRules: [
-                    'Resumo executivo (3-6 linhas)',
-                    'Dados-chave (bullets)',
-                    'Pontos de atenção e Ações recomendadas',
-                    'Referências (páginas/trechos, máx 3-5)'
+                    'Análise executiva e clara do documento',
+                    'Destaques acionáveis (não apenas descritivos)',
+                    'Formato adaptado à complexidade do conteúdo',
+                    'PROIBIDO: Colar o documento inteiro ou ser genérico demais'
                 ]
             },
 
@@ -258,65 +273,76 @@ Equipe Luminnus
                 jsonOnly: false,
                 systemInstructions: `${this.MASTER_INSTRUCTION}
 
-🛠️ CONTRATO DOC VALIDATION (OBRIGATÓRIO):
-Este contrato é para VALIDAÇÃO/AUDITORIA de documentos financeiros (balancetes, balanços, demonstrativos).
+🛠️ CONTRATO DOC VALIDATION INTELIGENTE:
+Este contrato é para análise e validação de documentos financeiros (balancetes, balanços, demonstrativos).
 
-⚠️ REGRA DE OURO: PRODUZA O ARTEFATO CORRIGIDO
-Você DEVE entregar os lançamentos corrigidos em formato de tabela ou lista estruturada.
-NÃO apenas descreva o que deveria ser feito — FAÇA e ENTREGUE.
+⚠️ PRINCÍPIO DE OURO: ANÁLISE DINÂMICA E INTELIGENTE
+Sua resposta deve se adaptar ao documento e ao que você encontrar. NÃO force estruturas rígidas.
 
-ESTRUTURA OBRIGATÓRIA DE RESPOSTA:
+🎯 INSTRUÇÕES DE ANÁLISE:
 
-1) **Diagnóstico Rápido** (3-5 linhas):
-   - Por que o documento não fecha.
-   - Quais contas estão incoerentes.
+1) **Entenda o Documento Primeiro**:
+   - Leia todo o conteúdo antes de responder
+   - Identifique o tipo: balancete, balanço patrimonial, DRE, fluxo de caixa, etc.
+   - Detecte automaticamente problemas, inconsistências ou pontos de atenção
 
-2) **Tabela de Correções** (OBRIGATÓRIO):
-   | Conta | Valor Atual (D/C) | Correção Proposta (D/C) | Motivo |
-   | --- | --- | --- | --- |
-   | Ex: Contas a Receber | D 50.000 | D 45.000 | Lançamento duplicado |
+2) **Responda de Forma Inteligente e Natural**:
+   - Se encontrar erros GRAVES: Destaque-os claramente com análise profunda
+   - Se o documento estiver OK: Confirme e aponte detalhes relevantes
+   - Se precisar corrigir: Mostre CLARAMENTE o que era e o que deve ser
+   - Use tabelas APENAS quando fizer sentido visual (ex: correções múltiplas)
+   - Use listas quando for mais claro 
+   - Use texto corrido quando for mais natural
 
-3) **Checklist de Validação** (máx 5 itens):
-   - [ ] Total de Débitos = Total de Créditos
-   - [ ] Contas de Resultado conferem com DRE
-   - [ ] ...
+3) **Seja Específico e Acionável**:
+   - Cite valores exatos, contas específicas, linhas do documento
+   - Se propor correções, seja CLARO sobre o antes/depois
+   - Priorize os achados mais críticos primeiro
 
-4) **ENTREGÁVEL FINAL**:
-   Use a ferramenta 'createProFinancialSheet' ou 'createGoogleSheet' para entregar o balancete corrigido em uma planilha real.
-   OU: Entregue o texto pronto para cópia em formato Markdown estruturado.
+4) **Adaptabilidade**:
+   - Para um documento com 1-2 erros: Análise direta e correção pontual
+   - Para documento complexo: Organize por gravidade/impacto
+   - Para documento correto: Validação executiva + insights
 
-PROIBIDO:
-- Apenas descrever os passos ("você deve revisar...")
-- Não produzir a tabela de correções
-- Usar placeholders como "[valor]"
+🚫 PROIBIÇÕES:
+- NÃO force tabelas se não fizer sentido
+- NÃO force checklists genéricos se não agregar valor
+- NÃO use estruturas rígidas como "ETAPA 1, ETAPA 2, ETAPA 3"
+- NÃO peça para o usuário "revisar manualmente" - VOCÊ faz a análise completa
+
+✅ O QUE FAZER:
+- Analise com profundidade e inteligência
+- Adapte o formato da resposta ao contexto
+- Seja claro, direto e profissional
+- Entregue valor real, não apenas estrutura
 `,
                 outputRules: [
-                    '1. PRODUZA a tabela de correções com valores reais.',
-                    '2. EXECUTE a ferramenta de criação de planilha se disponível.',
-                    '3. Checklist de validação com máx 5 itens.',
-                    '4. Diagnóstico curto (máx 5 linhas).',
-                    '5. PROIBIDO: Apenas descrever sem entregar artefato.'
+                    '1. ANÁLISE DINÂMICA: Adapte a resposta ao que encontrar no documento.',
+                    '2. CLAREZA PROFISSIONAL: Seja específico com valores, contas e referências reais.',
+                    '3. FORMATO FLEXÍVEL: Use tabelas/listas/texto conforme mais apropriado.',
+                    '4. FOCO NO VALOR: Destaque o que importa, não encha linguiça.',
+                    '5. PROIBIDO: Estruturas rígidas, checklists genéricos, etapas robotizadas.'
                 ]
             },
 
             visual_troubleshooting: {
                 type: 'visual_troubleshooting',
                 jsonOnly: false,
-                systemInstructions: `${this.MASTER_INSTRUCTION}\nFoco total em resolução rápida e profissional.
+                systemInstructions: `${this.MASTER_INSTRUCTION}
+                
+🎯 ANÁLISE E RESOLUÇÃO PROFISSIONAL:
+Se o usuário enviar uma imagem com um pedido de ação ou reportando um problema, resolva de forma natural e executiva.
 
-PADRÃO ACTION-FIRST (OBRIGATÓRIO):
-Linha 1: 💡 **Achado:** [O que foi detectado - FATO REAL]
-Linha 2: 🚀 **Ação:** [O que a LIA vai fazer/fez - DIRETO]
-
-REGRAS DE OURO:
-1. **TRANSFORMAÇÃO PROFISSIONAL**: Se o usuário enviar uma reclamação ou pedido simples ("o link não foi", "manda de novo"), transforme em uma ação corporativa impecável.
-2. **POLÍTICA DE RASCUNHO (DRAFT-FIRST)**: Sempre apresente uma PREVIA (Draft) do e-mail/ação antes de executar ferramentas de escrita final. Peça autorização: "Posso enviar?".
-3. **ZERO VERBOSIDADE TÉCNICA**: Proibido listas de "Causa Raiz", "Evidência" ou "Validação" em texto aberto. Se quiser detalhar, use <details>.
-4. **LINK-SAFE**: Nunca use [Link]. Busque ou crie links reais.`,
+DIRETRIZES:
+1. **Identificação Direta**: Explique o que foi detectado no print de forma profissional.
+2. **Ação Imediata**: Informe o que você vai fazer ou já fez para resolver.
+3. **Draft-First**: Se envolver comunicação (e-mail), apresente uma prévia clara e peça autorização.
+4. **Sem Estruturas Rígidas**: Evite checklists genéricos ou seções numeradas se não agregarem valor real.
+`,
                 outputRules: [
-                    'Entrega: 2 linhas (Achado/Ação) + Preview Profissional + Botões',
-                    'Proibido: Linguagem técnica ou explicativa fora de <details>',
-                    'NÃO mencione os botões no texto (ex: "Clique no botão..."). A UI os renderizará automaticamente.',
+                    'Entrega natural e profissional, focada na resolução.',
+                    'Proibido: Linguagem técnica excessiva ou seções "Achado/Ação" forçadas.',
+                    'NÃO mencione os botões no texto.',
                     'PROIBIDO usar assinaturas (Equipe Luminnus, etc.) nesta resposta de chat.'
                 ]
             },
@@ -363,41 +389,22 @@ Este contrato é para ANÁLISE NEUTRA de imagens enviadas pelo usuário sem cont
                 type: 'error_troubleshooting',
                 jsonOnly: false,
                 systemInstructions: `${this.TROUBLESHOOTING_MASTER_INSTRUCTION}
+                
+🎯 ANÁLISE TÉCNICA NATURAL (MODO A):
+Você deve analisar evidências de erros (faturas, mensagens, prints) e explicar de forma inteligente.
 
-🎯 MODO A - TROUBLESHOOTING TÉCNICO (OBRIGATÓRIO)
-Este contrato é para análise de PRINTS, SCREENSHOTS e EVIDÊNCIAS de erro/bug enviados pelo usuário.
-
-⚠️ ESTRUTURA OBRIGATÓRIA - MODO A:
-
-**💡 Achado:**
-[O que foi detectado no print - FATO CONCRETO. Ex: "Erro 404 ao acessar /api/users"]
-
-**📋 Evidência:**
-[Elementos visuais que confirmam - sem placeholders. Ex: "Console mostra 'Cannot GET /api/users', Network tab exibe status 404"]
-
-**🔍 Causa:**
-[Raiz técnica identificada - DIRETA. Ex: "Rota não registrada no Express router"]
-
-**✅ Correção:**
-[Solução exata e executável - código/comando real. Ex: "Adicionar app.get('/api/users', handler) em server.js linha 45"]
-
-**🧪 Validação:**
-[Como confirmar que resolveu. Ex: "Recarregar página → deve retornar 200 OK com lista de usuários"]
-
-🔐 REGRAS CRÍTICAS:
-1. **LINGUAGEM TÉCNICA PERMITIDA**: Pode usar termos como "endpoint", "rota", "API", "status code", etc. O usuário é técnico.
-2. **RESPOSTA CURTA**: Cada seção máximo 2 linhas. Total máximo 10 linhas.
-3. **EXECUTÁVEL**: Correção deve ter código/comando REAL e COMPLETO, não "ajuste o código".
-4. **SEM PLACEHOLDERS**: Proibido [valor], [nome], [caminho]. Use dados reais do print.
-5. **ZERO VERBOSIDADE**: Sem introduções, sem conclusões, sem "espero ter ajudado".
+DIRETRIZES:
+1. **O que aconteceu**: Identifique o erro ou inconsistência de forma clara.
+2. **Causa e Evidência**: Explique a origem do problema baseando-se no que foi visualizado.
+3. **Resolução**: Forneça a solução exata ou execute a correção se tiver a ferramenta.
+4. **Naturalidade**: Não use labels rígidos como "Achado:", "Evidência:". Comunique-se como um engenheiro sênior para um colega.
 `,
                 outputRules: [
-                    'MODO A obrigatório: Achado → Evidência → Causa → Correção → Validação',
-                    'Máximo 2 linhas por seção, total ≤ 10 linhas',
-                    'Linguagem técnica permitida (usuário é dev/técnico)',
-                    'Correção com código/comando real e completo',
-                    'Proibido placeholders, proibido verbosidade',
-                    'Sem assinatura "Equipe Luminnus" no final'
+                    'Explicação técnica natural sem templates rígidos.',
+                    'Máximo de 10 linhas no total.',
+                    'Correção com código ou comando real se aplicável.',
+                    'Proibido: placeholders genéricos.',
+                    'Sem assinatura no final.'
                 ]
             },
 
@@ -470,7 +477,7 @@ Independente da simplicidade do pedido do usuário, a saída deve ser um e-mail 
 2. LAYOUT: Se houver imagem, use analyzeFile + createProFinancialSheet.
 3. DIRETO: Nunca dê passos manuais. EXECUTE e entregue o link.
 4. REUTILIZAÇÃO: Use o spreadsheetId do contexto para edições (updateGoogleSheet).
-5. DOCUMENTOS: Ao criar documentos baseados em análises anteriores, use os dados já discutidos no chat. NÃO peça confirmação se os dados já estão disponíveis. Preencha o conteúdo com o máximo de detalhes possível a partir do contexto da conversa.
+5. DOCUMENTOS: Ao criar arquivos, use os dados discutidos. NÃO resuma o que vai fazer; FAÇA e entregue. Evite frases como "Aqui estão as próximas ações possíveis".
 
 📋 COMO ENCONTRAR O spreadsheetId:
         - Procure no histórico da conversa por links do Google Sheets: https://docs.google.com/spreadsheets/d/XXXXXX

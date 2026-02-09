@@ -20,6 +20,9 @@ export interface UserProfile {
     onboarding_integrations_done: boolean;
     integrations_selected: string[];
     plan_type: string | null;
+    company_logo_url?: string | null;
+    company_primary_color?: string | null;
+    company_secondary_color?: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -102,6 +105,9 @@ export async function getProfile(userId: string): Promise<UserProfile | null> {
             onboarding_integrations_done: profile.onboarding_integrations_done ?? false,
             integrations_selected: profile.integrations_selected || [],
             plan_type: profile.plan_type || null,
+            company_logo_url: profile.company_logo_url || null,
+            company_primary_color: profile.company_primary_color || null,
+            company_secondary_color: profile.company_secondary_color || null,
             created_at: profile.created_at || new Date().toISOString(),
             updated_at: profile.updated_at || new Date().toISOString()
         };
@@ -183,6 +189,9 @@ export async function createProfile(userId: string, email: string): Promise<User
                     onboarding_integrations_done: profileData.onboarding_integrations_done ?? false,
                     integrations_selected: profileData.integrations_selected || [],
                     plan_type: profileData.plan_type || null,
+                    company_logo_url: profileData.company_logo_url || null,
+                    company_primary_color: profileData.company_primary_color || null,
+                    company_secondary_color: profileData.company_secondary_color || null,
                     created_at: profileData.created_at || new Date().toISOString(),
                     updated_at: profileData.updated_at || new Date().toISOString()
                 };
@@ -212,6 +221,9 @@ export async function createProfile(userId: string, email: string): Promise<User
         onboarding_integrations_done: createdProfile.onboarding_integrations_done ?? false,
         integrations_selected: createdProfile.integrations_selected || [],
         plan_type: createdProfile.plan_type || null,
+        company_logo_url: createdProfile.company_logo_url || null,
+        company_primary_color: createdProfile.company_primary_color || null,
+        company_secondary_color: createdProfile.company_secondary_color || null,
         created_at: createdProfile.created_at || new Date().toISOString(),
         updated_at: createdProfile.updated_at || new Date().toISOString()
     };
@@ -256,6 +268,9 @@ export async function updateProfile(userId: string, updates: Partial<UserProfile
         onboarding_integrations_done: profileData.onboarding_integrations_done ?? false,
         integrations_selected: profileData.integrations_selected || [],
         plan_type: profileData.plan_type || null,
+        company_logo_url: profileData.company_logo_url || null,
+        company_primary_color: profileData.company_primary_color || null,
+        company_secondary_color: profileData.company_secondary_color || null,
         created_at: profileData.created_at || new Date().toISOString(),
         updated_at: profileData.updated_at || new Date().toISOString()
     };
@@ -312,6 +327,9 @@ export async function completeOnboarding(
         onboarding_integrations_done: profileData.onboarding_integrations_done ?? false,
         integrations_selected: profileData.integrations_selected || [],
         plan_type: profileData.plan_type || null,
+        company_logo_url: profileData.company_logo_url || null,
+        company_primary_color: profileData.company_primary_color || null,
+        company_secondary_color: profileData.company_secondary_color || null,
         created_at: profileData.created_at || new Date().toISOString(),
         updated_at: profileData.updated_at || new Date().toISOString()
     };
@@ -358,6 +376,9 @@ async function revalidateProfile(userId: string): Promise<void> {
                 onboarding_integrations_done: profile.onboarding_integrations_done ?? false,
                 integrations_selected: profile.integrations_selected || [],
                 plan_type: profile.plan_type || null,
+                company_logo_url: profile.company_logo_url || null,
+                company_primary_color: profile.company_primary_color || null,
+                company_secondary_color: profile.company_secondary_color || null,
                 created_at: profile.created_at || new Date().toISOString(),
                 updated_at: profile.updated_at || new Date().toISOString()
             };

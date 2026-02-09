@@ -1,25 +1,20 @@
 
 import React, { useState, useContext, useEffect, useMemo } from 'react';
 import Header from './Header';
+import CustomSelect from './ui/CustomSelect';
 import { LanguageContext } from '../contexts/LanguageContext';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import { propertyService } from '../services/propertyService';
+import { useDashboardAuth } from '../contexts/DashboardAuthContext';
+import { Property } from '../types';
 
-interface Property {
-    id: string;
-    address: string;
-    city: string;
-    type: 'House' | 'Apartment' | 'Condo' | 'Office';
-    status: 'For Sale' | 'For Rent' | 'Sold';
-    price: number;
-    bedrooms: number;
-    date: string;
-    images: string[];
-}
+// Property interface moved to types.ts
 
 const initialProperties: Property[] = [
     {
         id: '1',
+        tenantId: 'mock-tenant',
         address: '123 Maple Street',
         city: 'Springfield, IL',
         type: 'House',
@@ -29,13 +24,14 @@ const initialProperties: Property[] = [
         date: '2023-10-26',
         images: [
             'https://images.unsplash.com/photo-1568605114967-8130f3a36994?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80',
-            'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80',
+            'https://images.unsplash.com/photo-15640137999119-ab600027ffc6?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80',
             'https://images.unsplash.com/photo-1484154218962-a1c002085d2f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80',
             'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80'
         ]
     },
     {
         id: '2',
+        tenantId: 'mock-tenant',
         address: '456 Oak Avenue, Apt 5B',
         city: 'Metropolis, CA',
         type: 'Apartment',
@@ -51,6 +47,7 @@ const initialProperties: Property[] = [
     },
     {
         id: '3',
+        tenantId: 'mock-tenant',
         address: '789 Pine Lane',
         city: 'Evergreen, CO',
         type: 'Condo',
@@ -68,8 +65,16 @@ const initialProperties: Property[] = [
 
 const Properties: React.FC = () => {
     const { t } = useContext(LanguageContext);
-    const [properties, setProperties] = useState<Property[]>(initialProperties);
+    const { user, isAdmin } = useDashboardAuth();
+    const [properties, setProperties] = useState<Property[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
+
+    const getTenantId = () => {
+        const metadata = (user as any)?.user_metadata;
+        const tenantId = metadata?.tenant_id || (user as any)?.tenant_id;
+        return tenantId || user?.id || 'default-tenant';
+    };
 
     // Advanced Filters
     const [search, setSearch] = useState('');
@@ -83,6 +88,21 @@ const Properties: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentProp, setCurrentProp] = useState<Partial<Property>>({});
     const [imageUrlsText, setImageUrlsText] = useState('');
+    const [uploading, setUploading] = useState(false);
+
+    useEffect(() => {
+        loadProperties();
+    }, [user]);
+
+    const loadProperties = async () => {
+        const tenantId = getTenantId();
+        if (!tenantId) return;
+
+        setIsLoading(true);
+        const data = await propertyService.listProperties(tenantId);
+        setProperties(data);
+        setIsLoading(false);
+    };
 
     // Gallery Carousel State
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
@@ -109,48 +129,62 @@ const Properties: React.FC = () => {
         });
     }, [properties, search, typeFilter, statusFilter, minPrice, maxPrice, bedroomsFilter]);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!currentProp.address || !currentProp.city) {
             toast.error('O endereço e a cidade são obrigatórios.');
             return;
         }
 
+        const tenantId = getTenantId();
         const processedImages = imageUrlsText
             .split('\n')
             .map(url => url.trim())
             .filter(url => url.length > 0);
 
-        const updatedPropData = {
+        const propData: Partial<Property> = {
             ...currentProp,
             images: processedImages.length > 0 ? processedImages : [`https://picsum.photos/seed/${Date.now()}/800/600`]
         };
 
         if (currentProp.id) {
-            // Edit existing
-            setProperties(prev => prev.map(p => p.id === currentProp.id ? { ...p, ...updatedPropData } as Property : p));
-            toast.success('Imóvel atualizado com sucesso!');
+            const updated = await propertyService.updateProperty(currentProp.id, propData);
+            if (updated) {
+                setProperties(prev => prev.map(p => p.id === updated.id ? updated : p));
+                toast.success('Imóvel atualizado!');
+            }
         } else {
-            // Create new
-            const newProp: Property = {
-                ...updatedPropData as Property,
-                id: `prop-${Date.now()}`,
-                date: new Date().toLocaleDateString(),
-                type: currentProp.type || 'House',
-                status: currentProp.status || 'For Sale',
-                price: currentProp.price || 0,
-                bedrooms: currentProp.bedrooms || 0,
-            };
-            setProperties(prev => [newProp, ...prev]);
-            toast.success('Novo imóvel adicionado ao portfólio!');
+            const created = await propertyService.createProperty(tenantId, propData);
+            if (created) {
+                setProperties(prev => [created, ...prev]);
+                toast.success('Imóvel adicionado!');
+            }
         }
         setIsModalOpen(false);
     };
 
-    const handleDelete = (id: string) => {
-        if (window.confirm('Tem certeza que deseja remover este imóvel permanentemente?')) {
-            setProperties(prev => prev.filter(p => p.id !== id));
-            toast.success('Imóvel removido.');
+    const handleDelete = async (id: string) => {
+        if (window.confirm('Tem certeza que deseja remover este imóvel?')) {
+            const success = await propertyService.deleteProperty(id);
+            if (success) {
+                setProperties(prev => prev.filter(p => p.id !== id));
+                toast.success('Imóvel removido.');
+            }
         }
+    };
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploading(true);
+        const url = await propertyService.uploadImage(getTenantId(), file);
+        if (url) {
+            setImageUrlsText(prev => prev ? `${prev}\n${url}` : url);
+            toast.success('Foto enviada com sucesso!');
+        } else {
+            toast.error('Erro ao enviar foto.');
+        }
+        setUploading(false);
     };
 
     const openEditModal = (prop?: Property) => {
@@ -253,27 +287,31 @@ const Properties: React.FC = () => {
                             />
                         </div>
                         <div className="flex gap-4">
-                            <select
-                                className="w-full lg:w-44 py-3 px-4 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-brand-primary focus:outline-none text-sm font-medium"
+                            <CustomSelect
                                 value={typeFilter}
-                                onChange={(e) => setTypeFilter(e.target.value)}
-                            >
-                                <option>Any Type</option>
-                                <option>Apartment</option>
-                                <option>House</option>
-                                <option>Condo</option>
-                                <option>Office</option>
-                            </select>
-                            <select
-                                className="w-full lg:w-44 py-3 px-4 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-brand-primary focus:outline-none text-sm font-medium"
+                                onChange={(value) => setTypeFilter(value)}
+                                options={[
+                                    'Any Type',
+                                    'Apartment',
+                                    'House',
+                                    'Condo',
+                                    'Office'
+                                ]}
+                                variant="glass"
+                                className="w-full lg:w-44"
+                            />
+                            <CustomSelect
                                 value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
-                            >
-                                <option>Any Status</option>
-                                <option>For Sale</option>
-                                <option>For Rent</option>
-                                <option>Sold</option>
-                            </select>
+                                onChange={(value) => setStatusFilter(value)}
+                                options={[
+                                    'Any Status',
+                                    'For Sale',
+                                    'For Rent',
+                                    'Sold'
+                                ]}
+                                variant="glass"
+                                className="w-full lg:w-44"
+                            />
                         </div>
                     </div>
 
@@ -301,17 +339,19 @@ const Properties: React.FC = () => {
 
                         <div className="flex items-center gap-2 w-full md:w-auto">
                             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Bedrooms:</span>
-                            <select
-                                className="w-full md:w-32 py-2 px-3 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-brand-primary focus:outline-none text-sm font-medium"
+                            <CustomSelect
                                 value={bedroomsFilter}
-                                onChange={(e) => setBedroomsFilter(e.target.value)}
-                            >
-                                <option value="Any">Any</option>
-                                <option value="1+">1+ Quarto</option>
-                                <option value="2+">2+ Quartos</option>
-                                <option value="3+">3+ Quartos</option>
-                                <option value="4+">4+ Quartos</option>
-                            </select>
+                                onChange={(value) => setBedroomsFilter(value)}
+                                options={[
+                                    { label: 'Any', value: 'Any' },
+                                    { label: '1+ Quarto', value: '1+' },
+                                    { label: '2+ Quartos', value: '2+' },
+                                    { label: '3+ Quartos', value: '3+' },
+                                    { label: '4+ Quartos', value: '4+' }
+                                ]}
+                                variant="glass"
+                                className="w-full md:w-32"
+                            />
                         </div>
 
                         <button
@@ -608,38 +648,56 @@ const Properties: React.FC = () => {
                                     </div>
                                     <div>
                                         <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Tipo de Ativo</label>
-                                        <select
+                                        <CustomSelect
                                             value={currentProp.type || 'House'}
-                                            onChange={(e) => setCurrentProp({ ...currentProp, type: e.target.value as any })}
-                                            className="w-full bg-gray-50 dark:bg-black/30 border border-gray-200 dark:border-white/10 rounded-2xl px-6 py-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-brand-primary outline-none transition-all font-bold appearance-none cursor-pointer"
-                                        >
-                                            <option value="House">Casa</option>
-                                            <option value="Apartment">Apartamento</option>
-                                            <option value="Condo">Condomínio</option>
-                                            <option value="Office">Comercial / Office</option>
-                                        </select>
+                                            onChange={(value) => setCurrentProp({ ...currentProp, type: value as any })}
+                                            options={[
+                                                { label: 'Casa', value: 'House' },
+                                                { label: 'Apartamento', value: 'Apartment' },
+                                                { label: 'Condomínio', value: 'Condo' },
+                                                { label: 'Comercial / Office', value: 'Office' }
+                                            ]}
+                                            variant="glass"
+                                            className="w-full"
+                                        />
                                     </div>
                                     <div>
                                         <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Status Atual</label>
-                                        <select
+                                        <CustomSelect
                                             value={currentProp.status || 'For Sale'}
-                                            onChange={(e) => setCurrentProp({ ...currentProp, status: e.target.value as any })}
-                                            className="w-full bg-gray-50 dark:bg-black/30 border border-gray-200 dark:border-white/10 rounded-2xl px-6 py-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-brand-primary outline-none transition-all font-bold appearance-none cursor-pointer"
-                                        >
-                                            <option value="For Sale">À Venda</option>
-                                            <option value="For Rent">Para Alugar</option>
-                                            <option value="Sold">Vendido</option>
-                                        </select>
+                                            onChange={(value) => setCurrentProp({ ...currentProp, status: value as any })}
+                                            options={[
+                                                { label: 'À Venda', value: 'For Sale' },
+                                                { label: 'Para Alugar', value: 'For Rent' },
+                                                { label: 'Vendido', value: 'Sold' }
+                                            ]}
+                                            variant="glass"
+                                            className="w-full"
+                                        />
                                     </div>
                                 </div>
-                                <div>
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Galerias de Imagens (Uma URL por linha)</label>
-                                    <textarea
-                                        value={imageUrlsText}
-                                        onChange={(e) => setImageUrlsText(e.target.value)}
-                                        placeholder="Insira os links das fotos aqui..."
-                                        className="w-full h-32 bg-gray-50 dark:bg-black/30 border border-gray-200 dark:border-white/10 rounded-2xl px-6 py-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-brand-primary outline-none transition-all text-xs font-mono resize-none"
-                                    />
+
+                                <div className="space-y-4 pb-4">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Fotos do Imóvel</label>
+                                    <div className="flex gap-4 items-center">
+                                        <label className={`flex-1 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 dark:border-white/10 rounded-2xl p-6 cursor-pointer hover:border-brand-primary transition-all ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                                            <span className="material-symbols-outlined text-3xl text-gray-400">add_a_photo</span>
+                                            <span className="text-xs font-bold text-gray-500 mt-2">{uploading ? 'Enviando...' : 'Fazer Upload de Foto'}</span>
+                                            <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+                                        </label>
+                                        <div className="text-[10px] text-gray-400 font-bold uppercase w-1/3 leading-relaxed">
+                                            Se preferir, você também pode colar links diretos abaixo.
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Links das Imagens (Uma por linha)</label>
+                                        <textarea
+                                            value={imageUrlsText}
+                                            onChange={(e) => setImageUrlsText(e.target.value)}
+                                            placeholder="Cole aqui as URLs das fotos ou use o botão de upload acima..."
+                                            className="w-full h-32 bg-gray-50 dark:bg-black/30 border border-gray-200 dark:border-white/10 rounded-2xl px-6 py-4 text-gray-800 dark:text-white focus:ring-2 focus:ring-brand-primary outline-none transition-all text-xs font-mono resize-none"
+                                        />
+                                    </div>
                                 </div>
                             </div>
 

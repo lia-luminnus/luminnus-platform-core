@@ -33,15 +33,18 @@ async function analisarImagem({ imageData, userMessage, analysisType = 'auto' })
     // 2. Preparar prompt adequado
     const prompt = gerarPromptPorTipo(detectedType, userMessage);
 
-    // 3. Processar com Gemini Vision
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    // 3. Processar com Gemini Vision (Padronizado v2.5)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+    // v7.5: Sanitização defensiva também no serviço legado
+    const cleanBase64 = imageData.base64.replace(/^data:image\/\w+;base64,/, '');
 
     const result = await model.generateContent([
       { text: prompt },
       {
         inlineData: {
           mimeType: imageData.mimeType || 'image/jpeg',
-          data: imageData.base64,
+          data: cleanBase64,
         },
       },
     ]);
@@ -56,7 +59,7 @@ async function analisarImagem({ imageData, userMessage, analysisType = 'auto' })
       suggestions: extrairSugestoes(analysis, detectedType),
       metadata: {
         timestamp: Date.now(),
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
       },
     };
 
@@ -269,7 +272,7 @@ git commit -m "[tipo]: [descrição curta]"
 
 Seja EXTREMAMENTE técnico e preciso.`;
 
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   const result = await model.generateContent([
     { text: prompt },

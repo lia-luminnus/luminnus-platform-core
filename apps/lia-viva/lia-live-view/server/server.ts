@@ -1,4 +1,5 @@
-import './config/envLoader.js';// [RELOAD_TRIGGER] v4.0.1 - Applying personality updates
+import { config } from './config/unifiedConfig.js';
+import helmet from 'helmet';
 const RELOAD_STAMP = "2026-01-29T16:00:00";
 // ===========================================================
 // LIA UNIFIED SERVER - Port 3006
@@ -47,8 +48,7 @@ function cleanPort(port: number | string) {
 }
 
 // Initial Cleanup
-const PORT = process.env.PORT || 3006;
-// cleanPort(PORT); // Removido para evitar matar o servidor de Auth legado na porta 3000
+// cleanPort(config.port); // Removido para evitar matar o servidor de Auth legado na porta 3000
 
 // Routes (these import supabase.js which needs env vars)
 import { setupSessionRoutes } from './routes/session.js';
@@ -99,7 +99,7 @@ const allowedOrigins = [
   'http://localhost:8080',
   'http://localhost:5173',
   'http://localhost:3000',
-  ...(process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean)
+  ...config.cors.allowedOrigins
 ];
 
 function corsHandler(req: any, res: any, next: any) {
@@ -129,7 +129,13 @@ function corsHandler(req: any, res: any, next: any) {
 const app = express();
 const httpServer = createServer(app);
 
-// CORS Dinâmico via ENV
+// Security Headers
+app.use(helmet({
+  contentSecurityPolicy: false, // Permitir carregamento de recursos externos por enquanto
+  crossOriginResourcePolicy: false,
+}));
+
+// CORS Dinâmico via Config
 app.use(corsHandler);
 
 // Middleware
@@ -190,8 +196,8 @@ setSocketIO(io);
 app.set('io', io);
 
 // Auth Middleware: Usar auth real em produção, fallback dev em desenvolvimento
-const isDev = process.env.NODE_ENV !== 'production';
-io.use(isDev ? socketAuthDev : socketAuth);
+// Auth Middleware: Usar auth real em produção, fallback dev em desenvolvimento
+io.use(config.isDev ? socketAuthDev : socketAuth);
 
 // Rooms Multi-Tenant no Connect
 io.on('connection', (socket) => {
@@ -223,7 +229,7 @@ io.on('connection', (socket) => {
 // ===========================================================
 
 export const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: config.openai.apiKey
 });
 
 // ===========================================================
@@ -296,8 +302,8 @@ async function startServer() {
     res.json({
       status: 'LIA Server Online',
       version: '4.0.1',
-      port: Number(process.env.PORT || 3000),
-      env: process.env.NODE_ENV || 'development',
+      port: config.port,
+      env: config.env,
       timestamp: new Date().toISOString(),
       routes: [
         'POST /api/conversations',
@@ -376,7 +382,7 @@ async function startServer() {
   console.log('🔍 [System] Checking critical env vars...');
   const criticalVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'OPENAI_API_KEY'];
   criticalVars.forEach(v => {
-    console.log(`   - ${v}: ${process.env[v] ? 'LOADED' : 'MISSING'}`);
+    console.log(`   - ${v}: ${process.env[v] ? 'LOADED (via Config)' : 'MISSING'}`);
   });
 
   console.log('🚀 [Server] Verificando variáveis críticas...');
@@ -444,8 +450,7 @@ async function startServer() {
 
     // Se estivermos em dev e alguém acessar port 3000/qualquer-coisa-frontend
     // Redirecionamos para o port 8080 (Vite) para que o SPA funcione
-    const isProduction = process.env.NODE_ENV === 'production';
-    if (!isProduction) {
+    if (!config.isProduction) {
       console.log(`[SPA Fallback] Redirecting ${req.path} to frontend dev server (5173)`);
       return res.redirect(`http://localhost:5173${req.path}${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`);
     }
@@ -464,17 +469,15 @@ async function startServer() {
   // ===========================================================
 
   // Unified architecture: Single port for all services
-  const PORT = process.env.PORT || 3006;
-
-  httpServer.listen(Number(PORT), '0.0.0.0', () => {
-    console.log(`🚀 LIA Unified Server ready on http://127.0.0.1:${PORT} [${process.env.NODE_ENV || 'dev'}]`);
+  httpServer.listen(config.port, '0.0.0.0', () => {
+    console.log(`🚀 LIA Unified Server ready on http://127.0.0.1:${config.port} [${config.env}]`);
   }).on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {
-      console.log(`⚠️ Porta ${PORT} ocupada. Tentando limpeza forçada (aguardando 3s)...`);
-      cleanPort(PORT);
+      console.log(`⚠️ Porta ${config.port} ocupada. Tentando limpeza forçada (aguardando 3s)...`);
+      cleanPort(config.port);
       setTimeout(() => {
-        console.log(`🔄 Tentando iniciar servidor novamente na porta ${PORT}...`);
-        httpServer.listen(Number(PORT), '0.0.0.0'); // Listen on all interfaces
+        console.log(`🔄 Tentando iniciar servidor novamente na porta ${config.port}...`);
+        httpServer.listen(config.port, '0.0.0.0'); // Listen on all interfaces
       }, 3000);
     }
   });
@@ -491,7 +494,7 @@ process.on('SIGINT', () => {
   console.log('🛑 [Server] Recebido SIGINT. Fechando conexões...');
   io.close();
   httpServer.close(() => {
-    console.log('✅ [Server] Porta 3000 liberada. Saindo...');
+    console.log(`✅ [Server] Porta ${config.port} liberada. Saindo...`);
     process.exit(0);
   });
 });
@@ -500,7 +503,7 @@ process.on('SIGTERM', () => {
   console.log('🛑 [Server] Recebido SIGTERM. Fechando conexões...');
   io.close();
   httpServer.close(() => {
-    console.log('✅ [Server] Porta 3000 liberada. Saindo...');
+    console.log(`✅ [Server] Porta ${config.port} liberada. Saindo...`);
     process.exit(0);
   });
 });

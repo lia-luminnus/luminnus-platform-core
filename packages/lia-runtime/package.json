@@ -65,7 +65,8 @@
     },
     "dependencies": {
         "@google/genai": "^1.0.0",
-        "@luminnus/shared": "workspace:*"
+        "@luminnus/shared": "workspace:*",
+        "zod": "^3.25.76"
     },
     "devDependencies": {
         "rimraf": "^5.0.5",

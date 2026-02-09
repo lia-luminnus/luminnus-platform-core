@@ -160,12 +160,15 @@ export function MultiModal() {
         } catch (error) {
             console.error('Erro ao enviar mensagem:', error);
         } finally {
-            // Revogar URLs após o envio (sucesso ou falha)
+            // v10.2: NÃO revogar URLs aqui. Elas são necessárias para o preview no chat.
+            // O LIAContext ou o refresh da página limparão a memória.
+            /* 
             filesToSend.forEach(item => {
                 if (item.preview) {
                     URL.revokeObjectURL(item.preview);
                 }
             });
+            */
         }
     };
 

@@ -73,7 +73,15 @@ O sistema de botões contextuais no chat deve respeitar o perfil:
 - [ ] Link é oficial `docs.google.com`?
 - [ ] Preview contém dados reais?
 - [ ] Placeholders removidos?
+- [ ] Force role-based buttons?
 - [ ] Botões exibidos são permitidos para a ROLE do usuário?
+
+### 8) BACKEND CONFIGURATION & URLS (V9.7)
+Para evitar erros de conexão (CORRS/404) entre frontend (3001) e backend (3006):
+- **PROIBIDO**: Usar URLs relativas como `fetch('/api/...')`.
+- **OBRIGATÓRIO**: Usar a função `getApiUrl()` importada de `@/config/api`.
+- **Exemplo**: `fetch(\`${getApiUrl()}/api/vision/analyze\`)`.
+- **Socket**: URLs de WebSocket também devem ser derivadas de `getSocketUrl()`.
 
 ---
 

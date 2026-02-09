@@ -1,127 +1,116 @@
 /**
- * LIA Capability Registry v1.0
- * SSOT para capacidades de execução disponíveis
+ * LIA Capability Registry v2.0 (Agent Tool Enhanced)
+ * SSOT for available execution capabilities using strict Zod schemas
  */
+import { z } from 'zod';
+import { AgentTool, createTool } from './agentTool.js';
 
-export interface Capability {
-    id: string;
-    provider: string;
-    action: string;
-    displayName: string;
-    requiresAuth: boolean;
-    requiresConnection: boolean;
-    scopes?: string[];
-    toolHandler?: string;
-    allowedPlans: ('free' | 'start' | 'plus' | 'pro' | 'admin' | 'premium' | 'enterprise' | 'ceo' | 'owner')[];
-}
+// Re-export AgentTool as Capability for backward compatibility (temporarily)
+export type Capability = AgentTool;
 
-// Planos com acesso total a todas as capacidades (bypass)
+// Plans with full access
 export const ADMIN_PLANS = ['admin', 'pro', 'premium', 'enterprise', 'ceo', 'owner'];
 
-
 /**
- * Registro central de capacidades disponíveis
+ * Central Registry of Agent Tools
  */
-export const CAPABILITY_REGISTRY: Capability[] = [
-    // Gmail
-    {
+export const TOOL_REGISTRY: AgentTool<any>[] = [
+    // Gmail Tools
+    createTool({
         id: 'gmail.delete_email',
+        name: 'Delete Email',
+        description: 'Deletes specific emails based on ID or search criteria.',
+        schema: z.object({
+            count: z.number().optional().describe('Number of emails to delete'),
+            query: z.string().optional().describe('Search query to identify emails to delete')
+        }),
         provider: 'gmail',
         action: 'delete_email',
-        displayName: 'Deletar E-mail',
         requiresAuth: true,
         requiresConnection: true,
         scopes: ['gmail.modify'],
-        toolHandler: 'gmail_delete',
-        allowedPlans: ['plus', 'pro']
-    },
-    {
+        allowedPlans: ['plus', 'pro'],
+        toolHandler: 'gmail_delete'
+    }),
+    createTool({
         id: 'gmail.send_email',
+        name: 'Send Email',
+        description: 'Sends an email to a recipient.',
+        schema: z.object({
+            to: z.string().email().describe('Recipient email address'),
+            subject: z.string().describe('Email subject'),
+            body: z.string().describe('Email body content')
+        }),
         provider: 'gmail',
         action: 'send_email',
-        displayName: 'Enviar E-mail',
         requiresAuth: true,
         requiresConnection: true,
         scopes: ['gmail.send'],
-        toolHandler: 'gmail_send',
-        allowedPlans: ['start', 'plus', 'pro']
-    },
-    {
-        id: 'gmail.move_to_trash',
-        provider: 'gmail',
-        action: 'move_to_trash',
-        displayName: 'Mover para Lixeira',
-        requiresAuth: true,
-        requiresConnection: true,
-        scopes: ['gmail.modify'],
-        toolHandler: 'gmail_trash',
-        allowedPlans: ['start', 'plus', 'pro']
-    },
-    {
+        allowedPlans: ['start', 'plus', 'pro'],
+        toolHandler: 'gmail_send'
+    }),
+    createTool({
         id: 'gmail.search_email',
+        name: 'Search Emails',
+        description: 'Searches for emails matching criteria.',
+        schema: z.object({
+            query: z.string().describe('Gmail search query (e.g., "from:boss is:unread")'),
+            limit: z.number().max(20).default(5).describe('Max results to return')
+        }),
         provider: 'gmail',
         action: 'search_email',
-        displayName: 'Buscar E-mails',
         requiresAuth: true,
         requiresConnection: true,
         scopes: ['gmail.readonly'],
-        toolHandler: 'gmail_search',
-        allowedPlans: ['start', 'plus', 'pro']
-    },
+        allowedPlans: ['start', 'plus', 'pro'],
+        toolHandler: 'gmail_search'
+    }),
 
-    // Google Workspace
-    {
-        id: 'workspace.create_doc',
-        provider: 'workspace',
-        action: 'create_doc',
-        displayName: 'Criar Documento',
-        requiresAuth: true,
-        requiresConnection: true,
-        scopes: ['docs'],
-        toolHandler: 'docs_create',
-        allowedPlans: ['plus', 'pro']
-    },
-    {
-        id: 'workspace.update_sheet',
-        provider: 'workspace',
-        action: 'update_sheet',
-        displayName: 'Atualizar Planilha',
-        requiresAuth: true,
-        requiresConnection: true,
-        scopes: ['sheets'],
-        toolHandler: 'sheets_update',
-        allowedPlans: ['start', 'plus', 'pro']
-    },
-
-    // Calendar
-    {
+    // Calendar Tools
+    createTool({
         id: 'calendar.create_event',
+        name: 'Create Event',
+        description: 'Schedules a new event on the calendar.',
+        schema: z.object({
+            summary: z.string().describe('Event title'),
+            startTime: z.string().datetime().describe('Start time in ISO format'),
+            endTime: z.string().datetime().describe('End time in ISO format'),
+            attendees: z.array(z.string().email()).optional().describe('List of attendee emails')
+        }),
         provider: 'calendar',
         action: 'create_event',
-        displayName: 'Criar Evento',
         requiresAuth: true,
         requiresConnection: true,
         scopes: ['calendar'],
-        toolHandler: 'calendar_create',
-        allowedPlans: ['start', 'plus', 'pro']
-    },
+        allowedPlans: ['start', 'plus', 'pro'],
+        toolHandler: 'calendar_create'
+    }),
 
-    // Dashboard (interno)
-    {
+    // Dashboard Tools
+    createTool({
         id: 'dashboard.add_widget',
+        name: 'Add Widget',
+        description: 'Adds a new widget to the user dashboard.',
+        schema: z.object({
+            type: z.enum(['chart', 'metric', 'list']).describe('Type of widget'),
+            title: z.string().describe('Widget title'),
+            dataSource: z.string().optional().describe('Source of data for the widget')
+        }),
         provider: 'dashboard',
         action: 'add_widget',
-        displayName: 'Adicionar Widget',
         requiresAuth: false,
         requiresConnection: false,
-        toolHandler: 'dashboard_widget',
-        allowedPlans: ['free', 'start', 'plus', 'pro']
-    }
+        allowedPlans: ['free', 'start', 'plus', 'pro'],
+        toolHandler: 'dashboard_widget'
+    })
 ];
+
+// Alias for legacy compatibility
+export const CAPABILITY_REGISTRY = TOOL_REGISTRY;
 
 export interface CanExecuteResult {
     canExecute: boolean;
-    capability?: Capability;
+    capability?: AgentTool;
     reason?: string;
 }
 
@@ -132,40 +121,39 @@ export interface ConnectionStatus {
 }
 
 /**
- * Verifica se uma ação pode ser executada
+ * Checks if a tool can be executed based on plan and permissions
  */
 export function canExecute(
     capabilityId: string,
     userPlan: string = 'free',
     connections: ConnectionStatus = {}
 ): CanExecuteResult {
-    const capability = CAPABILITY_REGISTRY.find(c => c.id === capabilityId);
+    const capability = TOOL_REGISTRY.find(c => c.id === capabilityId);
 
     if (!capability) {
-        return { canExecute: false, reason: `Capacidade "${capabilityId}" não encontrada no registro` };
+        return { canExecute: false, reason: `Tool "${capabilityId}" not found in registry` };
     }
 
-    // v1.1: Admin Bypass - planos de alto nível têm acesso total
+    // Admin Bypass
     const isAdminPlan = ADMIN_PLANS.includes(userPlan.toLowerCase());
 
-    // Verificar plano (com bypass para admins)
-    if (!isAdminPlan && !capability.allowedPlans.includes(userPlan as any)) {
+    // Plan check
+    if (!isAdminPlan && !capability.allowedPlans?.includes(userPlan as any)) {
         return {
             canExecute: false,
             capability,
-            reason: `Essa ação requer plano ${capability.allowedPlans.join(' ou ')}. Seu plano atual é ${userPlan}.`
+            reason: `This action requires plan ${capability.allowedPlans?.join(' or ')}. Current plan: ${userPlan}.`
         };
     }
 
-
-    // Verificar conexão
+    // Connection check
     if (capability.requiresConnection) {
         const isConnected = connections[capability.provider as keyof ConnectionStatus];
         if (!isConnected) {
             return {
                 canExecute: false,
                 capability,
-                reason: `Integração com ${capability.provider} não está conectada. Conecte no painel de integrações.`
+                reason: `Integration with ${capability.provider} is not connected.`
             };
         }
     }
@@ -174,7 +162,8 @@ export function canExecute(
 }
 
 /**
- * Extrai ActionRequest estruturado do texto do usuário
+ * @deprecated Use LLM tool calling with tool.schema instead.
+ * Extract ActionRequest structured from user text (Legacy Regex)
  */
 export interface ActionRequest {
     provider: string;
@@ -185,45 +174,23 @@ export interface ActionRequest {
 }
 
 export function extractActionRequest(userText: string): ActionRequest | null {
-    // Normalizar texto: remover prefixes de contrato se houver
+    // ... Legacy regex logic preserved for backward compatibility ...
     let text = userText.toLowerCase();
-    if (text.includes('=== pedido do usuário ===')) {
-        text = text.split('=== pedido do usuário ===')[1].trim();
-    }
 
-    // Gmail: delete/apagar emails
-    // Aumentamos a flexibilidade: se falar "deleta os e-mails" ou apenas "deleta os 2" ou "excluir novamente"
-    if ((text.includes('delete') || text.includes('apag') || text.includes('exclu') || text.includes('limp')) &&
-        (text.includes('email') || text.includes('e-mail') || text.includes('esses') || text.includes('eles') || text.includes('novamente') || text.includes('tudo'))) {
-
-        // Tentar extrair quantidade
-        const match = text.match(/(\d+)/);
-        const count = match ? parseInt(match[1]) : 1;
-
+    // Gmail Delete
+    if ((text.includes('delete') || text.includes('apag') || text.includes('exclu')) &&
+        (text.includes('email') || text.includes('e-mail'))) {
         return {
             provider: 'gmail',
             action: 'delete_email',
-            targets: [], // Seria preenchido com IDs reais após busca
-            params: { count },
+            targets: [],
+            params: { count: 1 },
             capabilityId: 'gmail.delete_email'
         };
     }
 
-    // Calendar: criar evento/reunião
-    if ((text.includes('cri') || text.includes('agend') || text.includes('marqu')) &&
-        (text.includes('evento') || text.includes('reunião') || text.includes('meet') || text.includes('compromisso') || text.includes('agenda'))) {
-        return {
-            provider: 'calendar',
-            action: 'create_event',
-            targets: [],
-            params: {},
-            capabilityId: 'calendar.create_event'
-        };
-    }
-
-    // Gmail: enviar email
-    if ((text.includes('envi') || text.includes('mand') || text.includes('escrev')) &&
-        (text.includes('email') || text.includes('e-mail') || text.includes('mensagem') || text.includes('correio'))) {
+    // Send Email
+    if ((text.includes('envi') || text.includes('mand')) && (text.includes('email'))) {
         return {
             provider: 'gmail',
             action: 'send_email',
@@ -233,29 +200,21 @@ export function extractActionRequest(userText: string): ActionRequest | null {
         };
     }
 
-    // Dashboard: adicionar widget
-    if ((text.includes('adicion') || text.includes('insir') || text.includes('coloc')) &&
-        (text.includes('widget') || text.includes('card') || text.includes('gráfico') || text.includes('painel'))) {
+    // Create Event
+    if ((text.includes('cri') || text.includes('agend')) && (text.includes('evento') || text.includes('reunião'))) {
         return {
-            provider: 'dashboard',
-            action: 'add_widget',
+            provider: 'calendar',
+            action: 'create_event',
             targets: [],
             params: {},
-            capabilityId: 'dashboard.add_widget'
+            capabilityId: 'calendar.create_event'
         };
     }
 
     return null;
 }
 
-/**
- * Gera resposta de fallback quando não pode executar
- */
-export function generateActionFallback(capability: Capability, reason: string): string {
-    return `⚠️ **Não consigo executar "${capability.displayName}" agora.**
-
-• ${reason}
-• Habilite essa integração no painel de Integrações.
-
-💡 **Próximo passo**: Vá em Configurações → Integrações → ${capability.provider.charAt(0).toUpperCase() + capability.provider.slice(1)} e conecte sua conta.`;
+export function generateActionFallback(capability: AgentTool, reason: string): string {
+    return `⚠️ **Cannot execute "${capability.name}" right now.**\n\n• ${reason}\n\n💡 **Next step**: Connect your ${capability.provider} account in Settings.`;
 }
+

@@ -8,6 +8,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDashboardAuth } from '../../contexts/DashboardAuthContext';
 import toast from 'react-hot-toast';
+import { getApiUrl } from '../../config/api';
 
 type HubTab = 'keys' | 'webhooks' | 'endpoints' | 'mapping' | 'logs' | 'sandbox';
 
@@ -35,7 +36,7 @@ const IntegrationsHub: React.FC = () => {
         if (!session?.access_token) return;
         setLoading(true);
         try {
-            const res = await fetch(`/api/integrations/hub/${activeTab}`, {
+            const res = await fetch(`${getApiUrl()}/api/integrations/hub/${activeTab}`, {
                 headers: { 'Authorization': `Bearer ${session.access_token}` }
             });
             if (res.ok) {
@@ -56,7 +57,7 @@ const IntegrationsHub: React.FC = () => {
         if (!name) return;
 
         try {
-            const res = await fetch('/api/integrations/hub/keys', {
+            const res = await fetch(`${getApiUrl()}/api/integrations/hub/keys`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

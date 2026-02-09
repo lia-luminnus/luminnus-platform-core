@@ -290,10 +290,16 @@ class BackendService {
     /**
      * Busca sessão do Gemini
      */
-    async getSession(): Promise<any | null> {
+    async getSession(conversationId?: string): Promise<any | null> {
         try {
+            const userId = this.getUserId();
+            let url = `${BACKEND_URL}/api/session?userId=${userId || ''}`;
+            if (conversationId) {
+                url += `&conversationId=${conversationId}`;
+            }
+
             // Rota no servidor 3000 é /api/session
-            const response = await fetch(`${BACKEND_URL}/api/session`, {
+            const response = await fetch(url, {
                 method: 'GET',
                 headers: { 'Content-Type': 'application/json' },
             });

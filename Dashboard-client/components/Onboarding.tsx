@@ -39,7 +39,7 @@ const Onboarding: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   // 🔒 CRITICAL: Prevent returning users from seeing onboarding
-  const { user, refreshProfile, onboardingCompleted, initialized } = useDashboardAuth();
+  const { user, refreshProfile, onboardingCompleted, initialized, completeSessionOnboarding: completeSessionOnboardingAuth } = useDashboardAuth();
 
   React.useEffect(() => {
     if (initialized && onboardingCompleted) {
@@ -130,6 +130,9 @@ const Onboarding: React.FC = () => {
       // Sempre atualiza estado local (funciona mesmo sem autenticação)
       setBusinessInfo(selectedCategory || 'other', selectedDescription || 'Personalizado');
       setModules(tempModules.length > 0 ? tempModules : ['dashboard', 'lia', 'settings']);
+
+      // v12.0: Trigger State Machine (Official Session Completion)
+      completeSessionOnboardingAuth();
       completeOnboarding();
 
       toast.dismiss(loadingToast);
@@ -140,6 +143,9 @@ const Onboarding: React.FC = () => {
       // Mesmo com erro no banco, permite continuar
       setBusinessInfo(selectedCategory || 'other', selectedDescription || 'Personalizado');
       setModules(tempModules.length > 0 ? tempModules : ['dashboard', 'lia', 'settings']);
+
+      // v12.0: Trigger State Machine
+      completeSessionOnboardingAuth();
       completeOnboarding();
       toast.success('Configuração salva localmente. Continue para o dashboard!');
       navigate('/');
@@ -312,6 +318,9 @@ const Onboarding: React.FC = () => {
                       }
                       setBusinessInfo(selectedCategory || 'other', selectedDescription || 'Personalizado');
                       setModules(tempModules.length > 0 ? tempModules : ['dashboard', 'lia', 'settings']);
+
+                      // v12.0: Trigger State Machine
+                      completeSessionOnboardingAuth();
                       completeOnboarding();
                     })();
 

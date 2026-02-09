@@ -30,16 +30,26 @@ class BackendService {
       'Content-Type': 'application/json',
     };
 
-    // Tentar obter token do localStorage (salvo pelo handshake ou login direto)
-    const storedAuth = localStorage.getItem('supabase.auth.token');
-    if (storedAuth) {
-      try {
-        const { access_token } = JSON.parse(storedAuth);
-        if (access_token) {
-          headers['Authorization'] = `Bearer ${access_token}`;
+    // Tentar obter token do localStorage (múltiplas chaves possíveis)
+    // v4.5: Suporte unificado para Dashboard (sb-dashboard-auth) e LIA Standalone (supabase.auth.token)
+    const storageKeys = ['sb-dashboard-auth', 'supabase.auth.token', 'sb-access-token'];
+
+    for (const key of storageKeys) {
+      const storedAuth = localStorage.getItem(key);
+      if (storedAuth) {
+        try {
+          const parsed = JSON.parse(storedAuth);
+          // Dashboard usa formato { access_token, user }
+          // Supabase default também segue padrão similar ou session direto
+          const token = parsed.access_token || parsed.session?.access_token || parsed.token;
+
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+            break; // Encontrou um token válido, para a busca
+          }
+        } catch (e) {
+          console.warn('[BackendService] Erro ao parsear token da key:', key, e);
         }
-      } catch (e) {
-        console.warn('[BackendService] Erro ao parsear token:', e);
       }
     }
 
@@ -47,13 +57,18 @@ class BackendService {
   }
 
   private getUserId(): string | null {
-    const storedAuth = localStorage.getItem('supabase.auth.token');
-    if (storedAuth) {
-      try {
-        const { user } = JSON.parse(storedAuth);
-        return user?.id || null;
-      } catch (e) {
-        return null;
+    const storageKeys = ['sb-dashboard-auth', 'supabase.auth.token', 'sb-access-token'];
+
+    for (const key of storageKeys) {
+      const storedAuth = localStorage.getItem(key);
+      if (storedAuth) {
+        try {
+          const parsed = JSON.parse(storedAuth);
+          const user = parsed.user || parsed.session?.user;
+          if (user?.id) return user.id;
+        } catch (e) {
+          // Ignore errors
+        }
       }
     }
     return null;
@@ -197,9 +212,15 @@ class BackendService {
    * Busca sessão do Gemini
    * Backend: GET /api/session
    */
-  async getSession(): Promise<any | null> {
+  async getSession(conversationId?: string): Promise<any | null> {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/session`, {
+      const userId = this.getUserId();
+      let url = `${BACKEND_URL}/api/session?userId=${userId || ''}`;
+      if (conversationId) {
+        url += `&conversationId=${conversationId}`;
+      }
+
+      const response = await fetch(url, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });

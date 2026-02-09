@@ -37,13 +37,62 @@ export const SubscriptionGate: React.FC<SubscriptionGateProps> = ({ children }) 
             // Se não há usuário MAS há tokens na URL, a sessão está sendo sincronizada
             // Aguardar mais para evitar redirecionamento prematuro
             if (!user && hasTokensInUrl) {
-                console.log('[SubscriptionGate] ⏳ Tokens na URL, aguardando sync...');
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                console.log('[SubscriptionGate] ⏳ Tokens na URL, aguardando sync (4s)...');
+                await new Promise(resolve => setTimeout(resolve, 4000));
 
                 // Tentar obter sessão diretamente
-                const { data: { session } } = await supabase.auth.getSession();
+                let { data: { session } } = await supabase.auth.getSession();
+
+                // Se ainda não temos sessão MAS ainda temos tokens, tentar setSession manualmente
+                if (!session && hasTokensInUrl) {
+                    console.log('[SubscriptionGate] 🔁 Tentando sync manual dos tokens...');
+                    const hash = window.location.hash;
+                    const search = window.location.search;
+
+                    let accessToken: string | null = null;
+                    let refreshToken: string | null = null;
+
+                    // Extrair tokens do hash ou search
+                    if (hash.includes('access_token=')) {
+                        let searchPart = hash.includes('?') ? hash.split('?')[1] : hash;
+                        const params = new URLSearchParams(searchPart);
+                        accessToken = params.get('access_token');
+                        refreshToken = params.get('refresh_token');
+                    } else if (search.includes('access_token=')) {
+                        const params = new URLSearchParams(search);
+                        accessToken = params.get('access_token');
+                        refreshToken = params.get('refresh_token');
+                    }
+
+                    if (accessToken && accessToken.length > 100) {
+                        try {
+                            const result = await supabase.auth.setSession({
+                                access_token: accessToken,
+                                refresh_token: refreshToken || ''
+                            });
+                            if (result.data.session) {
+                                console.log('[SubscriptionGate] ✅ Sync manual funcionou!');
+                                // Re-trigger check by returning (effect will re-run)
+                                return;
+                            }
+                        } catch (err) {
+                            console.warn('[SubscriptionGate] ⚠️ Sync manual falhou:', err);
+                        }
+                    }
+
+                    // Tentar getSession novamente após a tentativa manual
+                    const retry = await supabase.auth.getSession();
+                    session = retry.data.session;
+                }
+
                 if (!session?.user) {
-                    console.log('[SubscriptionGate] ❌ Sessão não sincronizada após espera');
+                    console.log('[SubscriptionGate] ❌ Sessão não sincronizada após 4s + retry manual');
+                    // v11.4: Se falhou o sync mas temos tokens, pode ser que o setSession ainda esteja rodando
+                    // Não vamos desistir imediatamente se o initialized for false
+                    if (!initialized) {
+                        console.log('[SubscriptionGate] ⏳ Contexto ainda não inicializado, aguardando mais um pouco...');
+                        return;
+                    }
                     setChecking(false);
                     setHasAccess(false);
                     return;
@@ -290,7 +339,7 @@ export const SubscriptionGate: React.FC<SubscriptionGateProps> = ({ children }) 
                         </button>
                     </div>
                     <p className="text-xs text-slate-500 mt-6">
-                        Logado como: {user.email}
+                        Logado como: {user?.email || 'Desconhecido'}
                     </p>
                 </div>
             </div>

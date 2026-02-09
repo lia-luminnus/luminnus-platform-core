@@ -255,7 +255,7 @@ export class GeminiLiveService {
         // MAS CUIDADO: Não juntar "de a", "e o", "é a"
         // Lista de palavras curtas válidas que não devem ser fundidas
         const validShortWords = new Set(['e', 'a', 'o', 'é', 'à', 'de', 'da', 'do', 'em', 'na', 'no', 'se', 'já', 'lá', 'só', 'eu', 'tu', 'ele', 'nós', 'vós', 'eles', 'me', 'te', 'se', 'nos', 'vos', 'lhe']);
-        
+
         normalized = normalized.replace(/(\p{L})\s(\p{L})(?=\s|$)/gu, (match, p1, p2) => {
             const potentialWord = (p1 + p2).toLowerCase();
             // Se p1 ou p2 forem palavras válidas isoladas, não juntar
@@ -271,6 +271,42 @@ export class GeminiLiveService {
         // Remover fragmentos muito curtos isolados se não forem palavras válidas
         if (normalized.length < 2 && !validShortWords.has(normalized.toLowerCase())) return '';
 
+        return normalized;
+    }
+
+    private isExplicitListRequest(userText: string): boolean {
+        if (!userText) return false;
+        return /(em\s+\d+\s+passos|passo\s+a\s+passo|liste|listar|t[oó]picos|itens|numerad[oa]|checklist)/i.test(userText);
+    }
+
+    private normalizeVoiceStyle(text: string, userText: string): string {
+        if (!text) return '';
+        if (this.isExplicitListRequest(userText)) return text;
+
+        let normalized = text;
+
+        // Remove títulos rígidos de template para fala natural.
+        normalized = normalized
+            .replace(/\*\*\s*PARTE\s*\d+\s*-[^*]+\*\*/gi, '')
+            .replace(/\b(Achado principal|Evid[eê]ncia|Causa raiz(?: prov[aá]vel)?|Corre[cç][aã]o m[ií]nima|Valida[cç][aã]o)\s*[:\-]\s*/gi, '');
+
+        // Quebra enumerações inline para facilitar normalização.
+        normalized = normalized.replace(/\s+(\d+[\)\.])\s+/g, '\n$1 ');
+
+        const lines = normalized
+            .split('\n')
+            .map(line => line.trim())
+            .filter(Boolean);
+
+        const numberedLines = lines.filter(line => /^\d+[\)\.]\s+/.test(line));
+        if (numberedLines.length >= 2 && numberedLines.length >= Math.ceil(lines.length * 0.5)) {
+            normalized = numberedLines
+                .map(line => line.replace(/^\d+[\)\.]\s+/, '').trim())
+                .filter(Boolean)
+                .join('. ');
+        }
+
+        normalized = normalized.replace(/\s{2,}/g, ' ').trim();
         return normalized;
     }
 
@@ -443,10 +479,10 @@ export class GeminiLiveService {
             // ✅ CORREÇÃO: Usar SOMENTE token efêmero (backend já tem config completa)
             // v5.7: CRÍTICO - Adicionar model explícito (SDK exige mesmo com token efêmero)
             this.liveSession = await liveClient.connect({
-                model: 'gemini-2.5-flash', // OBRIGATÓRIO: SDK valida este parâmetro antes do handshake
+                model: 'gemini-2.0-flash-exp', // OBRIGATÓRIO: SDK valida este parâmetro antes do handshake. NOTA: Gemini Live NÃO suporta 2.5-flash!
                 callbacks: {
                     onopen: () => {
-                        console.log('✅ Conectado ao Gemini Live (v2.5)');
+                        console.log('✅ Conectado ao Gemini Live (v2.0-flash-exp)');
                         this.setState(ConnState.OPEN);
                         this.emitEvent({ type: 'connected' });
                         this.emitEvent({ type: 'listening' });
@@ -708,8 +744,8 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
         } catch (error) {
             console.warn('⚠️ AudioWorklet não suportado, usando ScriptProcessor (fallback):', error);
 
-            if (!this.audioContext) {
-                console.error('❌ [GeminiLive] AudioContext perdido no fallback');
+            if (!this.audioContext || !this.mediaStream) {
+                console.error('❌ [GeminiLive] AudioContext ou MediaStream perdido no fallback');
                 return;
             }
 
@@ -1033,7 +1069,8 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
                 console.log('📊 [Forçando] Detectado gatilho de dashboard, forçando snapshot...');
                 await this.executeForcedDashboard();
             } else if (liaText) {
-                const sanitizedLia = sanitizeForTTS(liaText);
+                const naturalLiaText = this.normalizeVoiceStyle(liaText, userTextForTrigger);
+                const sanitizedLia = sanitizeForTTS(naturalLiaText);
                 if (sanitizedLia) {
                     console.log('🤖 LIA:', sanitizedLia.substring(0, 50) + (sanitizedLia.length > 50 ? '...' : ''));
                     this.emitEvent({ type: 'lia-transcript', data: sanitizedLia });

@@ -9,6 +9,9 @@ import { OpenAIService } from './openAIService.js';
 import { getContext } from './memoryService.js';
 import { ToolService } from './toolService.js';
 import { supabase } from '../config/supabase.js';
+import { AutomationRunner } from './automationRunner.js';
+import { AutomationService } from './automationService.js';
+import { AudioService } from './audioService.js';
 
 export const WhatsAppIntelligence = {
     /**
@@ -23,6 +26,16 @@ export const WhatsAppIntelligence = {
                 await this.handleIncomingMessage(event);
             } catch (err) {
                 console.error('❌ [WhatsAppIntelligence] Erro ao processar mensagem:', err);
+            }
+        });
+
+        // Escutar áudios recebidos
+        eventBus.onEvent('audio_received', async (event) => {
+            try {
+                const { tenantId, payload } = event;
+                await AudioService.processIncomingAudio(tenantId, payload.audioAssetId, payload.mediaUrl);
+            } catch (err) {
+                console.error('❌ [WhatsAppIntelligence] Erro ao processar áudio:', err);
             }
         });
     },
@@ -54,7 +67,28 @@ export const WhatsAppIntelligence = {
         // 2. Obter contexto da LIA
         const context = await getContext(conversationId, tenantId, messageText);
 
-        // 3. Chamar "Cérebro" (OpenAI)
+        // 3. Verificar se existe automação ativa para este evento
+        try {
+            const automations = await AutomationService.listAutomations(tenantId);
+            const activeAutomation = automations.find(a =>
+                a.is_enabled &&
+                a.status === 'active' &&
+                (a.trigger_type === 'event' || a.trigger_type === 'keyword')
+            );
+
+            if (activeAutomation) {
+                console.log(`⚡ [WhatsAppIntelligence] Disparando automação: ${activeAutomation.name}`);
+                await AutomationRunner.trigger(activeAutomation.id, tenantId, {
+                    vars: { message: messageText, contactId, conversationId },
+                    context: { conversationId, contactId, messageText }
+                }, 'webhook');
+                return; // O AutomationRunner cuidará da resposta
+            }
+        } catch (err) {
+            console.warn('⚠️ [WhatsAppIntelligence] Erro ao buscar automações, seguindo com fluxo padrão:', err);
+        }
+
+        // 4. Fluxo Padrão: Chamar "Cérebro" (OpenAI)
         const response = await OpenAIService.chat(
             messageText,
             context.history,
@@ -62,7 +96,7 @@ export const WhatsAppIntelligence = {
             ToolService.getTools()
         );
 
-        // 4. Se houver chamada de ferramenta, executar e gerar nova resposta
+        // 5. Se houver chamada de ferramenta, executar e gerar nova resposta
         if (response.function_call) {
             console.log(`🔧 [WhatsAppIntelligence] Executando ferramenta: ${response.function_call.name}`);
             const toolResult = await ToolService.execute(
@@ -80,7 +114,7 @@ export const WhatsAppIntelligence = {
 
             await this.sendResponse(tenantId, conversationId, conversation.external_id, finalResponse.text);
         } else {
-            // 5. Enviar resposta direta
+            // 6. Enviar resposta direta
             await this.sendResponse(tenantId, conversationId, conversation.external_id, response.text);
         }
     },

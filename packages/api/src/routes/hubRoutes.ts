@@ -111,4 +111,35 @@ router.get('/logs', async (req: any, res) => {
     }
 });
 
+// --- Universal Sync Endpoint (External Systems) ---
+router.post('/sync', async (req, res) => {
+    try {
+        const apiKey = req.headers['x-api-key'] || req.query.api_key;
+
+        if (!apiKey) {
+            return res.status(401).json({ error: 'API Key missing' });
+        }
+
+        const keyData = await HubService.findKeyByToken(apiKey as string);
+        if (!keyData) {
+            return res.status(401).json({ error: 'Invalid or revoked API Key' });
+        }
+
+        const { type, data } = req.body;
+        if (!type || !data) {
+            return res.status(400).json({ error: 'Missing type or data in payload' });
+        }
+
+        const result = await HubService.processSync(keyData.tenant_id, type, data);
+
+        if (result.success) {
+            res.json(result);
+        } else {
+            res.status(500).json(result);
+        }
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 export default router;

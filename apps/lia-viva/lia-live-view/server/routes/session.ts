@@ -4,6 +4,27 @@ import { loadImportantMemories } from '../config/supabase.js';
 import { getContext } from '../services/memoryService.js';
 import { LIA_FULL_PERSONALITY, LIA_GEMINI_LIVE_PERSONALITY } from '@luminnus/shared';
 
+function sanitizeVoiceInstruction(rawInstruction: string): string {
+  if (!rawInstruction) return '';
+
+  let sanitized = rawInstruction;
+
+  // Remove blocos de template rígido que tornam a voz engessada.
+  sanitized = sanitized.replace(/\*\*PARTE\s*1\s*-\s*Diagnóstico[\s\S]*?\*\*PARTE\s*2\s*-\s*Conteúdo[\s\S]*?(\n\n|$)/gi, '\n');
+
+  // Neutraliza orientações explícitas de passo-a-passo automático para voz.
+  sanitized = sanitized
+    .replace(/\bMODO\s*A\s*\(Incidente\)\b/gi, 'modo diagnóstico')
+    .replace(/\bResponda\s+EXATAMENTE\s+no\s+formato\s+abaixo\b/gi, 'Responda de forma natural e direta');
+
+  // Converte listas numeradas em bullets neutros para reduzir indução de fala robotizada.
+  sanitized = sanitized
+    .replace(/^\s*\d+\)\s+/gm, '- ')
+    .replace(/^\s*\d+\.\s+/gm, '- ');
+
+  return sanitized;
+}
+
 export function setupSessionRoutes(app: Express) {
   // GET /api/session - Retorna sessão atual + API Key
   app.get('/api/session', async (req, res) => {
@@ -12,7 +33,11 @@ export function setupSessionRoutes(app: Express) {
       process.env.GOOGLE_API_KEY ||
       process.env.API_KEY;
 
-    const session = await ensureSession();
+    const conversationId = req.query.conversationId as string;
+    const userId = req.query.userId as string; // v5.5: Support userId passing
+
+    // v5.5: Pass params to ensureSession to reuse existing session if possible
+    const session = await ensureSession(userId, conversationId);
 
     const response: any = {
       conversationId: session.conversationId,
@@ -44,17 +69,51 @@ export function setupSessionRoutes(app: Express) {
       const { createClient } = await import('@supabase/supabase-js');
       const supabaseUrl = process.env.SUPABASE_URL!;
       const serviceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!;
+      let userId: string;
+      console.log(`🔍 [/api/me] Verificando token. URL: ${supabaseUrl}, Key: ${serviceKey?.substring(0, 10)}..., Token Len: ${token.length}`);
+
       const supabaseAdmin = createClient(supabaseUrl, serviceKey, {
         auth: { persistSession: false, autoRefreshToken: false }
       });
 
+      // v11.5: Tentativa 1 - Validação Padrão
       const { data: userData, error: authError } = await supabaseAdmin.auth.getUser(token);
 
       if (authError || !userData?.user?.id) {
-        return res.status(401).json({ error: 'Token inválido' });
-      }
+        console.warn(`⚠️ [/api/me] getUser falhou (${authError?.message || 'Sem ID'}), tentando via decode...`);
 
-      const userId = userData.user.id;
+        try {
+          // Decodificação segura do payload (Base64)
+          const payloadPart = token.split('.')[1];
+          if (!payloadPart) throw new Error('Token malformado');
+
+          const payload = JSON.parse(Buffer.from(payloadPart, 'base64').toString());
+          const sub = payload.sub;
+
+          if (sub) {
+            console.log(`🎯 [/api/me] Payload extraído (sub: ${sub}). Validando via admin...`);
+            // Tentativa 2 - Busca direta via Admin (ignora sessão GoTrue)
+            const { data: adminUser, error: adminError } = await supabaseAdmin.auth.admin.getUserById(sub);
+
+            if (!adminError && adminUser?.user) {
+              console.log(`✅ [/api/me] Usuário verificado via Admin API: ${adminUser.user.id}`);
+              userId = adminUser.user.id;
+            } else {
+              console.error(`❌ [/api/me] Admin verification failed:`, adminError?.message);
+              return res.status(401).json({ error: 'Token inválido ou expirado' });
+            }
+          } else {
+            console.error(`❌ [/api/me] Token sem claim 'sub'`);
+            return res.status(401).json({ error: 'Token inválido' });
+          }
+        } catch (err: any) {
+          console.error(`❌ [/api/me] Exceção na validação manual:`, err.message);
+          return res.status(401).json({ error: 'Falha na autenticação' });
+        }
+      } else {
+        console.log(`✅ [/api/me] Token validado (padrão) para user: ${userData.user.id}`);
+        userId = userData.user.id;
+      }
 
       // Buscar perfil do usuário
       const { getUserProfile } = await import('../config/supabase.js');
@@ -214,6 +273,7 @@ export function setupSessionRoutes(app: Express) {
 
       // v4.31: Injetar consciência de controle de dashboard (LIA Action)
       const { DASHBOARD_CONTROL_PROMPT } = await import('@luminnus/shared').catch(() => ({ DASHBOARD_CONTROL_PROMPT: '' }));
+      const voiceContextInstruction = sanitizeVoiceInstruction(context.systemInstruction.replace(LIA_FULL_PERSONALITY, ''));
 
 
       // Construir systemInstruction COMPLETO para motor de voz Gemini
@@ -228,7 +288,7 @@ ${userNameFromMemory ? `\n[NOME DO USUÁRIO - OBRIGATÓRIO] O nome do usuário �
 • Sua identidade é LIA - Luminnus Intelligent Assistant.
 
 === CONTEXTO DINÂMICO (Tempo/Localização/Memórias) ===
-${context.systemInstruction.replace(LIA_FULL_PERSONALITY, '')}
+${voiceContextInstruction}
 
 === CONTROLE DE DASHBOARD (LUMINNUS) ===
 ${DASHBOARD_CONTROL_PROMPT}
@@ -239,6 +299,7 @@ ${DASHBOARD_CONTROL_PROMPT}
 • Se já houve conversa por texto, não cumprimente de novo. Continue o assunto.
 • Você TEM memória persistente. Use o que sabe sobre o usuário naturalmente.
 • Quando o usuário corrigir grafia do nome (ex: "com dois L"), APLIQUE a correção ao escrever/falar o nome.
+• NÃO use resposta em formato engessado com "1) 2) 3)" a menos que o usuário peça explicitamente por passos/lista.
 
 === POLÍTICA DE EXECUÇÃO DE FERRAMENTAS (CRÍTICO) ===
 • **REGRA DE OURO**: Você DEVE chamar a ferramenta (function call) ANTES de confirmar ao usuário que fez algo.

@@ -13,6 +13,7 @@ import { AuditService } from '../services/auditService.js';
 import { AIRouter } from '../services/aiRouter.js';
 import { FileService } from '../services/fileService.js';
 import { saveMessage } from '../config/supabase.js';
+import crypto from 'crypto';
 
 
 
@@ -131,7 +132,7 @@ export function setupVisionRoutes(app: Express) {
                         const mammoth = await import('mammoth');
                         const extractFn = (mammoth as any).extractRawText || (mammoth as any).default?.extractRawText;
                         if (!extractFn) throw new Error('Não foi possível encontrar a função de extração do mammoth');
-                        
+
                         const result = await extractFn({ buffer: fileBuffer });
                         extractedText = result.value;
                         console.log(`    📄 Texto extraído do Word: ${extractedText.length} caracteres`);
@@ -182,7 +183,7 @@ export function setupVisionRoutes(app: Express) {
                         else if (file.mimetype.includes('spreadsheet') || file.mimetype.includes('excel') || file.originalname.match(/\.(xls|xlsx|csv)$/i)) folderName = 'Planilhas';
                         else if (file.mimetype.includes('presentation') || file.originalname.match(/\.(ppt|pptx)$/i)) folderName = 'Apresentações';
 
-                        const folderId = await FileService.getOrCreateFolder(finalTenantId, finalUserId, folderName, 'lia_shared');
+                        const folderId = await FileService.getOrCreateFolder(finalTenantId, finalUserId, folderName, 'personal');
 
                         // 2. REGISTRO NO BANCO DE DADOS
                         const fileRecord = await FileService.saveMetadata({
@@ -196,7 +197,7 @@ export function setupVisionRoutes(app: Express) {
                             folder_id: folderId,
                             parse_method: 'gemini-vision',
                             status: 'uploaded',
-                            scope: 'lia_shared',
+                            scope: 'personal',
                             source: 'lia_attachment'
                         });
 
@@ -229,8 +230,31 @@ export function setupVisionRoutes(app: Express) {
                             folder_id: folderId || undefined
                         });
                     }
-                } catch (upErr: any) {
-                    console.error(`    ❌ Erro no upload de ${file.originalname}:`, upErr.message);
+                } catch (persistError: any) {
+                    // v17.0: PERSIST_WARN - Logar mas não abortar
+                    console.error(JSON.stringify({
+                        timestamp: new Date().toISOString(),
+                        component: 'VISION_ROUTE',
+                        stage: 'PERSIST_WARN',
+                        conversationId: req.body.conversationId,
+                        userId,
+                        tenantId,
+                        fileName: file.originalname,
+                        error: {
+                            message: persistError.message,
+                            code: persistError.code,
+                            constraint: persistError.constraint
+                        }
+                    }));
+
+                    // Continuar com dados mínimos para análise
+                    processedFilesForAIRouter.push({
+                        name: file.originalname,
+                        mimetype: effectiveMimetype,
+                        data: base64Data,
+                        size: file.size,
+                        extracted_text: extractedText
+                    });
                 }
             }
 
@@ -300,18 +324,28 @@ export function setupVisionRoutes(app: Express) {
 
             // 4. Persistir mensagens no Banco de Dados
             const conversationId = req.body.conversationId;
-            const messageId = req.body.messageId || null;
+            let messageId = req.body.messageId;
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+            // Validar se o messageId recebido é um UUID válido, senão gerar novo
+            if (!messageId || !uuidRegex.test(messageId)) {
+                console.warn(`⚠️ [Vision] messageId inválido recebido: "${messageId}". Gerando novo UUID.`);
+                messageId = crypto.randomUUID();
+            }
+
             let responseMessageId: string | undefined;
 
+            // v17.0: Persistir mensagens - Blindar contra falhas de DB
             if (conversationId) {
                 try {
-                    responseMessageId = messageId ? `resp_${messageId}` : `vision_${Date.now()}`;
+                    // GARANTIR UUID VÁLIDO para a resposta também
+                    responseMessageId = crypto.randomUUID();
 
                     // Salvar mensagem do usuário
                     await saveMessage(conversationId, 'user', userPrompt || `Analise ${files.length} arquivo(s)`, 'multimodal', attachmentsForMessage, messageId);
 
-                    // Salvar resposta da LIA
-                    await saveMessage(conversationId, 'assistant', result.text, 'multimodal', attachmentsForMessage, responseMessageId);
+                    // Salvar resposta da LIA (SEM attachments - evita duplicação)
+                    await saveMessage(conversationId, 'assistant', result.text, 'multimodal', [], responseMessageId);
 
                     // Emitir eventos Socket
                     const io = req.app.get('io');
@@ -334,12 +368,24 @@ export function setupVisionRoutes(app: Express) {
                             type: 'lia',
                             content: result.text,
                             origin: 'multimodal',
-                            attachments: attachmentsForMessage,
+                            attachments: [], // v17.1: Não duplicar attachments na resposta da LIA
                             created_at: new Date().toISOString()
                         });
                     }
-                } catch (saveError) {
-                    console.error('⚠️ Erro ao persistir mensagens:', saveError);
+                } catch (saveError: any) {
+                    // v17.0: PERSIST_WARN - Logar mas não abortar entrega da resposta
+                    console.error(JSON.stringify({
+                        timestamp: new Date().toISOString(),
+                        component: 'VISION_ROUTE',
+                        stage: 'PERSIST_WARN',
+                        conversationId,
+                        userId,
+                        tenantId,
+                        error: {
+                            message: saveError.message,
+                            operation: 'saveMessage'
+                        }
+                    }));
                 }
             }
 
@@ -350,13 +396,30 @@ export function setupVisionRoutes(app: Express) {
                 }
             }
 
+            // v17.0: CRITICAL - Garantir que result.text nunca seja vazio/undefined
+            if (!result?.text || result.text.trim().length === 0) {
+                console.error(JSON.stringify({
+                    timestamp: new Date().toISOString(),
+                    component: 'VISION_ROUTE',
+                    stage: 'ERROR',
+                    conversationId: req.body.conversationId,
+                    userId,
+                    tenantId,
+                    error: 'AIRouter retornou texto vazio para análise multimodal'
+                }));
+
+                return res.status(500).json({
+                    error: 'Erro ao processar análise: resposta vazia do orquestrador'
+                });
+            }
+
             res.json({
                 success: true,
                 id: responseMessageId,
                 fileIds: processedFilesForAIRouter.map(f => f.id),
                 analysis: {
                     title: files.length > 1 ? `${files.length} Arquivos` : files[0].originalname,
-                    summary: result?.text || 'Análise completa.',
+                    summary: result.text, // v17.0: Nunca usar fallback silencioso
                     detailPayload: result?.detailPayload
                 },
                 provider: result?.provider || 'hybrid',
@@ -434,7 +497,7 @@ Para ANÁLISES:
 Gere dados realistas e úteis baseados no contexto.`;
 
             const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

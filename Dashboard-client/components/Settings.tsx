@@ -1,6 +1,7 @@
 
 import React, { useContext, useState, useEffect } from 'react';
 import Header from './Header';
+import CustomSelect from './ui/CustomSelect';
 import { ThemeContext } from '../App';
 import { LanguageContext, Language } from '../contexts/LanguageContext';
 import { useAppStore } from '../store/useAppStore';
@@ -340,17 +341,19 @@ const Settings: React.FC = () => {
                                                 </h4>
                                                 <div className="flex items-center gap-2">
                                                     <label className="text-[9px] font-black uppercase tracking-widest text-gray-500">País:</label>
-                                                    <select
+                                                    <CustomSelect
                                                         value={country}
-                                                        onChange={(e) => setCountry(e.target.value)}
-                                                        className="bg-transparent text-[9px] font-black uppercase tracking-widest text-brand-primary border-none focus:ring-0 cursor-pointer"
-                                                    >
-                                                        <option value="Brasil">Brasil 🇧🇷</option>
-                                                        <option value="Portugal">Portugal 🇵🇹</option>
-                                                        <option value="EUA">EUA 🇺🇸</option>
-                                                        <option value="Espanha">Espanha 🇪🇸</option>
-                                                        <option value="Outro">Outro 🌐</option>
-                                                    </select>
+                                                        onChange={(value) => setCountry(value)}
+                                                        options={[
+                                                            { label: 'Brasil 🇧🇷', value: 'Brasil' },
+                                                            { label: 'Portugal 🇵🇹', value: 'Portugal' },
+                                                            { label: 'EUA 🇺🇸', value: 'EUA' },
+                                                            { label: 'Espanha 🇪🇸', value: 'Espanha' },
+                                                            { label: 'Outro 🌐', value: 'Outro' }
+                                                        ]}
+                                                        variant="glass"
+                                                        className="min-w-[140px]"
+                                                    />
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -494,15 +497,18 @@ const Settings: React.FC = () => {
                                         <h3 className="text-xl font-black mb-1 tracking-tight">{t('language')}</h3>
                                         <p className="text-sm text-gray-500 font-medium">{t('chooseLanguage')}</p>
                                     </div>
-                                    <select
+                                    <CustomSelect
                                         value={selectedLang}
-                                        onChange={(e) => setSelectedLang(e.target.value as Language)}
-                                        className="bg-gray-50 dark:bg-black/30 border border-gray-200 dark:border-white/10 rounded-2xl px-6 py-3 text-sm font-bold focus:ring-2 focus:ring-brand-primary outline-none transition-all cursor-pointer"
-                                    >
-                                        <option value="en">English (US)</option>
-                                        <option value="pt">Português (BR)</option>
-                                        <option value="es">Español</option>
-                                    </select>
+                                        onChange={(value) => setSelectedLang(value as Language)}
+                                        options={[
+                                            { label: 'English (US)', value: 'en' },
+                                            { label: 'Português (BR)', value: 'pt' },
+                                            { label: 'Español', value: 'es' }
+                                        ]}
+                                        variant="glass"
+                                        placeholder="Selecione o idioma"
+                                        className="w-full md:w-64"
+                                    />
                                 </div>
                             </div>
 

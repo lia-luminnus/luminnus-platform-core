@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { backendService } from '../lia/services/backendService';
+import CustomSelect from '../ui/CustomSelect';
 
 interface WhatsAppConfigProps {
     onSave?: () => void;
@@ -288,35 +289,33 @@ REGRAS:
                         <div className="glass-panel bg-white p-4 rounded-2xl border border-gray-300 dark:border-white/10 dark:bg-white/5 shadow-sm space-y-3">
                             <div>
                                 <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Objetivo do Canal</label>
-                                <div className="relative group">
-                                    <select
-                                        className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:ring-2 focus:ring-brand-primary/50 transition-all appearance-none cursor-pointer text-gray-900 dark:text-white"
-                                        value={config.objective}
-                                        onChange={(e) => setConfig({ ...config, objective: e.target.value })}
-                                    >
-                                        <option value="vendas" className="dark:bg-[#0a0d14]">Vendas</option>
-                                        <option value="suporte" className="dark:bg-[#0a0d14]">Suporte</option>
-                                        <option value="agendamento" className="dark:bg-[#0a0d14]">Agendamento</option>
-                                        <option value="financeiro" className="dark:bg-[#0a0d14]">Financeiro</option>
-                                    </select>
-                                    <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-brand-primary transition-colors">expand_more</span>
-                                </div>
+                                <CustomSelect
+                                    value={config.objective}
+                                    onChange={(value) => setConfig({ ...config, objective: value })}
+                                    options={[
+                                        { label: 'Vendas', value: 'vendas' },
+                                        { label: 'Suporte', value: 'suporte' },
+                                        { label: 'Agendamento', value: 'agendamento' },
+                                        { label: 'Financeiro', value: 'financeiro' }
+                                    ]}
+                                    variant="glass"
+                                    placeholder="Selecione o objetivo"
+                                />
                             </div>
                             <div>
                                 <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Tom de Voz</label>
-                                <div className="relative group">
-                                    <select
-                                        className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-brand-primary/50 transition-all appearance-none cursor-pointer text-gray-900 dark:text-white"
-                                        value={config.tone}
-                                        onChange={(e) => setConfig({ ...config, tone: e.target.value })}
-                                    >
-                                        <option value="consultivo" className="dark:bg-[#0a0d14]">Consultivo</option>
-                                        <option value="formal" className="dark:bg-[#0a0d14]">Formal</option>
-                                        <option value="direto" className="dark:bg-[#0a0d14]">Direto</option>
-                                        <option value="leve" className="dark:bg-[#0a0d14]">Leve / Descontraído</option>
-                                    </select>
-                                    <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-brand-primary transition-colors">expand_more</span>
-                                </div>
+                                <CustomSelect
+                                    value={config.tone}
+                                    onChange={(value) => setConfig({ ...config, tone: value })}
+                                    options={[
+                                        { label: 'Consultivo', value: 'Consultivo' },
+                                        { label: 'Formal', value: 'Formal' },
+                                        { label: 'Direto', value: 'Direto' },
+                                        { label: 'Leve / Descontraído', value: 'Leve' }
+                                    ]}
+                                    variant="glass"
+                                    placeholder="Selecione o tom"
+                                />
                             </div>
                         </div>
                     </div>
@@ -467,10 +466,9 @@ REGRAS:
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Modelo Base</label>
-                                    <select
-                                        className="w-full bg-gray-50/50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:ring-2 focus:ring-brand-primary/50 transition-all appearance-none cursor-pointer"
-                                        onChange={(e) => {
-                                            const selectedValue = e.target.value;
+                                    <CustomSelect
+                                        value=""
+                                        onChange={(selectedValue) => {
                                             const template = defaultPlaybooks.find(t => t.name === selectedValue);
                                             if (template) {
                                                 const hasContent = playbookContent.trim().length > 0;
@@ -480,13 +478,10 @@ REGRAS:
                                                 }
                                             }
                                         }}
-                                        defaultValue=""
-                                    >
-                                        <option value="" disabled className="dark:bg-[#0a0d14]">Selecionar modelo...</option>
-                                        {defaultPlaybooks.map(t => (
-                                            <option key={t.name} value={t.name} className="dark:bg-[#0a0d14]">{t.name}</option>
-                                        ))}
-                                    </select>
+                                        options={defaultPlaybooks.map(t => ({ label: t.name, value: t.name }))}
+                                        variant="glass"
+                                        placeholder="Selecionar modelo..."
+                                    />
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Contexto Sugerido</label>

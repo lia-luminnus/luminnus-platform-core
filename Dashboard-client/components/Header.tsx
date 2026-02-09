@@ -13,8 +13,8 @@ const Header: React.FC<{ title?: string }> = ({ title }) => {
   const { subscription } = useSubscription();
   const navigate = useNavigate();
 
-  // Usar subscription.plan_name do Supabase como fonte primária
-  const currentPlanName = subscription?.plan_name || plan?.name || 'Start';
+  // Usar plan.name do AuthContext (que permite overrides manuais/admin) como prioridade
+  const currentPlanName = plan?.name || subscription?.plan_name || 'Start';
 
   const handleAction = (action: string) => {
     toast.success(`${t('featureComingSoon')} (${action})`);

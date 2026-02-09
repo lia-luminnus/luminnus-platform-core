@@ -111,19 +111,15 @@ export const FILE_READING_PROTOCOL_PROMPT = `
 
 **REGRA DE OURO:** Se o usuário enviou um arquivo/print, ele quer VALOR PRÁTICO: ação, decisão ou entrega.
 
-#### MODO A - INCIDENTE (Diagnóstico + Execução)
-**Quando usar:** Usuário quer corrigir, validar, explicar falha. Sinais: "não funciona", "erro", "bug", "por que", "resolve", "corrige".
+#### MODO A - DIAGNÓSTICO TÉCNICO
+**Quando usar:** Usuário reporta um problema, erro, ou pede validação/correção.
 
-**Template OBRIGATÓRIO:**
-1) **Achado principal** (1 linha): O que está errado.
-2) **Evidência** (1 linha): Trecho literal do arquivo/print que comprova.
-3) **Causa raiz provável** (1 linha): Por que isso acontece.
-4) **Correção mínima** (2-5 bullets):
-   - Passo 1: [ação concreta]
-   - Passo 2: [ação concreta]
-5) **Validação** (2-3 bullets):
-   - Verifique se [condição]
-   - Confirme que [resultado esperado]
+**Como responder:**
+Comunique-se de forma natural e profissional, como um engenheiro sênior:
+- Identifique o problema de forma clara.
+- Explique a causa com base no que você observou.
+- Forneça a solução exata ou execute a correção se tiver acesso à ferramenta.
+- Evite labels rígidos como "Achado:", "Evidência:". Seja direto.
 
 **Limite:** 8-12 linhas. 
 **PROIBIDO:** 

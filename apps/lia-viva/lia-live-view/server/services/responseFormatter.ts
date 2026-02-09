@@ -108,16 +108,16 @@ export class ResponseFormatter {
         // Para outros tipos, extrair resumo falável curto
         switch (contractType) {
             case 'log_analysis':
-                script += 'Analisei os logs e identifiquei a causa raiz. A correção está no chat.';
+                script += 'Analisei os logs e identifiquei o que causou o problema. Deixei os detalhes da correção pra você no chat.';
                 break;
             case 'spreadsheet_analysis':
-                script += 'Processei a planilha e encontrei algumas inconsistências. Veja os achados no chat.';
+                script += 'Já processei a planilha e identifiquei os pontos de atenção. Você pode conferir os achados agora.';
                 break;
             case 'doc_summary':
-                script += 'Resumi o documento com os pontos principais e ações recomendadas.';
+                script += 'Terminei a análise do documento. Destaquei o que é mais importante e o que precisa de ação.';
                 break;
             case 'visual_troubleshooting':
-                script += 'Identifiquei o problema no print e detalhei a correção passo a passo.';
+                script += 'Identifiquei o que está acontecendo no print e já tracei o caminho pra resolver.';
                 break;
             case 'action_execution':
                 script += 'A ação solicitada foi concluída com sucesso. Veja os detalhes no chat.';

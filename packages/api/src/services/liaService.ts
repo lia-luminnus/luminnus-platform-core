@@ -14,7 +14,7 @@ export class LiaService {
             console.log(`🧠 [LiaService] Pensando sobre: "${text}" (conv: ${conversationId})`);
 
             const model = genAI.getGenerativeModel({
-                model: 'gemini-2.5-flash', // Modelo específico solicitado pelo usuário
+                model: 'gemini-2.5-flash', // Modelo estável e atualizado
                 systemInstruction: LIA_PERSONALITY_V4
             });
 

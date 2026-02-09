@@ -28,7 +28,7 @@ interface MetaWebhookEntry {
                 from: string;
                 id: string;
                 timestamp: string;
-                type: 'text' | 'audio' | 'image' | 'document' | 'location' | 'sticker';
+                type: 'text' | 'audio' | 'image' | 'document' | 'location' | 'sticker' | 'interactive';
                 text?: { body: string };
                 audio?: { id: string; mime_type: string };
                 image?: { id: string; mime_type: string; caption?: string };
@@ -360,6 +360,13 @@ async function processIncomingMessage(
             mediaId = message.document?.id || '';
             bodyText = message.document?.filename || '';
             break;
+        case 'interactive':
+            if (message.interactive?.button_reply) {
+                bodyText = message.interactive.button_reply.title;
+            } else if (message.interactive?.list_reply) {
+                bodyText = message.interactive.list_reply.title;
+            }
+            break;
     }
 
     // Salvar mensagem
@@ -386,7 +393,8 @@ async function processIncomingMessage(
     await eventBus.emitMessageReceived(tenantId, conversationId, contactId, {
         type: message.type,
         body: bodyText,
-        mediaId
+        mediaId,
+        interactive: message.interactive
     });
 
     // Se for áudio, criar audio_asset para transcrição

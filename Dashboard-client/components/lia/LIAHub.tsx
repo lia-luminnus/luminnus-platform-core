@@ -12,6 +12,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     MessageSquare, Layers, Plus, Trash2, Edit2, Search,
     Lock, MessageCircle, X, Check, RefreshCw
@@ -60,6 +61,95 @@ function cn(...classes: any[]) {
 }
 
 // ============================================================
+// COMPONENTS
+// ============================================================
+
+function MultiModalUpgradePromo() {
+    const { t } = useContext(LanguageContext);
+    const navigate = useNavigate();
+
+    return (
+        <div className="flex-1 flex items-center justify-center p-6 bg-[#050810]">
+            <div className="max-w-2xl w-full bg-gradient-to-br from-[#0D111C] to-[#0A0F1A] border border-white/10 rounded-[32px] p-8 md:p-12 relative overflow-hidden shadow-2xl">
+                {/* Background Glows */}
+                <div className="absolute -top-24 -right-24 w-64 h-64 bg-brand-primary/20 rounded-full blur-[80px]" />
+                <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-500/10 rounded-full blur-[80px]" />
+
+                <div className="relative z-10 flex flex-col md:flex-row gap-10 items-center">
+                    {/* Left Side: Illustration Area */}
+                    <div className="flex-shrink-0 w-48 h-48 md:w-64 md:h-64 relative group">
+                        <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/30 to-indigo-600/30 rounded-full blur-2xl group-hover:scale-110 transition-transform duration-700" />
+                        <div className="absolute inset-0 border border-white/10 rounded-full flex items-center justify-center backdrop-blur-sm bg-white/5 overflow-hidden">
+                            <div className="relative flex flex-col items-center">
+                                <Layers className="w-20 h-20 text-brand-primary mb-2 animate-pulse" />
+                                <div className="flex gap-2">
+                                    <div className="w-1.5 h-6 bg-brand-primary/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                    <div className="w-1.5 h-8 bg-brand-primary rounded-full animate-bounce" style={{ animationDelay: '200ms' }} />
+                                    <div className="w-1.5 h-5 bg-indigo-500/60 rounded-full animate-bounce" style={{ animationDelay: '400ms' }} />
+                                </div>
+                            </div>
+                        </div>
+                        {/* Floating Badges */}
+                        <div className="absolute -top-2 -right-2 bg-[#FF2E9E] text-white text-[10px] font-black px-3 py-1 rounded-full shadow-lg rotate-12"> VISION </div>
+                        <div className="absolute -bottom-2 -left-2 bg-[#7C3AED] text-white text-[10px] font-black px-3 py-1 rounded-full shadow-lg -rotate-12"> VOICE </div>
+                    </div>
+
+                    {/* Right Side: Content */}
+                    <div className="flex-1 space-y-6">
+                        <div className="space-y-2 text-center md:text-left">
+                            <p className="text-brand-primary font-black uppercase tracking-[0.2em] text-[10px]">Evolua para o Plano Plus</p>
+                            <h2 className="text-3xl md:text-4xl font-black text-white leading-tight tracking-tighter">
+                                Desbloqueie a Versão <span className="bg-gradient-to-r from-brand-primary to-indigo-400 bg-clip-text text-transparent">Multimodal</span>
+                            </h2>
+                            <p className="text-gray-400 text-sm font-medium">
+                                A Lia pode ver, ouvir e agir. Não apenas leia dados, visualize a inteligência em tempo real.
+                            </p>
+                        </div>
+
+                        <ul className="grid grid-cols-1 gap-4">
+                            {[
+                                { icon: 'visibility', title: 'Análise Visual', desc: 'Envie prints de erros, planilhas e fotos para diagnósticos imediatos.' },
+                                { icon: 'mic', title: 'Comunicação por Voz', desc: 'Fale com a Lia naturalmente, sem precisar digitar uma única palavra.' },
+                                { icon: 'auto_awesome', title: 'Inteligência Proativa', desc: 'Acesso aos modelos mais avançados de visão e áudio do mundo.' }
+                            ].map((feat, i) => (
+                                <li key={i} className="flex gap-4 items-start group/item">
+                                    <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center text-brand-primary group-hover/item:bg-brand-primary/10 transition-colors">
+                                        <span className="material-symbols-outlined text-xl">{feat.icon}</span>
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        <p className="text-xs font-black text-white">{feat.title}</p>
+                                        <p className="text-[11px] text-gray-400/80 leading-relaxed font-medium">{feat.desc}</p>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+
+                        <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                            <button
+                                onClick={() => navigate('/plan')}
+                                className="px-8 py-4 bg-gradient-to-r from-brand-primary to-indigo-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl hover:scale-[1.03] active:scale-95 transition-all shadow-xl shadow-brand-primary/20"
+                            >
+                                Assinar Plano Plus
+                            </button>
+                            <button
+                                onClick={() => navigate('/plan')}
+                                className="px-8 py-4 bg-white/5 hover:bg-white/10 text-white font-black text-xs uppercase tracking-widest rounded-2xl border border-white/10 transition-all"
+                            >
+                                Ver Detalhes
+                            </button>
+                        </div>
+
+                        <p className="text-center md:text-left text-[9px] text-gray-500 font-bold uppercase tracking-widest">
+                            * Disponível a partir do Plano Plus
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ============================================================
 // LIA HUB CONTENT (Inside LIAProvider)
 // ============================================================
 
@@ -67,6 +157,7 @@ function LIAHubContent() {
     const { user, plan, profile, isAdmin } = useDashboardAuth();
     const { t } = useContext(LanguageContext);
     const lia = useLIA();
+    const navigate = useNavigate();
 
     const [activeMode, setActiveMode] = useState<'chat' | 'multimodal' | 'live'>('chat');
     const [searchQuery, setSearchQuery] = useState('');
@@ -197,7 +288,8 @@ function LIAHubContent() {
     }, [activeMode, activeConversationId]);
 
     const handleTabClick = (mode: LIAMode) => {
-        if (!canAccessMode(mode)) return;
+        // v10.1: SEMPRE permitir a troca de modo. 
+        // A lógica de renderActiveMode decidirá se mostra o componente ou o bloqueio/promo.
         setActiveMode(mode);
     };
 
@@ -232,6 +324,14 @@ function LIAHubContent() {
     };
 
     const renderActiveMode = () => {
+        // v10.0: CRÍTICO - Verificar upgrade ANTES de bloquear acesso
+        // Isso permite mostrar o promo para usuários Start
+        if (activeMode === 'multimodal' && userPlanLevel < PLAN_LEVELS.plus) {
+            console.log('[LIAHub] 🎁 Exibindo MultiModalUpgradePromo');
+            return <MultiModalUpgradePromo />;
+        }
+
+        // Fallback genérico para outros modos bloqueados
         if (!canAccessMode(activeMode)) {
             return (
                 <div className="flex-1 flex items-center justify-center">
@@ -244,13 +344,17 @@ function LIAHubContent() {
                             O modo {t(TABS.find(t => t.id === activeMode)?.label as any)} {t('requiresPlan')}{' '}
                             <strong className="text-white">{TABS.find(t => t.id === activeMode)?.requiredPlan.toUpperCase()}</strong> {t('planToUpgrade')}
                         </p>
-                        <button className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-xl hover:scale-105 transition-transform">
+                        <button
+                            onClick={() => navigate('/plan')}
+                            className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-xl hover:scale-105 transition-transform"
+                        >
                             {t('upgradeNowBtn')}
                         </button>
                     </div>
                 </div>
             );
         }
+
         switch (activeMode) {
             case 'chat': return <ChatMode />;
             case 'multimodal': return <MultiModal />;
@@ -273,13 +377,13 @@ function LIAHubContent() {
                                     <button
                                         key={tab.id}
                                         onClick={() => handleTabClick(tab.id)}
-                                        disabled={isLocked}
+                                        disabled={false} // v10.1: Permitir clique mesmo bloqueado para mostrar o Promo
                                         className={cn(
-                                            "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all",
+                                            "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all relative group/tab",
                                             isActive
                                                 ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
                                                 : isLocked
-                                                    ? "bg-white/5 text-gray-600 cursor-not-allowed"
+                                                    ? "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white cursor-pointer" // v10.1: Cursor pointer
                                                     : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
                                         )}
                                     >

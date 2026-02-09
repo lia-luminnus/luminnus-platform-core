@@ -56,16 +56,18 @@ function decidirModelo(input) {
 function classificarIntencao(message: string, hasAttachments: boolean): 'ANALYZE' | 'CREATE' | 'CORRECT' | 'HYBRID' {
   let lower = message.toLowerCase();
 
-  // v9.0: Se o prompt foi enriquecido pelo OutputGovernance, isolar apenas o pedido real do usuário
-  const userRequestMarker = '=== pedido do usuário ===';
-  if (lower.includes(userRequestMarker)) {
-    const userRequestIndex = lower.indexOf(userRequestMarker);
-    lower = lower.substring(userRequestIndex + userRequestMarker.length).trim();
+  // v11.0: Se o prompt foi enriquecido, isolar apenas o pedido real do usuário (Case-insensitive)
+  const markerRegex = /===\s*pedido do usuário\s*===/i;
+  const match = message.match(markerRegex);
+  if (match) {
+    const userRequestIndex = match.index! + match[0].length;
+    lower = message.substring(userRequestIndex).trim().toLowerCase();
+    console.log(`🛡️ [IntentRouter] Pedido isolado para classificação: "${lower.substring(0, 100)}..."`);
   }
 
   // v9.0: Detecção de contratos visuais - forçar ANALYZE para visual_analysis
-  if (message.includes('CONTRATO DE OUTPUT: VISUAL_ANALYSIS') ||
-    message.includes('MODO ANÁLISE VISUAL')) {
+  if (message.toUpperCase().includes('CONTRATO DE OUTPUT: VISUAL_ANALYSIS') ||
+    message.toUpperCase().includes('MODO ANÁLISE VISUAL')) {
     console.log('🎯 [IntentRouter] Contrato visual_analysis detectado → forçando ANALYZE');
     return 'ANALYZE';
   }
@@ -73,22 +75,23 @@ function classificarIntencao(message: string, hasAttachments: boolean): 'ANALYZE
   // v7.5: Verbos de ação real (Ações destrutivas ou de criação sistêmica)
   // v9.0: Usar regex de palavra inteira para evitar falsos positivos
   // v10.1: Adicionar keywords de impressão/PDF
-  const creationKeywords = ['crie', 'gere', 'monte', 'construa', 'salve', 'exporte', 'create', 'generate', 'make', 'faça', 'faz', 'montar', 'imprimir', 'pdf', 'exportar pdf', 'gerar pdf'];
-  const actionKeywords = ['deleta', 'apaga', 'exclua', 'move', 'transfira', 'envia', 'agenda', 'marca'];
-  const correctionKeywords = ['corrija', 'conserte', 'fix', 'correct'];
+  // v12.0: Usar regex de palavra inteira (\b) para evitar falsos positivos (ex: "faz" em "faz sentido")
+  const creationKeywords = [/\bcrie\b/i, /\bgere\b/i, /\bmonte\b/i, /\bconstrua\b/i, /\bsalve\b/i, /\bexporte\b/i, /\bcreate\b/i, /\bgenerate\b/i, /\bmake\b/i, /\bfaça\b/i, /\bfaz\b/i, /\bmontar\b/i, /\bimprimir\b/i, /\bpdf\b/i, /\bexportar pdf\b/i, /\bgerar pdf\b/i];
+  const actionKeywords = [/\bdeleta\b/i, /\bapaga\b/i, /\bexclua\b/i, /\bmove\b/i, /\btransfira\b/i, /\benvia\b/i, /\bagenda\b/i, /\bmarca\b/i];
+  const correctionKeywords = [/\bcorrija\b/i, /\bconserte\b/i, /\bfix\b/i, /\bcorrect\b/i];
 
   // v8.0: Remover keywords de erro de analysisKeywords para evitar falsos positivos
-  const analysisKeywords = ['analise', 'veja', 'explique', 'resuma', 'entenda', 'analyze', 'explain', 'summarize', 'diga', 'fale', 'qual', 'quais', 'mostre', 'pergunta', 'duvida', 'verifique', 'ajuste', 'o que você acha', 'sua opinião'];
+  const analysisKeywords = [/\banalise\b/i, /\bveja\b/i, /\bexplique\b/i, /\bresuma\b/i, /\bentenda\b/i, /\banalyze\b/i, /\bexplain\b/i, /\bsummarize\b/i, /\bdiga\b/i, /\bfale\b/i, /\bqual\b/i, /\bquais\b/i, /\bmostre\b/i, /\bpergunta\b/i, /\bduvida\b/i, /\bverifique\b/i, /\bajuste\b/i, /\bo que você acha\b/i, /\bsua opinião\b/i];
 
   // v8.0: Keywords específicas de troubleshooting (separadas para evitar conflito)
   // v9.0: Usar apenas em contexto de pedido real do usuário (após isolamento)
-  const troubleshootingKeywords = ['erro', 'bug', 'problema', 'não funciona', 'falha', 'quebrado', 'crash'];
+  const troubleshootingKeywords = [/\berro\b/i, /\bbug\b/i, /\bproblema\b/i, /\bnão funciona\b/i, /\bfalha\b/i, /\bquebrado\b/i, /\bcrash\b/i];
 
-  const isCreation = creationKeywords.some(k => lower.includes(k));
-  const isAction = actionKeywords.some(k => lower.includes(k));
-  const isCorrection = correctionKeywords.some(k => lower.includes(k));
-  const isTroubleshooting = troubleshootingKeywords.some(k => lower.includes(k));
-  const isAnalysis = analysisKeywords.some(k => lower.includes(k)) || (!isCreation && !isAction && !isCorrection && hasAttachments && !isTroubleshooting);
+  const isCreation = creationKeywords.some(k => k.test(lower));
+  const isAction = actionKeywords.some(k => k.test(lower));
+  const isCorrection = correctionKeywords.some(k => k.test(lower));
+  const isTroubleshooting = troubleshootingKeywords.some(k => k.test(lower));
+  const isAnalysis = analysisKeywords.some(k => k.test(lower)) || (!isCreation && !isAction && !isCorrection && hasAttachments && !isTroubleshooting);
 
   // Se o usuário está perguntando "o que está acontecendo", é ANALYZE, mesmo se falar "ajuste"
   if (lower.includes('acontecendo') || lower.includes('perdi') || lower.includes('perdido')) return 'ANALYZE';
@@ -171,6 +174,32 @@ async function processarRequisicaoMultimodal({
   tenantId?: string;
 }) {
   try {
+    // v7.5: Payload Contract & Sanitization (Deep Defense)
+    // Garantir que images estejam no formato { mimeType, base64 } sem prefixo
+    const sanitizedImages = images.map((img, idx) => {
+      let cleanBase64 = img.base64 || (img as any).data || '';
+      // Remover prefixo se ainda existir (fallback)
+      if (cleanBase64.startsWith('data:')) {
+        cleanBase64 = cleanBase64.replace(/^data:image\/\w+;base64,/, '');
+      }
+
+      if (!img.mimeType || !cleanBase64) {
+        console.warn(`⚠️ [Orquestrador] Imagem ${idx} inválida/corrompida no payload.`);
+      }
+
+      return {
+        mimeType: img.mimeType || 'image/jpeg',
+        base64: cleanBase64
+      };
+    }).filter(i => i.base64.length > 0);
+
+    if (sanitizedImages.length > 0 && sanitizedImages.length !== images.length) {
+      console.warn(`⚠️ [Orquestrador] ${images.length - sanitizedImages.length} imagens removidas por falha de contrato.`);
+    }
+
+    // Atualizar referência para uso posterior
+    images = sanitizedImages;
+
     // 1. Detectar tipo de requisição
     const requestType = detectarTipoRequisicao(message);
 
@@ -284,12 +313,19 @@ async function processarRequisicaoMultimodal({
       toolsCalled: toolResults.map(tr => tr.name)
     });
 
-    if (!audit.passed && (intent === 'CREATE' || intent === 'CORRECT')) {
+
+    // v13.0: CRITICAL FIX - Apenas bloquear se for ALTO RISCO (score >= 70) E for criação/correção ativa
+    // Permitir que diagnósticos e explicações passem mesmo com violações moderadas
+    if (!audit.passed && (intent === 'CREATE' || intent === 'CORRECT') && audit.riskScore >= 70) {
       // v9.0: Mensagem de erro mais informativa
       const violationsFormatted = audit.violations.map(v => `• ${v}`).join('\n');
       response.content = `Não consegui completar sua solicitação de forma segura.\n\n**Motivo:**\n${violationsFormatted}\n\n**O que fazer:**\n• Reformule seu pedido sendo mais específico\n• Se precisa criar ou editar algo, mencione explicitamente\n• Se for apenas uma análise, deixe isso claro\n\nPosso ajudar de outra forma?`;
       response.metadata.assurance_failed = true;
       console.warn(`⚠️ [Orquestrador] Auditoria bloqueou resposta. Intent: ${intent}, Violations: ${audit.violations.length}, Score: ${audit.riskScore}`);
+    } else if (!audit.passed) {
+      // v13.0: Se falhou mas não é crítico, apenas logar e permitir resposta passar
+      console.warn(`⚠️ [Orquestrador] Auditoria com ressalvas (não-bloqueante). Intent: ${intent}, Score: ${audit.riskScore}, Violations: ${audit.violations.join('; ')}`);
+      response.metadata.assurance_warnings = audit.violations;
     }
 
     return response;
@@ -321,7 +357,7 @@ async function processarComGeminiBrain({
   memories = [], // v7.5: Adicionado para evitar ReferenceError
   systemInstruction = ''
 }) {
-  console.log(`🧠 Processando com Gemini 2.0 Flash (Brain) | Intent: ${intent}`);
+  console.log(`🧠 Processando com Gemini 2.5 Flash (Brain) | Intent: ${intent}`);
 
   // v3.0: Usar ToolService.getTools() para obter todas as ferramentas disponíveis
   const allTools = ToolService.getTools();
@@ -342,6 +378,17 @@ async function processarComGeminiBrain({
   };
 
   const result = await runGemini(message, context);
+
+  // v17.0: LOG CRÍTICO - Verificar resultado do runGemini
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    component: 'GEMINI_BRAIN',
+    stage: 'GEMINI_RAW_RESULT',
+    hasText: !!result.text,
+    textLength: result.text?.length || 0,
+    hasFunctionCalls: !!(result.function_calls && result.function_calls.length > 0),
+    functionCallCount: result.function_calls?.length || 0
+  }));
 
   // v3.0: Processar chamadas de ferramentas usando ToolService.execute()
   let toolResults: any[] = [];
@@ -410,6 +457,21 @@ async function processarComGeminiBrain({
     });
 
     finalBrainText = secondTurnResponse.text;
+  }
+
+  // v17.0: FALLBACK CRÍTICO - Garantir que content nunca seja vazio
+  if (!finalBrainText || finalBrainText.trim().length === 0) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      component: 'GEMINI_BRAIN',
+      stage: 'EMPTY_CONTENT_FALLBACK',
+      originalText: result.text,
+      secondTurnExecuted: toolResults.length > 0,
+      toolResultsCount: toolResults.length
+    }));
+
+    // Fallback para garantir resposta ao usuário
+    finalBrainText = 'Análise concluída. Vi sua imagem e estou processando. Se precisar de mais detalhes, pode me perguntar!';
   }
 
   return {
@@ -481,7 +543,7 @@ async function processarComGeminiVision({
     - PROIBIDO: Placeholders como [Veja aqui].`;
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     systemInstruction: currentSystemInstruction,
     tools: geminiTools as any,
     toolConfig: (intent === 'CREATE' || intent === 'CORRECT' || intent === 'HYBRID') ? {
@@ -490,13 +552,14 @@ async function processarComGeminiVision({
       }
     } : {
       functionCallingConfig: {
-        mode: 'NONE' as any
+        mode: 'AUTO' as any // v12.0: Permitir AUTO para ANALYZE (para ferramentas de pesquisa)
       }
     }
   });
 
   // v7.3: Converter histórico para formato Gemini (Retrocompatibilidade SSOT)
   // v7.5: Mapeamento de histórico enriquecido (incluindo anexos)
+  // v7.6: Garantir que o histórico comece com 'user' (Gemini API requirement)
   const contents = history.filter((m: any) => m.role !== 'system').map((m: any) => {
     if (m.role === 'function' || m.role === 'tool') {
       return {
@@ -517,6 +580,11 @@ async function processarComGeminiVision({
       parts: [{ text: enrichedContent }]
     };
   });
+
+  // v7.6: CRITICAL FIX - Gemini exige que o histórico comece com 'user'
+  // Encontrar o índice da primeira mensagem 'user' e descartar tudo antes dela
+  const firstUserIndex = contents.findIndex((c: any) => c.role === 'user');
+  const validContents = firstUserIndex >= 0 ? contents.slice(firstUserIndex) : contents;
 
   // Preparar partes da mensagem atual (texto + imagens + documentos)
   const currentParts: any[] = [{ text: message }];
@@ -545,9 +613,9 @@ async function processarComGeminiVision({
   let result;
   let response;
 
-  if (contents.length > 0) {
+  if (validContents.length > 0) {
     const chat = model.startChat({
-      history: contents,
+      history: validContents,
       generationConfig: {
         maxOutputTokens: 2048,
         temperature: 0.7
@@ -591,6 +659,28 @@ async function processarComGeminiVision({
 
   const text = response.text();
 
+  const extractUserRequest = (rawMessage: string): string => {
+    const markerRegex = /===\s*pedido do usuário\s*===/i;
+    const markerMatch = rawMessage.match(markerRegex);
+    if (!markerMatch) {
+      return (rawMessage || '').trim();
+    }
+
+    const requestStart = (markerMatch.index || 0) + markerMatch[0].length;
+    return rawMessage.substring(requestStart).trim();
+  };
+
+  // v17.5: LOG CRÍTICO - Verificar resultado bruto do Vision
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    component: 'GEMINI_VISION',
+    stage: 'VISION_RAW_RESULT',
+    hasText: !!text,
+    textLength: text?.length || 0,
+    hasFunctionCalls: toolResults.length > 0,
+    functionCallCount: toolResults.length
+  }));
+
   // v7.0: Se houve chamadas de ferramentas, precisamos de um SEGUNDO TURNO para o link real
   let finalText = text;
   if (toolResults.length > 0) {
@@ -625,6 +715,58 @@ async function processarComGeminiVision({
 
     const followUp = await chat.sendMessage("Finalize a resposta agora fornecendo o link real e confirmando a execução.");
     finalText = followUp.response.text();
+
+    // v17.5: Log do segundo turno
+    console.log(`🔄 [Vision] Segundo turno concluído. Texto final: ${finalText?.length || 0} caracteres`);
+  }
+
+  // v17.5: FALLBACK CRÍTICO - Garantir que content nunca seja vazio em Vision
+  if (!finalText || finalText.trim().length === 0) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      component: 'GEMINI_VISION',
+      stage: 'EMPTY_CONTENT_FALLBACK',
+      originalText: text,
+      secondTurnExecuted: toolResults.length > 0
+    }));
+
+    // Recovery pass: resposta objetiva para a pergunta do usuário, sem template genérico.
+    const userRequest = extractUserRequest(message);
+    const recoveryPrompt = `Responda objetivamente ao pedido do usuário com base apenas no(s) anexo(s).
+- Se a pergunta for de contagem/listagem (ex: "quantos"/"quais"), devolva a contagem e os itens identificados.
+- Não faça perguntas genéricas de retorno como "como posso ajudar".
+- Se houver incerteza visual, explique em 1 frase e dê a melhor estimativa.
+
+Pedido do usuário: ${userRequest || message}`;
+
+    try {
+      const recoveryResult = await model.generateContent([
+        { text: recoveryPrompt },
+        ...currentParts,
+      ]);
+      const recoveredText = recoveryResult.response?.text?.() || '';
+
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        component: 'GEMINI_VISION',
+        stage: 'RECOVERY_PASS',
+        recoveredTextLength: recoveredText.length,
+      }));
+
+      if (recoveredText.trim().length > 0) {
+        finalText = recoveredText;
+      }
+    } catch (recoveryError) {
+      console.error('❌ [Vision] Recovery pass falhou:', recoveryError);
+    }
+
+    if (!finalText || finalText.trim().length === 0) {
+      finalText = 'Não consegui concluir a leitura do anexo nesta tentativa por uma falha técnica de processamento multimodal. Tente reenviar o arquivo ou fazer a pergunta novamente.';
+    }
+
+    if (toolResults.some(tr => tr.error)) {
+      finalText = 'Consegui receber o anexo, mas tive falha ao executar uma ação auxiliar. Posso analisar somente o conteúdo visual/textual se você quiser tentar de novo agora.';
+    }
   }
 
   return {

@@ -29,10 +29,35 @@ export async function verifyAuth(req: AuthenticatedRequest, res: Response, next:
             return res.status(500).json({ error: 'Supabase não inicializado no servidor' });
         }
 
-        const { data: { user }, error } = await supabase.auth.getUser(token);
+        // v11.5: Tentativa 1 - Validação Padrão
+        let { data: { user }, error } = await supabase.auth.getUser(token);
 
         if (error || !user) {
-            return res.status(401).json({ error: 'Sessão inválida ou expirada' });
+            console.warn(`[verifyAuth] getUser falhou (${error?.message || 'Sem user'}), tentando decode...`);
+            try {
+                const payloadPart = token.split('.')[1];
+                if (!payloadPart) throw new Error('Token malformado');
+
+                const payload = JSON.parse(Buffer.from(payloadPart, 'base64').toString());
+                const sub = payload.sub;
+
+                if (sub) {
+                    console.log(`[verifyAuth] Validando UID via Admin API: ${sub}`);
+                    const { data: adminUser, error: adminError } = await supabase.auth.admin.getUserById(sub);
+
+                    if (!adminError && adminUser?.user) {
+                        user = adminUser.user;
+                        console.log(`[verifyAuth] Sucesso via Admin fallback: ${user.id}`);
+                    } else {
+                        throw new Error(adminError?.message || 'User not found in admin check');
+                    }
+                } else {
+                    throw new Error('No sub claim');
+                }
+            } catch (fallbackErr: any) {
+                console.error('[verifyAuth] Falha crítica na autenticação:', fallbackErr.message);
+                return res.status(401).json({ error: 'Sessão inválida ou expirada' });
+            }
         }
 
         req.user = { id: user.id };

@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import CustomSelect from '../ui/CustomSelect';
 
 interface Lead {
     id: string;
@@ -61,6 +62,7 @@ const WhatsAppKanban: React.FC<WhatsAppKanbanProps> = ({ tenantId, onOpenChat, o
     const [loading, setLoading] = useState(true);
     const [draggedLead, setDraggedLead] = useState<Lead | null>(null);
     const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+    const [agentMode, setAgentMode] = useState('SDR');
 
     // Função para atualizar os scores do lead selecionado
     const updateLeadScore = (field: 'urgency_score' | 'sentiment_score', value: number) => {
@@ -193,10 +195,16 @@ const WhatsAppKanban: React.FC<WhatsAppKanbanProps> = ({ tenantId, onOpenChat, o
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        <select className="bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/20 rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-wide outline-none text-gray-700 dark:text-white cursor-pointer hover:bg-gray-200 dark:hover:bg-white/20 transition-all appearance-none pr-10 relative">
-                            <option value="SDR" className="dark:bg-[#0a0d14] dark:text-white">Modo SDR</option>
-                            <option value="SUPPORT" className="dark:bg-[#0a0d14] dark:text-white">Modo Suporte</option>
-                        </select>
+                        <CustomSelect
+                            value={agentMode}
+                            onChange={setAgentMode}
+                            options={[
+                                { label: 'Modo SDR', value: 'SDR' },
+                                { label: 'Modo Suporte', value: 'SUPPORT' }
+                            ]}
+                            variant="glass"
+                            className="min-w-[160px]"
+                        />
                     </div>
                 </div>
             </div>
