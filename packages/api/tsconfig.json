@@ -17,7 +17,7 @@
         "baseUrl": ".",
         "paths": {
             "@luminnus/shared": [
-                "../shared/dist/index.d.ts"
+                "../shared/src"
             ]
         }
     },

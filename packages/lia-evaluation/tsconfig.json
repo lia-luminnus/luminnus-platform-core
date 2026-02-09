@@ -14,8 +14,18 @@
         "declaration": true,
         "composite": true,
         "sourceMap": true,
-        "baseUrl": "."
+        "baseUrl": ".",
+        "paths": {
+            "@luminnus/shared": [
+                "../shared/src"
+            ]
+        }
     },
+    "references": [
+        {
+            "path": "../shared"
+        }
+    ],
     "include": [
         "src/**/*"
     ],
