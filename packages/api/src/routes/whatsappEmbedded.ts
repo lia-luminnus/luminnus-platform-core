@@ -47,6 +47,27 @@ function parseState(state: string): { tenantId: string; valid: boolean } {
 }
 
 /**
+ * GET /api/whatsapp/embedded/debug-config
+ * 
+ * Diagnostic endpoint to verify env var values in production
+ */
+router.get('/debug-config', (_req: Request, res: Response) => {
+    res.json({
+        status: 'ok',
+        config: {
+            META_APP_ID,
+            META_REDIRECT_URI,
+            DASHBOARD_URL,
+            META_CONFIG_ID: META_CONFIG_ID ? '***set***' : '(empty)',
+            META_APP_SECRET: META_APP_SECRET ? '***set***' : '(empty)',
+            env_WHATSAPP_OAUTH_REDIRECT: process.env.WHATSAPP_OAUTH_REDIRECT || '(not set)',
+            env_META_REDIRECT_URI: process.env.META_REDIRECT_URI || '(not set)',
+            env_DASHBOARD_URL: process.env.DASHBOARD_URL || '(not set)',
+        }
+    });
+});
+
+/**
  * POST /api/whatsapp/embedded/start
  * 
  * Generates the Embedded Signup URL for the client to open
@@ -54,6 +75,8 @@ function parseState(state: string): { tenantId: string; valid: boolean } {
 router.post('/start', async (req: Request, res: Response) => {
     try {
         const { tenant_id } = req.body;
+
+        console.log(`🔧 [Embedded Signup] Config: redirect_uri=${META_REDIRECT_URI}, app_id=${META_APP_ID}, dashboard=${DASHBOARD_URL}`);
 
         if (!tenant_id) {
             return res.status(400).json({
@@ -74,7 +97,7 @@ router.post('/start', async (req: Request, res: Response) => {
         const state = generateState(tenant_id);
 
         // Store state in database for validation on callback
-        await supabase
+        const { error: stateError } = await supabase
             .from('whatsapp_signup_states')
             .upsert({
                 tenant_id,
@@ -82,6 +105,10 @@ router.post('/start', async (req: Request, res: Response) => {
                 created_at: new Date().toISOString(),
                 expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
             });
+
+        if (stateError) {
+            console.error('❌ [Embedded Signup] Failed to save state to Supabase:', stateError);
+        }
 
         // Build the Embedded Signup URL
         // Docs: https://developers.facebook.com/docs/whatsapp/embedded-signup
@@ -97,6 +124,8 @@ router.post('/start', async (req: Request, res: Response) => {
         const signupUrl = `https://www.facebook.com/v18.0/dialog/oauth?${params.toString()}`;
 
         console.log(`✅ [Embedded Signup] Generated URL for tenant: ${tenant_id}`);
+        console.log(`🔗 [Embedded Signup] redirect_uri used: ${META_REDIRECT_URI}`);
+        console.log(`🔗 [Embedded Signup] Full signup URL: ${signupUrl}`);
 
         res.json({
             status: 'ok',
