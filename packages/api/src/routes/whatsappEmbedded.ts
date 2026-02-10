@@ -150,6 +150,9 @@ router.post('/start', async (req: Request, res: Response) => {
  */
 router.get('/callback', async (req: Request, res: Response) => {
     try {
+        console.log(`📱 [Embedded Callback] Query Params:`, JSON.stringify(req.query, null, 2));
+        console.log(`📱 [Embedded Callback] Headers:`, JSON.stringify(req.headers, null, 2));
+
         const { code, state, error, error_description } = req.query;
 
         // Handle error from Meta
@@ -376,6 +379,7 @@ router.get('/status', async (req: Request, res: Response) => {
             data: {
                 connected: connection.status === 'connected',
                 status: connection.status,
+                tenant_id: connection.tenant_id,
                 phone_number: connection.phone_number ? `***${connection.phone_number.slice(-4)}` : null,
                 waba_id: connection.waba_id,
                 verified_name: connection.config_json?.verified_name,
