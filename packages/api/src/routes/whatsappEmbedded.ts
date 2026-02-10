@@ -150,8 +150,8 @@ router.post('/start', async (req: Request, res: Response) => {
  */
 router.get('/callback', async (req: Request, res: Response) => {
     try {
-        console.log(`📱 [Embedded Callback] Query Params:`, JSON.stringify(req.query, null, 2));
-        console.log(`📱 [Embedded Callback] Headers:`, JSON.stringify(req.headers, null, 2));
+        console.log('📱 [Embedded Callback] HIT! Full Query:', JSON.stringify(req.query, null, 2));
+        console.log('📱 [Embedded Callback] HIT! Headers:', JSON.stringify(req.headers, null, 2));
 
         const { code, state, error, error_description } = req.query;
 
@@ -162,7 +162,7 @@ router.get('/callback', async (req: Request, res: Response) => {
         }
 
         if (!code || !state) {
-            console.error('❌ [Embedded Callback] Missing code or state');
+            console.error('❌ [Embedded Callback] Missing code or state. Params received:', Object.keys(req.query));
             return res.redirect(`${DASHBOARD_URL}/#/integrations/whatsapp?error=missing_params`);
         }
 
@@ -369,7 +369,8 @@ router.get('/status', async (req: Request, res: Response) => {
                 status: 'ok',
                 data: {
                     connected: false,
-                    status: 'not_configured'
+                    status: 'not_configured',
+                    tenant_id: tenantId
                 }
             });
         }
