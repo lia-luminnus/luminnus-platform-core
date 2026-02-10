@@ -20,8 +20,8 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @luminnus/lia-runtime build
-      - run: pnpm --filter @luminnus/lia-runtime typecheck
+      - run: pnpm turbo run build --filter=@luminnus/lia-runtime
+      - run: pnpm turbo run typecheck --filter=@luminnus/lia-runtime
 
   build-admin:
     name: Build Admin (lia-unified)
@@ -35,7 +35,7 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter lia-unified build
+      - run: pnpm turbo run build --filter=lia-unified
 
   build-client:
     name: Build Dashboard Client
@@ -49,7 +49,7 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter luminnus-dashboard build
+      - run: pnpm turbo run build --filter=luminnus-dashboard
 
   parity-check:
     name: Parity Guard
