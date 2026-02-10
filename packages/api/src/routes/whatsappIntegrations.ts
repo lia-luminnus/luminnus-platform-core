@@ -42,6 +42,7 @@ router.get('/status', async (req: Request, res: Response) => {
                 data: {
                     connected: false,
                     status: 'disconnected',
+                    tenant_id: tenantId,
                     phone_masked: null,
                     waba_id: null,
                     last_webhook_at: null,
@@ -55,6 +56,7 @@ router.get('/status', async (req: Request, res: Response) => {
             data: {
                 connected: data.status === 'connected' || data.status === 'active',
                 status: data.status,
+                tenant_id: data.tenant_id,
                 phone_masked: maskPhoneNumber(data.phone_number),
                 waba_id: data.config_json?.waba_id || null,
                 last_webhook_at: data.last_webhook_at || data.updated_at,

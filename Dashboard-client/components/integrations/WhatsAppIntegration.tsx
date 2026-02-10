@@ -79,20 +79,29 @@ const WhatsAppIntegration: React.FC = () => {
         const error = searchParams.get('error');
         const statusParam = searchParams.get('status');
 
+        console.log('🔗 [WhatsApp] URL Parameters detected:', { success, error, statusParam });
+
         if (success === 'true') {
-            toast.success('✅ WhatsApp conectado com sucesso!');
+            toast.success('✅ WhatsApp conectado com sucesso!', { id: 'whatsapp-status-toast' });
             fetchStatus();
-            // Clean URL params
-            setSearchParams({}, { replace: true });
+            // Clean URL params definitively using history to avoid loops
+            const url = new URL(window.location.href);
+            url.searchParams.delete('success');
+            url.searchParams.delete('status');
+            window.history.replaceState({}, '', url.toString());
         } else if (error) {
-            toast.error(`❌ Erro na conexão: ${decodeURIComponent(error)}`);
-            setSearchParams({}, { replace: true });
+            toast.error(`❌ Erro na conexão: ${decodeURIComponent(error)}`, { id: 'whatsapp-status-toast' });
+            const url = new URL(window.location.href);
+            url.searchParams.delete('error');
+            window.history.replaceState({}, '', url.toString());
         } else if (statusParam === 'pending') {
-            toast('⏳ Conexão em andamento... Aguarde a configuração completar.', { icon: '⏳' });
+            toast('⏳ Conexão em andamento... Aguarde a configuração completar.', { icon: '⏳', id: 'whatsapp-status-toast' });
             fetchStatus();
-            setSearchParams({}, { replace: true });
+            const url = new URL(window.location.href);
+            url.searchParams.delete('status');
+            window.history.replaceState({}, '', url.toString());
         }
-    }, []);
+    }, [searchParams]); // Depend on searchParams to catch changes
 
     const fetchStatus = async () => {
         setLoading(true);
@@ -114,24 +123,17 @@ const WhatsAppIntegration: React.FC = () => {
             }
 
             const data = await response.json().catch(() => ({ status: 'error' }));
+            console.log('📡 [WhatsApp] API Response:', data);
 
-            // 🔒 SECURITY: Validate response belongs to current tenant
-            if (data.status === 'ok') {
-                // ✅ CORREÇÃO: Validação mais rigorosa
-                if (data.data?.tenant_id) {
-                    if (data.data.tenant_id !== tenantId) {
-                        console.error('🚨 [WhatsApp] TENANT MISMATCH! Expected:', tenantId, 'Got:', data.data.tenant_id);
-                        console.error('🚨 [WhatsApp] BLOCKING DATA TO PREVENT LEAK');
-                        setStatus(null);
-                        return;
-                    }
-                } else {
-                    // ✅ NOVO: Se não vier tenant_id, logar warning mas aceitar (para compatibilidade)
-                    console.warn('⚠️ [WhatsApp] API não retornou tenant_id. Validação de segurança ignorada.');
+            if (data.status === 'ok' && data.data) {
+                // 🔒 SECURITY: Optional validation if tenant_id exists in response
+                if (data.data.tenant_id && data.data.tenant_id !== tenantId) {
+                    console.error('🚨 [WhatsApp] TENANT MISMATCH! SECURITY BLOCK.');
+                    setStatus(null);
+                    return;
                 }
                 setStatus(data.data);
             } else {
-                // No integration found - this is expected for new clients
                 setStatus(null);
             }
         } catch (error: any) {
