@@ -123,15 +123,19 @@ router.post('/start', async (req: Request, res: Response) => {
 
         const signupUrl = `https://www.facebook.com/v18.0/dialog/oauth?${params.toString()}`;
 
-        console.log(`✅ [Embedded Signup] Generated URL for tenant: ${tenant_id}`);
+        console.log(`✅ [Embedded Signup] Generating link for tenant: ${tenant_id}`);
         console.log(`🔗 [Embedded Signup] redirect_uri used: ${META_REDIRECT_URI}`);
-        console.log(`🔗 [Embedded Signup] Full signup URL: ${signupUrl}`);
+        console.log(`🔗 [Embedded Signup] Full URL: ${signupUrl}`);
 
         res.json({
             status: 'ok',
             data: {
                 signupUrl,
-                state
+                state,
+                debug: {
+                    redirect_uri: META_REDIRECT_URI,
+                    app_id: META_APP_ID
+                }
             }
         });
     } catch (error) {
@@ -349,22 +353,29 @@ router.get('/status', async (req: Request, res: Response) => {
     try {
         const { tenantId } = req.query;
 
+        console.log(`🔍 [Embedded Status] Checking connection for tenant: ${tenantId}`);
+
         if (!tenantId) {
             return res.status(400).json({
                 status: 'error',
-                reason: 'tenantId is required'
+                reason: 'tenantId is required',
+                data: { tenant_id: null }
             });
         }
 
         const { data: connection, error } = await supabase
             .from('whatsapp_connections')
             .select('*')
-            .eq('tenant_id', tenantId)
+            .eq('tenant_id', String(tenantId))
             .maybeSingle();
 
-        if (error) throw error;
+        if (error) {
+            console.error('❌ [Embedded Status] Supabase Error:', error);
+            throw error;
+        }
 
         if (!connection) {
+            console.log(`ℹ️ [Embedded Status] No connection found for ${tenantId}`);
             return res.json({
                 status: 'ok',
                 data: {
@@ -374,6 +385,8 @@ router.get('/status', async (req: Request, res: Response) => {
                 }
             });
         }
+
+        console.log(`✅ [Embedded Status] Found connection for ${tenantId}. Status: ${connection.status}`);
 
         res.json({
             status: 'ok',
@@ -388,10 +401,11 @@ router.get('/status', async (req: Request, res: Response) => {
             }
         });
     } catch (error) {
-        console.error('❌ [Embedded Status] Error:', error);
+        console.error('❌ [Embedded Status] Final Error:', error);
         res.status(500).json({
             status: 'error',
-            reason: String(error)
+            reason: String(error),
+            data: { tenant_id: req.query.tenantId }
         });
     }
 });
