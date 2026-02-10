@@ -20,7 +20,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const META_APP_ID = process.env.META_APP_ID || '885283457594424';
 const META_APP_SECRET = process.env.META_APP_SECRET || '';
 const META_CONFIG_ID = process.env.META_CONFIG_ID || '';
-const META_REDIRECT_URI = process.env.META_REDIRECT_URI || 'https://api.luminnus.ai/api/whatsapp/embedded/callback';
+const META_REDIRECT_URI = process.env.WHATSAPP_OAUTH_REDIRECT || process.env.META_REDIRECT_URI || 'https://luminnus-platform-core.onrender.com/api/whatsapp/embedded/callback';
 const DASHBOARD_URL = process.env.DASHBOARD_URL || 'https://luminnus-dashboard.onrender.com';
 
 // Graph API base URL

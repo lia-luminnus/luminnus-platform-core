@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Header from '../Header';
 import { LanguageContext } from '../../contexts/LanguageContext';
@@ -18,6 +18,7 @@ interface IntegrationStatus {
 
 const WhatsAppIntegration: React.FC = () => {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { t } = useContext(LanguageContext);
     const { user, isAdmin } = useDashboardAuth();
 
@@ -71,6 +72,27 @@ const WhatsAppIntegration: React.FC = () => {
         setLoading(true);
         fetchStatus();
     }, [tenantId]);
+
+    // ✅ Handle OAuth callback result from URL params
+    useEffect(() => {
+        const success = searchParams.get('success');
+        const error = searchParams.get('error');
+        const statusParam = searchParams.get('status');
+
+        if (success === 'true') {
+            toast.success('✅ WhatsApp conectado com sucesso!');
+            fetchStatus();
+            // Clean URL params
+            setSearchParams({}, { replace: true });
+        } else if (error) {
+            toast.error(`❌ Erro na conexão: ${decodeURIComponent(error)}`);
+            setSearchParams({}, { replace: true });
+        } else if (statusParam === 'pending') {
+            toast('⏳ Conexão em andamento... Aguarde a configuração completar.', { icon: '⏳' });
+            fetchStatus();
+            setSearchParams({}, { replace: true });
+        }
+    }, []);
 
     const fetchStatus = async () => {
         setLoading(true);
@@ -258,7 +280,7 @@ const WhatsAppIntegration: React.FC = () => {
             }
 
             const data = await response.json().catch(() => ({ status: 'error' }));
-            
+
             if (data.status === 'ok') {
                 toast.success('Integração salva com sucesso!');
                 fetchStatus();
@@ -290,7 +312,7 @@ const WhatsAppIntegration: React.FC = () => {
             }
 
             const data = await response.json().catch(() => ({ status: 'error' }));
-            
+
             if (data.status === 'ok') {
                 toast.success(`Webhook OK! Latência: ${data.data.latency_ms}ms`);
             } else {
@@ -318,7 +340,7 @@ const WhatsAppIntegration: React.FC = () => {
             }
 
             const data = await response.json().catch(() => ({ status: 'error' }));
-            
+
             if (data.status === 'ok') {
                 toast.success('Reconectado com sucesso!');
                 fetchStatus();
