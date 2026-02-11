@@ -22,11 +22,19 @@ const WhatsAppIntegration: React.FC = () => {
     const { t } = useContext(LanguageContext);
     const { user, isAdmin } = useDashboardAuth();
 
-    const [activeTab, setActiveTab] = useState<'quick' | 'manual'>('quick');
+    const [activeTab, setActiveTab] = useState<'quick' | 'manual' | 'twilio'>('quick');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(false);
     const [status, setStatus] = useState<IntegrationStatus | null>(null);
+
+    // Twilio onboarding state
+    const [twilioStatus, setTwilioStatus] = useState<any>(null);
+    const [twilioLoading, setTwilioLoading] = useState(false);
+    const [twilioProvisioning, setTwilioProvisioning] = useState(false);
+    const [twilioFlow, setTwilioFlow] = useState<'new_number' | 'byon'>('new_number');
+    const [twilioCountry, setTwilioCountry] = useState('BR');
+    const [twilioFriendlyName, setTwilioFriendlyName] = useState('');
 
     // Form state for manual connection
     const [formData, setFormData] = useState({
@@ -71,7 +79,85 @@ const WhatsAppIntegration: React.FC = () => {
         setStatus(null);
         setLoading(true);
         fetchStatus();
+        fetchTwilioStatus();
     }, [tenantId]);
+
+    // Fetch Twilio subaccount status
+    const fetchTwilioStatus = async () => {
+        if (!tenantId) return;
+        try {
+            setTwilioLoading(true);
+            const res = await fetch(`${getApiUrl()}/api/twilio/subaccount/status?tenant_id=${tenantId}`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.ok) setTwilioStatus(json.data);
+            }
+        } catch (err) {
+            console.warn('[WhatsApp] Twilio status fetch failed:', err);
+        } finally {
+            setTwilioLoading(false);
+        }
+    };
+
+    // Handle Twilio onboarding
+    const handleTwilioOnboard = async () => {
+        if (!tenantId) return;
+        setTwilioProvisioning(true);
+        try {
+            const endpoint = twilioFlow === 'new_number'
+                ? `${getApiUrl()}/api/twilio/onboard/new-number`
+                : `${getApiUrl()}/api/twilio/onboard/byon/start`;
+
+            const body: any = { tenant_id: tenantId };
+            if (twilioFlow === 'new_number') {
+                body.country_code = twilioCountry;
+            }
+            if (twilioFriendlyName) {
+                body.friendly_name = twilioFriendlyName;
+            }
+
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+
+            const json = await res.json();
+            if (json.ok) {
+                toast.success(twilioFlow === 'new_number'
+                    ? `✅ Número Twilio provisionado: ${json.data.phone_number}`
+                    : '✅ Subconta criada! Associe seu número agora.');
+                fetchTwilioStatus();
+            } else {
+                toast.error(`❌ ${json.error || 'Erro no onboarding Twilio'}`);
+            }
+        } catch (err: any) {
+            toast.error(`Erro: ${err.message}`);
+        } finally {
+            setTwilioProvisioning(false);
+        }
+    };
+
+    // Handle Twilio suspend/reactivate
+    const handleTwilioAction = async (action: 'suspend' | 'reactivate') => {
+        if (!tenantId) return;
+        try {
+            const res = await fetch(`${getApiUrl()}/api/twilio/subaccount/${action}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tenant_id: tenantId }),
+            });
+            const json = await res.json();
+            if (json.ok) {
+                toast.success(action === 'suspend' ? '⏸️ Subconta suspensa' : '▶️ Subconta reativada');
+                fetchTwilioStatus();
+            } else {
+                toast.error(json.error || 'Erro na ação');
+            }
+        } catch (err: any) {
+            toast.error(err.message);
+        }
+    };
 
     // ✅ Handle OAuth callback result from URL params
     useEffect(() => {
@@ -452,23 +538,33 @@ const WhatsAppIntegration: React.FC = () => {
                             <div className="flex border-b border-gray-200 dark:border-white/10">
                                 <button
                                     onClick={() => setActiveTab('quick')}
-                                    className={`flex-1 px-6 py-4 text-sm font-bold transition-all ${activeTab === 'quick'
+                                    className={`flex-1 px-4 py-4 text-sm font-bold transition-all ${activeTab === 'quick'
                                         ? 'bg-brand-primary/10 text-brand-primary border-b-2 border-brand-primary'
                                         : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
                                         }`}
                                 >
                                     <span className="material-symbols-outlined text-sm mr-2">bolt</span>
-                                    Conexão Rápida (Recomendado)
+                                    Meta (Rápido)
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('manual')}
-                                    className={`flex-1 px-6 py-4 text-sm font-bold transition-all ${activeTab === 'manual'
+                                    className={`flex-1 px-4 py-4 text-sm font-bold transition-all ${activeTab === 'manual'
                                         ? 'bg-brand-primary/10 text-brand-primary border-b-2 border-brand-primary'
                                         : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
                                         }`}
                                 >
                                     <span className="material-symbols-outlined text-sm mr-2">settings</span>
-                                    Conexão Manual (Avançado)
+                                    Manual
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('twilio')}
+                                    className={`flex-1 px-4 py-4 text-sm font-bold transition-all ${activeTab === 'twilio'
+                                        ? 'bg-purple-500/10 text-purple-400 border-b-2 border-purple-500'
+                                        : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                                        }`}
+                                >
+                                    <span className="material-symbols-outlined text-sm mr-2">cell_tower</span>
+                                    Twilio Pro
                                 </button>
                             </div>
 
@@ -542,7 +638,7 @@ const WhatsAppIntegration: React.FC = () => {
                                                 )}
                                             </button>
                                         </motion.div>
-                                    ) : (
+                                    ) : activeTab === 'manual' ? (
                                         <motion.div
                                             key="manual"
                                             initial={{ opacity: 0, y: 10 }}
@@ -629,6 +725,183 @@ const WhatsAppIntegration: React.FC = () => {
                                                     </>
                                                 )}
                                             </button>
+                                        </motion.div>
+                                    ) : (
+                                        /* ========== TWILIO TAB ========== */
+                                        <motion.div
+                                            key="twilio"
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -10 }}
+                                            className="space-y-5"
+                                        >
+                                            <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                                                <p className="text-sm text-purple-300">
+                                                    <strong>🔮 Twilio Pro:</strong> Número dedicado com isolamento total de dados e custos.
+                                                    Ideal para empresas que precisam de controle avançado.
+                                                </p>
+                                            </div>
+
+                                            {/* Twilio Active Status */}
+                                            {twilioStatus?.has_subaccount && (
+                                                <div className={`p-5 rounded-xl border ${twilioStatus.onboarding_status === 'active'
+                                                        ? 'bg-green-500/5 border-green-500/20'
+                                                        : twilioStatus.onboarding_status === 'failed'
+                                                            ? 'bg-red-500/5 border-red-500/20'
+                                                            : 'bg-amber-500/5 border-amber-500/20'
+                                                    }`}>
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-3 h-3 rounded-full ${twilioStatus.onboarding_status === 'active' ? 'bg-green-500 animate-pulse'
+                                                                    : twilioStatus.onboarding_status === 'failed' ? 'bg-red-500'
+                                                                        : 'bg-amber-500 animate-pulse'
+                                                                }`} />
+                                                            <div>
+                                                                <p className="text-sm font-bold capitalize">
+                                                                    {twilioStatus.onboarding_status === 'active' ? '✅ Ativo'
+                                                                        : twilioStatus.onboarding_status === 'failed' ? '❌ Falhou'
+                                                                            : twilioStatus.onboarding_status === 'suspended' ? '⏸️ Suspenso'
+                                                                                : `⏳ ${twilioStatus.onboarding_status}`}
+                                                                </p>
+                                                                {twilioStatus.phone_number && (
+                                                                    <p className="text-xs text-gray-400 font-mono">{twilioStatus.phone_number}</p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            {twilioStatus.onboarding_status === 'active' && (
+                                                                <button
+                                                                    onClick={() => handleTwilioAction('suspend')}
+                                                                    className="px-3 py-1.5 text-xs font-bold rounded-lg border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-all"
+                                                                >
+                                                                    Suspender
+                                                                </button>
+                                                            )}
+                                                            {twilioStatus.onboarding_status === 'suspended' && (
+                                                                <button
+                                                                    onClick={() => handleTwilioAction('reactivate')}
+                                                                    className="px-3 py-1.5 text-xs font-bold rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-all"
+                                                                >
+                                                                    Reativar
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {twilioStatus.error && (
+                                                        <p className="mt-2 text-xs text-red-400 bg-red-500/10 p-2 rounded-lg">{twilioStatus.error}</p>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Onboarding Form - Only if no subaccount */}
+                                            {!twilioStatus?.has_subaccount && (
+                                                <>
+                                                    {/* Flow Selection */}
+                                                    <div>
+                                                        <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">
+                                                            Tipo de Conexão
+                                                        </label>
+                                                        <div className="grid grid-cols-2 gap-3">
+                                                            <button
+                                                                onClick={() => setTwilioFlow('new_number')}
+                                                                className={`p-4 rounded-xl border text-left transition-all ${twilioFlow === 'new_number'
+                                                                        ? 'border-purple-500 bg-purple-500/10 ring-2 ring-purple-500/30'
+                                                                        : 'border-white/10 hover:border-white/20'
+                                                                    }`}
+                                                            >
+                                                                <span className="material-symbols-outlined text-purple-400 mb-2">add_call</span>
+                                                                <p className="text-sm font-bold">Número Novo</p>
+                                                                <p className="text-[10px] text-gray-500 mt-1">A LIA provisiona um número dedicado automaticamente</p>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setTwilioFlow('byon')}
+                                                                className={`p-4 rounded-xl border text-left transition-all ${twilioFlow === 'byon'
+                                                                        ? 'border-purple-500 bg-purple-500/10 ring-2 ring-purple-500/30'
+                                                                        : 'border-white/10 hover:border-white/20'
+                                                                    }`}
+                                                            >
+                                                                <span className="material-symbols-outlined text-purple-400 mb-2">phone_forwarded</span>
+                                                                <p className="text-sm font-bold">Usar meu número</p>
+                                                                <p className="text-[10px] text-gray-500 mt-1">Traga seu próprio número WhatsApp Business</p>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Country (only for new number) */}
+                                                    {twilioFlow === 'new_number' && (
+                                                        <div>
+                                                            <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
+                                                                País do Número
+                                                            </label>
+                                                            <select
+                                                                value={twilioCountry}
+                                                                onChange={(e) => setTwilioCountry(e.target.value)}
+                                                                className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500/50"
+                                                            >
+                                                                <option value="BR">🇧🇷 Brasil (+55)</option>
+                                                                <option value="US">🇺🇸 Estados Unidos (+1)</option>
+                                                                <option value="PT">🇵🇹 Portugal (+351)</option>
+                                                                <option value="GB">🇬🇧 Reino Unido (+44)</option>
+                                                                <option value="DE">🇩🇪 Alemanha (+49)</option>
+                                                                <option value="FR">🇫🇷 França (+33)</option>
+                                                                <option value="ES">🇪🇸 Espanha (+34)</option>
+                                                                <option value="IT">🇮🇹 Itália (+39)</option>
+                                                                <option value="MX">🇲🇽 México (+52)</option>
+                                                                <option value="AR">🇦🇷 Argentina (+54)</option>
+                                                            </select>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Friendly Name */}
+                                                    <div>
+                                                        <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
+                                                            Nome da Conexão (Opcional)
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={twilioFriendlyName}
+                                                            onChange={(e) => setTwilioFriendlyName(e.target.value)}
+                                                            placeholder="Ex: Atendimento Principal"
+                                                            className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500/50"
+                                                        />
+                                                    </div>
+
+                                                    {/* Start Onboarding */}
+                                                    <button
+                                                        onClick={handleTwilioOnboard}
+                                                        disabled={twilioProvisioning}
+                                                        className="w-full px-6 py-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-sm shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        {twilioProvisioning ? (
+                                                            <>
+                                                                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                                Provisionando...
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <span className="material-symbols-outlined text-xl">rocket_launch</span>
+                                                                {twilioFlow === 'new_number' ? 'Provisionar Número' : 'Iniciar Conexão BYON'}
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </>
+                                            )}
+
+                                            {/* Twilio Benefits */}
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <div className="p-3 rounded-xl bg-white/5 border border-white/5 text-center">
+                                                    <span className="material-symbols-outlined text-purple-400 text-2xl">shield</span>
+                                                    <p className="text-[10px] text-gray-400 mt-1">Dados Isolados</p>
+                                                </div>
+                                                <div className="p-3 rounded-xl bg-white/5 border border-white/5 text-center">
+                                                    <span className="material-symbols-outlined text-purple-400 text-2xl">payments</span>
+                                                    <p className="text-[10px] text-gray-400 mt-1">Custo Separado</p>
+                                                </div>
+                                                <div className="p-3 rounded-xl bg-white/5 border border-white/5 text-center">
+                                                    <span className="material-symbols-outlined text-purple-400 text-2xl">speed</span>
+                                                    <p className="text-[10px] text-gray-400 mt-1">Alta Performance</p>
+                                                </div>
+                                            </div>
                                         </motion.div>
                                     )}
                                 </AnimatePresence>

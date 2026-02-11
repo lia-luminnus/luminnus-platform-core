@@ -76,6 +76,10 @@ import whatsappAdminRoutes from './routes/whatsapp-admin.js';
 import { setupDashboardRoutes } from './routes/dashboard.js';
 import { setupGoogleAuthRoutes } from './routes/google-auth.js';
 import { setupAutomationRoutes } from './routes/automations.js';
+import { setupCreditsRoutes } from './routes/credits.js';
+import { setupTwilioOnboardingRoutes } from './routes/twilio-onboarding.js';
+import { setupTwilioWebhookRoutes } from './routes/twilio-webhook.js';
+import twilioAdminRoutes from './routes/twilio-admin.js';
 import WhatsAppIntelligence from './services/whatsappIntelligence.js';
 import { setSocketIO } from './services/eventBusService.js';
 import { AutomationScheduler } from './services/scheduler.js';
@@ -357,6 +361,7 @@ async function startServer() {
   setupWhatsAppIntegrationRoutes(app); // WhatsApp Integration Management (for Hub)
   setupGoogleAuthRoutes(app); // Google OAuth Integration
   setupAutomationRoutes(app);
+  setupCreditsRoutes(app);
 
   console.log('✅ [Server] Todas as rotas de API registradas com sucesso');
 
@@ -374,7 +379,13 @@ async function startServer() {
 
   // Admin Diagnostic Routes (Admin-Only, protected by adminGate)
   app.use('/api/admin/whatsapp', whatsappAdminRoutes);
+  app.use('/api/admin/twilio', twilioAdminRoutes);
   app.use('/api/admin', adminRoutes);
+
+  // Twilio Multi-Tenant Routes
+  setupTwilioOnboardingRoutes(app);
+  setupTwilioWebhookRoutes(app);
+  console.log('   ✅ Twilio routes (/api/twilio/*)');
 
   console.log('✅ Core LIA Functions loaded');
 
