@@ -44,6 +44,10 @@ const AdminWhatsAppGovernance = () => {
         activeAlerts: 0
     });
 
+    const [twilioOverview, setTwilioOverview] = useState<any>(null);
+    const [twilioSubaccounts, setTwilioSubaccounts] = useState<any[]>([]);
+    const [twilioLoading, setTwilioLoading] = useState(false);
+
     useEffect(() => {
         const fetchConfig = async () => {
             try {
@@ -88,8 +92,39 @@ const AdminWhatsAppGovernance = () => {
             }
         };
 
+        const fetchTwilioData = async () => {
+            setTwilioLoading(true);
+            try {
+                const token = session?.access_token || '';
+                const [ovRes, subRes] = await Promise.all([
+                    fetch(apiUrl('/api/admin/twilio/overview'), {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(apiUrl('/api/admin/twilio/subaccounts'), {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
+                ]);
+
+
+                if (ovRes.ok) {
+                    const json = await ovRes.json();
+                    if (json.ok) setTwilioOverview(json.data);
+                }
+
+                if (subRes.ok) {
+                    const json = await subRes.json();
+                    if (json.ok) setTwilioSubaccounts(json.data.subaccounts);
+                }
+            } catch (error) {
+                console.error('❌ [Admin] Twilio fetch error:', error);
+            } finally {
+                setTwilioLoading(false);
+            }
+        };
+
         fetchConfig();
         fetchOverview();
+        fetchTwilioData();
     }, [session]);
 
     const [tenants, setTenants] = useState<any[]>([]);
@@ -211,20 +246,40 @@ const AdminWhatsAppGovernance = () => {
                             <MessageCircle size={20} />
                         </div>
                         <div>
-                            <p className="text-xs font-bold text-amber-600/60 uppercase">Mgs Hoje</p>
+                            <p className="text-xs font-bold text-amber-600/60 uppercase">Mgs Hoje (Meta)</p>
                             <h3 className="text-2xl font-black text-amber-700">{overview.messagesToday}</h3>
                         </div>
                     </CardContent>
                 </Card>
+
+                {twilioOverview && (
+                    <Card className="bg-purple-500/10 border-purple-500/20">
+                        <CardContent className="p-4 flex items-center gap-4">
+                            <div className="p-3 bg-purple-500/20 rounded-xl text-purple-500">
+                                <Smartphone size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-purple-600/60 uppercase">Twilio Master Balance</p>
+                                <h3 className="text-2xl font-black text-purple-700">
+                                    {twilioOverview.master_balance?.currency === 'USD' ? '$' : ''}
+                                    {twilioOverview.master_balance?.balance || '0.00'}
+                                </h3>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
             </div>
 
             {/* Main Content Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 bg-slate-900/50 border border-white/10">
-                    <TabsTrigger value="tenants" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white">
-                        <Globe className="w-4 h-4 mr-2" /> Governança de Clientes
+                <TabsList className="grid w-full grid-cols-3 bg-slate-900/50 border border-white/10">
+                    <TabsTrigger value="tenants" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white uppercase text-[10px] font-black tracking-widest">
+                        <Globe className="w-4 h-4 mr-2" /> Meta Cloud (Clientes)
                     </TabsTrigger>
-                    <TabsTrigger value="settings" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white">
+                    <TabsTrigger value="twilio" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white uppercase text-[10px] font-black tracking-widest">
+                        <Smartphone className="w-4 h-4 mr-2" /> Ecossistema Twilio
+                    </TabsTrigger>
+                    <TabsTrigger value="settings" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white uppercase text-[10px] font-black tracking-widest">
                         <Shield className="w-4 h-4 mr-2" /> Configuração da Plataforma
                     </TabsTrigger>
                 </TabsList>
@@ -298,6 +353,109 @@ const AdminWhatsAppGovernance = () => {
                                         </td>
                                     </tr>
                                 ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </TabsContent>
+
+                {/* Tab: Twilio Ecosystem */}
+                <TabsContent value="twilio" className="space-y-6 pt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <Card className="bg-slate-900/40 border-white/5">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-xs font-black uppercase tracking-widest text-gray-400">Master Health</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-3 h-3 rounded-full ${twilioOverview?.master_healthy ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                                    <span className="text-sm font-bold text-white">{twilioOverview?.master_healthy ? 'Healthy' : 'Error / Offline'}</span>
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-2 font-mono uppercase">SID: {twilioOverview?.account_sid || '...'}</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="bg-slate-900/40 border-white/5">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-xs font-black uppercase tracking-widest text-gray-400">Segurança de Dados</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-center gap-3">
+                                    <ShieldCheck className={twilioOverview?.encryption_ok ? "text-green-500" : "text-red-500"} size={20} />
+                                    <span className="text-sm font-bold text-white">{twilioOverview?.encryption_ok ? 'AES-256 Validated' : 'Encryption Failure'}</span>
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-2 uppercase tracking-tight">Criptografia de subcontas ativa</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="bg-slate-900/40 border-white/5">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-xs font-black uppercase tracking-widest text-gray-400">Subcontas Totais</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-2xl font-black text-white">{twilioOverview?.total_subaccounts || 0}</h3>
+                                    <div className="flex gap-1">
+                                        <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-[9px]">{twilioOverview?.active || 0} Active</Badge>
+                                        <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[9px]">{twilioOverview?.provisioning || 0} Prov.</Badge>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <div className="rounded-xl border border-white/10 bg-slate-900/30 overflow-hidden">
+                        <CardHeader className="border-b border-white/5 bg-white/5">
+                            <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                                <Users size={16} className="text-purple-400" />
+                                Lista de Subcontas (Tenants)
+                            </CardTitle>
+                        </CardHeader>
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-black/20 uppercase text-[10px] font-black tracking-widest text-gray-400">
+                                <tr>
+                                    <th className="px-6 py-4">Tenant / Subconta SID</th>
+                                    <th className="px-6 py-4">Nome Amigável</th>
+                                    <th className="px-6 py-4">Número</th>
+                                    <th className="px-6 py-4">Onboarding</th>
+                                    <th className="px-6 py-4">Ativado em</th>
+                                    <th className="px-6 py-4 text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                                {twilioSubaccounts.map((sub) => (
+                                    <tr key={sub.id} className="hover:bg-white/[0.02] transition-colors group">
+                                        <td className="px-6 py-4">
+                                            <div className="text-[10px] text-gray-500 font-mono tracking-tighter mb-0.5">{sub.tenant_id}</div>
+                                            <div className="text-xs font-mono text-purple-400">{sub.twilio_account_sid}</div>
+                                        </td>
+                                        <td className="px-6 py-4 text-white font-bold">{sub.friendly_name || 'N/A'}</td>
+                                        <td className="px-6 py-4 text-gray-400 font-mono text-xs">{sub.phone_number || 'Aguardando...'}</td>
+                                        <td className="px-6 py-4">
+                                            <Badge className={
+                                                sub.onboarding_status === 'active' ? "bg-green-500/20 text-green-400 border-green-500/30" :
+                                                    sub.onboarding_status === 'failed' ? "bg-red-500/20 text-red-400 border-red-500/30" :
+                                                        "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                                            }>
+                                                {sub.onboarding_status}
+                                            </Badge>
+                                        </td>
+                                        <td className="px-6 py-4 text-[10px] text-gray-500">
+                                            {sub.activated_at ? new Date(sub.activated_at).toLocaleDateString() : '--'}
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 hover:bg-white/10">
+                                                <ChevronRight size={16} />
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {twilioSubaccounts.length === 0 && (
+                                    <tr>
+                                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500 italic">
+                                            Nenhuma subconta Twilio encontrada.
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>

@@ -212,31 +212,31 @@ const Plans = () => {
                   <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
                   <p className="text-sm text-white/60 mb-4">{plan.description}</p>
                   <div className="space-y-1">
-                    {(() => {
-                      const colors = plan.color.match(/hsl\([^)]+\)/g) || [];
-                      const gradient = colors.length === 2
-                        ? `linear-gradient(to right, ${colors[0]}, ${colors[1]})`
-                        : 'linear-gradient(to right, #7C3AED, #FF2E9E)';
-
-                      return (
-                        <p
-                          className="text-4xl font-black"
-                          style={{
-                            background: gradient,
-                            WebkitBackgroundClip: 'text',
-                            WebkitTextFillColor: 'transparent',
-                            backgroundClip: 'text'
-                          }}
-                        >
-                          {isAnnual ? plan.annualPrice : plan.price}
-                        </p>
-                      );
-                    })()}
+                    <div className="flex items-center justify-center gap-3">
+                      <p
+                        className="text-4xl font-black"
+                        style={{
+                          background: 'linear-gradient(to right, #7C3AED, #FF2E9E)',
+                          WebkitBackgroundClip: 'text',
+                          WebkitTextFillColor: 'transparent',
+                          backgroundClip: 'text'
+                        }}
+                      >
+                        {isAnnual ? plan.annualPrice : plan.price}
+                      </p>
+                      {isAnnual && (
+                        <span className="px-2 py-1 text-xs font-bold rounded-full bg-gradient-to-r from-[#7C3AED]/20 to-[#FF2E9E]/20 text-[#FF2E9E]">
+                          -{plan.discount}%
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-white/50">
                       {isAnnual ? (
                         <>
-                          Total anual: {plan.annualPrice}
-                          <span className="block text-xs text-green-400">/mês (faturado anualmente)</span>
+                          <span className="block text-xs text-white/40">Plano anual em 12x (fidelidade 12 meses)</span>
+                          <span className="block text-xs text-green-400 font-semibold">
+                            Economize {'annualSavings' in plan ? (plan as any).annualSavings : ''}/ano
+                          </span>
                         </>
                       ) : (
                         plan.period
@@ -255,6 +255,20 @@ const Plans = () => {
                     </li>
                   ))}
                 </ul>
+
+                {/* Credit Highlights */}
+                {'creditHighlights' in plan && (plan as any).creditHighlights && (
+                  <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-[#7C3AED]/10 to-[#FF2E9E]/10 border border-[#7C3AED]/20">
+                    <p className="text-xs text-white/50 mb-2 font-semibold uppercase tracking-wider">O que dá para fazer:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(plan as any).creditHighlights.map((h: string, idx: number) => (
+                        <span key={idx} className="px-2.5 py-1 text-xs rounded-full bg-white/10 text-white/80">
+                          {h}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Lia Quote */}
                 <div className="mb-6 p-4 rounded-xl bg-white/5 border border-white/10">

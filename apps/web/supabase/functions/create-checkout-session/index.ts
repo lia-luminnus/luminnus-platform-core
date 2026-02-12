@@ -19,6 +19,8 @@ interface CheckoutRequest {
     cancelUrl: string;
     planName?: string;
     billingType?: string;
+    mode?: 'subscription' | 'payment'; // payment = recharge
+    credits?: number; // for recharge metadata
 }
 
 Deno.serve(async (req) => {
@@ -28,7 +30,7 @@ Deno.serve(async (req) => {
     }
 
     try {
-        const { priceId, userId, tenantId, userEmail, successUrl, cancelUrl, planName, billingType }: CheckoutRequest = await req.json();
+        const { priceId, userId, tenantId, userEmail, successUrl, cancelUrl, planName, billingType, mode, credits }: CheckoutRequest = await req.json();
 
         if (!priceId || !userId || !tenantId) {
             return new Response(
@@ -37,7 +39,10 @@ Deno.serve(async (req) => {
             );
         }
 
-        console.log(`[Checkout] Creating session for user ${userId}, tenant ${tenantId}, price ${priceId}`);
+        const checkoutMode = mode || 'subscription';
+        const isRecharge = checkoutMode === 'payment';
+
+        console.log(`[Checkout] Creating ${checkoutMode} session for user ${userId}, tenant ${tenantId}, price ${priceId}`);
 
         // Create or get Stripe customer
         let customerId: string | undefined;
@@ -66,37 +71,50 @@ Deno.serve(async (req) => {
             }
         }
 
-        // Create Checkout Session
-        const session = await stripe.checkout.sessions.create({
-            mode: "subscription",
+        // Build session params based on mode
+        const sessionParams: any = {
+            mode: checkoutMode,
             payment_method_types: ["card"],
             customer: customerId,
             customer_email: customerId ? undefined : userEmail,
-            client_reference_id: userId, // Linked to the user who initiated
-            line_items: [
-                {
-                    price: priceId,
-                    quantity: 1,
-                },
-            ],
+            client_reference_id: userId,
+            line_items: [{ price: priceId, quantity: 1 }],
             success_url: successUrl,
             cancel_url: cancelUrl,
-            subscription_data: {
+            metadata: {
+                supabase_user_id: userId,
+                supabase_tenant_id: tenantId,
+                ...(isRecharge ? { type: 'recharge', credits: String(credits || 0) } : {}),
+            },
+            locale: "pt-BR",
+        };
+
+        if (isRecharge) {
+            // One-time payment for recharge
+            sessionParams.payment_intent_data = {
+                metadata: {
+                    supabase_user_id: userId,
+                    supabase_tenant_id: tenantId,
+                    type: 'recharge',
+                    credits: String(credits || 0),
+                },
+            };
+        } else {
+            // Subscription for plan
+            sessionParams.subscription_data = {
                 metadata: {
                     supabase_user_id: userId,
                     supabase_tenant_id: tenantId,
                     plan: planName || "unknown",
                     billing_type: billingType || "unknown",
                 },
-            },
-            metadata: {
-                supabase_user_id: userId,
-                supabase_tenant_id: tenantId,
-            },
-            allow_promotion_codes: true,
-            billing_address_collection: "required",
-            locale: "pt-BR",
-        });
+            };
+            sessionParams.allow_promotion_codes = true;
+            sessionParams.billing_address_collection = "required";
+        }
+
+        // Create Checkout Session
+        const session = await stripe.checkout.sessions.create(sessionParams);
 
         console.log(`[Checkout] Session created: ${session.id} for tenant ${tenantId}`);
 

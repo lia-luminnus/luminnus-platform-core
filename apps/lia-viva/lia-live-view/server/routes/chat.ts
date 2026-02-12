@@ -8,6 +8,7 @@ import { OutputContracts } from '../services/outputContracts.js';
 import { getOpenAIVoice } from '../config/openai-voices.js';
 import { ensureSession } from '../server.js';
 import { getLiaGreeting } from '@luminnus/lia-runtime';
+import { CreditService } from '../services/creditService.js';
 
 export function setupChatRoutes(app: Express, openai: OpenAI) {
   const functions = ToolService.getTools();
@@ -90,6 +91,16 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
       let function_calls = aiResponse.function_calls || (aiResponse.function_call ? [aiResponse.function_call] : []);
       let finalDashboardAction = null;
       let finalImagePayload = null;
+
+      // 4.1 Debitar crédito por mensagem (non-blocking)
+      try {
+        await CreditService.debit(finalTenantId, finalUserId, 'message', 'Mensagem de chat', {
+          conversation_id: conversationId,
+          model: aiResponse.model || 'gpt-4o-mini'
+        });
+      } catch (creditErr) {
+        console.warn('⚠️ [Chat] Erro ao debitar crédito (non-blocking):', creditErr);
+      }
 
       // 5. Ciclo Agêntico v4.0 - Loop de Ferramentas
       let turnCount = 0;
@@ -302,6 +313,14 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
         model: 'whisper-1',
         language: 'pt'
       });
+
+      // Debitar crédito por transcrição (non-blocking)
+      try {
+        const userId = req.body.userId || '00000000-0000-0000-0000-000000000001';
+        const tenantId = req.body.tenantId || userId;
+        await CreditService.debit(tenantId, userId, 'stt', 'Transcrição de áudio');
+      } catch (e) { /* non-blocking */ }
+
       res.json({ text: response.text });
     } catch (error) {
       res.status(500).json({ error: String(error) });

@@ -1,4 +1,4 @@
-import { Bot, Check, Loader2 } from "lucide-react";
+import { Bot, Check, Loader2, Zap } from "lucide-react";
 import React, { useContext, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ThemeContext } from '../App';
@@ -6,6 +6,7 @@ import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 import { LanguageContext } from '../contexts/LanguageContext';
 import { usePlans, Plan as PlanType } from '../hooks/usePlans';
 import { useSubscription } from '../hooks/useSubscription';
+import { useCredits } from '../hooks/useCredits';
 import { supabase } from '../lib/supabase';
 import Header from './Header';
 import { toast } from 'react-hot-toast';
@@ -17,6 +18,10 @@ const Plan: React.FC = () => {
    const { subscription, invoices, loading: loadingSub } = useSubscription();
    const [isAnnual, setIsAnnual] = useState(true);
    const navigate = useNavigate();
+
+   // Credits system
+   const tenantId = user?.id || null;
+   const { balance, percentual, isLow, isCritical, isExceeded, loading: loadingCredits } = useCredits({ tenantId });
 
    // Usar plan_name do subscription (Supabase) como fonte primária, com fallback para authPlan
    const currentPlanName = subscription?.plan_name || authPlan?.name || 'Start';
@@ -147,6 +152,70 @@ const Plan: React.FC = () => {
                </div>
             </div>
 
+            {/* Credit Balance Widget */}
+            {balance && (
+               <div className="bg-gradient-to-br from-white/5 to-transparent border border-white/10 rounded-3xl p-6 backdrop-blur-xl relative overflow-hidden">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                     <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isExceeded ? 'bg-red-500/20' : isCritical ? 'bg-orange-500/20' : isLow ? 'bg-yellow-500/20' : 'bg-brand-primary/20'
+                           }`}>
+                           <Zap className={`w-5 h-5 ${isExceeded ? 'text-red-400' : isCritical ? 'text-orange-400' : isLow ? 'text-yellow-400' : 'text-brand-primary'
+                              }`} />
+                        </div>
+                        <div>
+                           <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40">Créditos LIA</p>
+                           <p className="text-lg font-black text-white">
+                              {balance.creditos_restantes.toLocaleString('pt-BR')} <span className="text-sm font-bold text-white/40">/ {balance.creditos_totais.toLocaleString('pt-BR')}</span>
+                           </p>
+                        </div>
+                     </div>
+                     <div className="flex items-center gap-3">
+                        <div className="text-right">
+                           <p className="text-[10px] font-bold text-white/40">Plano: {balance.creditos_plano.toLocaleString('pt-BR')}</p>
+                           {balance.creditos_bonus > 0 && (
+                              <p className="text-[10px] font-bold text-green-400">+{balance.creditos_bonus.toLocaleString('pt-BR')} bónus</p>
+                           )}
+                        </div>
+                        <button
+                           onClick={() => toast('Em breve: Recarga de créditos! 🔋')}
+                           className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#7C3AED] to-[#FF2E9E] text-white font-black text-[10px] uppercase tracking-wider hover:shadow-lg hover:shadow-brand-primary/20 transition-all active:scale-95"
+                        >
+                           + Recarregar
+                        </button>
+                     </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="w-full h-3 rounded-full bg-white/10 overflow-hidden">
+                     <div
+                        className={`h-full rounded-full transition-all duration-1000 ${isExceeded ? 'bg-gradient-to-r from-red-500 to-red-400 animate-pulse' :
+                           isCritical ? 'bg-gradient-to-r from-orange-500 to-red-500' :
+                              isLow ? 'bg-gradient-to-r from-yellow-500 to-orange-500' :
+                                 'bg-gradient-to-r from-[#22D3EE] to-[#7C3AED]'
+                           }`}
+                        style={{ width: `${Math.min(percentual, 100)}%` }}
+                     />
+                  </div>
+                  <div className="flex justify-between mt-2">
+                     <span className="text-[10px] font-bold text-white/30">{balance.creditos_usados.toLocaleString('pt-BR')} usados</span>
+                     <span className={`text-[10px] font-black ${isExceeded ? 'text-red-400' : isCritical ? 'text-orange-400' : isLow ? 'text-yellow-400' : 'text-white/40'
+                        }`}>{percentual.toFixed(1)}% utilizado</span>
+                  </div>
+
+                  {/* Alert Messages */}
+                  {isExceeded && (
+                     <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                        <p className="text-xs text-red-400 font-bold">⚠️ Créditos excedidos! Recarregue para continuar usando a LIA sem interrupções.</p>
+                     </div>
+                  )}
+                  {isCritical && !isExceeded && (
+                     <div className="mt-3 p-3 rounded-xl bg-orange-500/10 border border-orange-500/20">
+                        <p className="text-xs text-orange-400 font-bold">🔋 Créditos críticos! Considere recarregar ou fazer upgrade do plano.</p>
+                     </div>
+                  )}
+               </div>
+            )}
+
             {/* Upgrade Options Header */}
             <div className="text-center space-y-2">
                <h2 className="text-4xl font-black text-white tracking-tighter">Escolha seu novo nível</h2>
@@ -181,7 +250,7 @@ const Plan: React.FC = () => {
                         </div>
 
                         <div className="mb-8">
-                           <div className="flex items-baseline gap-1">
+                           <div className="flex items-baseline gap-2">
                               <span
                                  className="text-5xl font-black tracking-tighter bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent group-hover:from-white group-hover:to-white transition-all duration-500"
                                  style={{
@@ -193,11 +262,21 @@ const Plan: React.FC = () => {
                                  {displayPriceValue}
                               </span>
                               <span className="text-sm font-bold text-white/30 uppercase tracking-widest">/mês</span>
+                              {isAnnual && (
+                                 <span className="px-2 py-0.5 text-[10px] font-black rounded-full bg-gradient-to-r from-[#7C3AED]/20 to-[#FF2E9E]/20 text-[#FF2E9E]">
+                                    -{p.discount}%
+                                 </span>
+                              )}
                            </div>
                            {isAnnual && (
-                              <p className="text-[10px] font-black text-green-400 mt-2 uppercase tracking-widest">
-                                 Faturado anualmente
-                              </p>
+                              <div className="mt-2 space-y-0.5">
+                                 <p className="text-[10px] font-bold text-white/40">Plano anual em 12x (fidelidade 12 meses)</p>
+                                 {'annualSavings' in p && (
+                                    <p className="text-[10px] font-black text-green-400 uppercase tracking-widest">
+                                       Economize {(p as any).annualSavings}/ano
+                                    </p>
+                                 )}
+                              </div>
                            )}
                         </div>
 

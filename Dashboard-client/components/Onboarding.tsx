@@ -97,7 +97,8 @@ const Onboarding: React.FC = () => {
         // 🔑 Admin detection (same logic as DashboardAuthContext)
         const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
         const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
-        const { profile: authProfile } = useDashboardAuth();
+
+        // v13.1: Moved hook to top level, using authProfile from destructuring
         const isAdmin = adminEmails.includes(user?.email?.toLowerCase() || '') || authProfile?.role === 'admin';
 
         // 🔒 SECURITY: Admin uses default admin tenant, clients require their own tenant
@@ -112,8 +113,7 @@ const Onboarding: React.FC = () => {
         // Instantiate modular dashboard
         if (tenantId) {
           try {
-            const API_URL = import.meta.env.VITE_API_URL || 'https://luminnus-platform-core.onrender.com';
-            await fetch(`${API_URL}/api/dashboard/tenant/${tenantId}/dashboard/instantiate`, {
+            await fetch(`/api/dashboard/tenant/${tenantId}/dashboard/instantiate`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ segment_key: selectedCategory || 'custom_other' })
@@ -288,7 +288,8 @@ const Onboarding: React.FC = () => {
                         // 🔑 Admin detection (same logic as DashboardAuthContext)
                         const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
                         const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
-                        const { profile: authProfile } = useDashboardAuth();
+
+                        // v13.1: Use top-level authProfile
                         const isAdmin = adminEmails.includes(user?.email?.toLowerCase() || '') || authProfile?.role === 'admin';
 
                         // 🔒 SECURITY: Admin uses default admin tenant, clients require their own tenant
@@ -303,8 +304,7 @@ const Onboarding: React.FC = () => {
 
                         // Instantiate modular dashboard
                         try {
-                          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-                          await fetch(`${API_URL}/api/dashboard/tenant/${tenantId}/dashboard/instantiate`, {
+                          await fetch(`/api/dashboard/tenant/${tenantId}/dashboard/instantiate`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ segment_key: selectedCategory || 'custom_other' })

@@ -39,6 +39,16 @@ const PRICE_TO_PLAN_MAP: Record<string, {
 };
 
 // ============================================
+// Recharge Price Map — maps price IDs to credit amounts
+// ============================================
+const RECHARGE_PRICE_MAP: Record<string, { credits: number; packageName: string }> = {
+    "price_1SzcoARy1wqZ6TIA45E96Eka": { credits: 400, packageName: "Recarga 400 Créditos" },
+    "price_1SzcpjRy1wqZ6TIAzVLobPoH": { credits: 1500, packageName: "Recarga 1.500 Créditos" },
+    "price_1SzcqrRy1wqZ6TIAGmLwRgfA": { credits: 3500, packageName: "Recarga 3.500 Créditos" },
+    "price_1SzcqyRy1wqZ6TIAJLgFpwmV": { credits: 10000, packageName: "Recarga 10.000 Créditos" },
+};
+
+// ============================================
 // Helper Functions
 // ============================================
 function safeTimestampToISO(timestamp: number | null | undefined): string | null {
@@ -214,8 +224,86 @@ Deno.serve(async (req) => {
         if (event.type === "checkout.session.completed") {
             const session = event.data.object;
 
+            // ============================================
+            // RECHARGE FLOW — one-time payment
+            // ============================================
+            if (session.mode === "payment") {
+                const sessionMeta = session.metadata || {};
+                const userId = session.client_reference_id || sessionMeta.supabase_user_id;
+                const tenantId = sessionMeta.supabase_tenant_id;
+                const isRecharge = sessionMeta.type === 'recharge';
+
+                if (!isRecharge) {
+                    console.log("[Webhook] Non-recharge payment, skipping");
+                    return new Response(JSON.stringify({ received: true }), {
+                        headers: { "Content-Type": "application/json" },
+                        status: 200,
+                    });
+                }
+
+                if (!userId || !tenantId) {
+                    console.error("[Webhook] Missing userId or tenantId for recharge");
+                    return new Response(JSON.stringify({ received: true }), {
+                        headers: { "Content-Type": "application/json" },
+                        status: 200,
+                    });
+                }
+
+                // Determine credits from metadata or price map
+                let credits = parseInt(sessionMeta.credits || '0', 10);
+
+                // Fallback: resolve from line items via Stripe API
+                if (!credits) {
+                    try {
+                        const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
+                        const priceId = lineItems.data[0]?.price?.id;
+                        if (priceId && RECHARGE_PRICE_MAP[priceId]) {
+                            credits = RECHARGE_PRICE_MAP[priceId].credits;
+                        }
+                    } catch (err) {
+                        console.error("[Webhook] Error fetching line items:", err);
+                    }
+                }
+
+                if (!credits) {
+                    console.error("[Webhook] Could not determine credits for recharge session: " + session.id);
+                    return new Response(JSON.stringify({ received: true }), {
+                        headers: { "Content-Type": "application/json" },
+                        status: 200,
+                    });
+                }
+
+                // Add recharge credits via RPC
+                const { data: rechargeResult, error: rechargeError } = await supabase.rpc('add_recharge_credits', {
+                    p_tenant_id: tenantId,
+                    p_user_id: userId,
+                    p_creditos: credits,
+                    p_package_name: `Stripe Recharge (${credits} créditos)`,
+                    p_metadata: {
+                        stripe_session_id: session.id,
+                        stripe_payment_intent: session.payment_intent,
+                        amount_paid: session.amount_total,
+                        currency: session.currency,
+                    },
+                });
+
+                if (rechargeError) {
+                    console.error("[Webhook] Error adding recharge credits:", rechargeError);
+                } else {
+                    console.log(`[Webhook] ✅ Recharge: +${credits} créditos para tenant ${tenantId} | Novo saldo: ${rechargeResult?.novo_saldo}`);
+                }
+
+                return new Response(JSON.stringify({ received: true }), {
+                    headers: { "Content-Type": "application/json" },
+                    status: 200,
+                });
+            }
+
+            // ============================================
+            // SUBSCRIPTION FLOW — existing logic
+            // ============================================
             if (session.mode !== "subscription") {
-                console.log("[Webhook] Not a subscription checkout, skipping");
+                console.log("[Webhook] Not a subscription or recharge checkout, skipping");
                 return new Response(JSON.stringify({ received: true }), {
                     headers: { "Content-Type": "application/json" },
                     status: 200,
