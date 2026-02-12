@@ -6,6 +6,8 @@ import { LanguageContext } from '../../contexts/LanguageContext';
 import { useDashboardAuth } from '../../contexts/DashboardAuthContext';
 import { getApiUrl } from '../../config/api';
 import toast from 'react-hot-toast';
+import CustomSelect from '../ui/CustomSelect';
+
 
 const WhatsAppIntegration: React.FC = () => {
     const navigate = useNavigate();
@@ -21,6 +23,7 @@ const WhatsAppIntegration: React.FC = () => {
     const [twilioFlow, setTwilioFlow] = useState<'new_number' | 'byon'>('new_number');
     const [twilioCountry, setTwilioCountry] = useState('BR');
     const [twilioFriendlyName, setTwilioFriendlyName] = useState('');
+    const [twilioPhoneNumber, setTwilioPhoneNumber] = useState('');
 
     // 🔒 SECURITY: Get tenant from user context
     const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
@@ -60,12 +63,26 @@ const WhatsAppIntegration: React.FC = () => {
         try {
             setTwilioLoading(true);
             const res = await fetch(`${getApiUrl()}/api/twilio/subaccount/status?tenant_id=${tenantId}`);
+
+            // Check content type before parsing
+            const contentType = res.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await res.text();
+                if (text.includes('<!DOCTYPE html>') || res.status === 404) {
+                    throw new Error('Servidor retornou erro 404 ou HTML. Verifique se as rotas Twilio estão deployadas no backend.');
+                }
+                throw new Error('Resposta do servidor não é JSON válido.');
+            }
+
             if (res.ok) {
                 const json = await res.json();
                 if (json.ok) setTwilioStatus(json.data);
+            } else if (res.status === 404) {
+                console.warn('[WhatsApp] Twilio status endpoint not found (404)');
             }
-        } catch (err) {
+        } catch (err: any) {
             console.warn('[WhatsApp] Twilio status fetch failed:', err);
+            // Don't show toast for background status check unless it's a critical error
         } finally {
             setTwilioLoading(false);
             setLoading(false);
@@ -75,6 +92,13 @@ const WhatsAppIntegration: React.FC = () => {
     // Handle Twilio onboarding
     const handleTwilioOnboard = async () => {
         if (!tenantId) return;
+
+        // Validation for BYON
+        if (twilioFlow === 'byon' && !twilioPhoneNumber) {
+            toast.error('❌ Por favor, informe o número do seu WhatsApp.');
+            return;
+        }
+
         setTwilioProvisioning(true);
         try {
             const endpoint = twilioFlow === 'new_number'
@@ -84,7 +108,10 @@ const WhatsAppIntegration: React.FC = () => {
             const body: any = { tenant_id: tenantId };
             if (twilioFlow === 'new_number') {
                 body.country_code = twilioCountry;
+            } else {
+                body.phone_number = twilioPhoneNumber;
             }
+
             if (twilioFriendlyName) {
                 body.friendly_name = twilioFriendlyName;
             }
@@ -94,6 +121,15 @@ const WhatsAppIntegration: React.FC = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
             });
+
+            const contentType = res.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await res.text();
+                if (text.includes('<!DOCTYPE html>') || res.status === 404) {
+                    throw new Error('O backend retornou uma página de erro (404). As rotas Twilio podem não estar configuradas no servidor.');
+                }
+                throw new Error('Erro de comunicação com o servidor. Resposta inválida.');
+            }
 
             const json = await res.json();
             if (json.ok) {
@@ -247,25 +283,25 @@ const WhatsAppIntegration: React.FC = () => {
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 className={`p-6 rounded-2xl border ${twilioStatus.onboarding_status === 'active'
-                                        ? 'bg-green-500/5 border-green-500/20'
-                                        : twilioStatus.onboarding_status === 'failed'
-                                            ? 'bg-red-500/5 border-red-500/20'
-                                            : 'bg-amber-500/5 border-amber-500/20'
+                                    ? 'bg-green-500/5 border-green-500/20'
+                                    : twilioStatus.onboarding_status === 'failed'
+                                        ? 'bg-red-500/5 border-red-500/20'
+                                        : 'bg-amber-500/5 border-amber-500/20'
                                     }`}
                             >
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-4">
                                         <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${twilioStatus.onboarding_status === 'active'
-                                                ? 'bg-green-500/20'
-                                                : twilioStatus.onboarding_status === 'failed'
-                                                    ? 'bg-red-500/20'
-                                                    : 'bg-amber-500/20'
+                                            ? 'bg-green-500/20'
+                                            : twilioStatus.onboarding_status === 'failed'
+                                                ? 'bg-red-500/20'
+                                                : 'bg-amber-500/20'
                                             }`}>
                                             <span className={`material-symbols-outlined text-3xl ${twilioStatus.onboarding_status === 'active'
-                                                    ? 'text-green-500'
-                                                    : twilioStatus.onboarding_status === 'failed'
-                                                        ? 'text-red-500'
-                                                        : 'text-amber-500'
+                                                ? 'text-green-500'
+                                                : twilioStatus.onboarding_status === 'failed'
+                                                    ? 'text-red-500'
+                                                    : 'text-amber-500'
                                                 }`}>
                                                 {twilioStatus.onboarding_status === 'active' ? 'check_circle'
                                                     : twilioStatus.onboarding_status === 'failed' ? 'error'
@@ -375,26 +411,44 @@ const WhatsAppIntegration: React.FC = () => {
 
                                     {/* Country (only for new number) */}
                                     {twilioFlow === 'new_number' && (
-                                        <div>
+                                        <div className="z-50 relative"> {/* High z-index for dropdown stacking context */}
                                             <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
                                                 País do Número
                                             </label>
-                                            <select
+                                            <CustomSelect
                                                 value={twilioCountry}
-                                                onChange={(e) => setTwilioCountry(e.target.value)}
+                                                onChange={(val) => setTwilioCountry(val)}
+                                                variant="glass"
+                                                options={[
+                                                    { label: '🇧🇷 Brasil (+55)', value: 'BR' },
+                                                    { label: '🇺🇸 Estados Unidos (+1)', value: 'US' },
+                                                    { label: '🇵🇹 Portugal (+351)', value: 'PT' },
+                                                    { label: '🇬🇧 Reino Unido (+44)', value: 'GB' },
+                                                    { label: '🇩🇪 Alemanha (+49)', value: 'DE' },
+                                                    { label: '🇫🇷 França (+33)', value: 'FR' },
+                                                    { label: '🇪🇸 Espanha (+34)', value: 'ES' },
+                                                    { label: '🇮🇹 Itália (+39)', value: 'IT' },
+                                                    { label: '🇲🇽 México (+52)', value: 'MX' },
+                                                    { label: '🇦🇷 Argentina (+54)', value: 'AR' }
+                                                ]}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Phone Number (only for BYON) */}
+                                    {twilioFlow === 'byon' && (
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
+                                                Número do WhatsApp Business
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={twilioPhoneNumber}
+                                                onChange={(e) => setTwilioPhoneNumber(e.target.value)}
+                                                placeholder="Ex: +5511999999999"
                                                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-purple-500/50"
-                                            >
-                                                <option value="BR">🇧🇷 Brasil (+55)</option>
-                                                <option value="US">🇺🇸 Estados Unidos (+1)</option>
-                                                <option value="PT">🇵🇹 Portugal (+351)</option>
-                                                <option value="GB">🇬🇧 Reino Unido (+44)</option>
-                                                <option value="DE">🇩🇪 Alemanha (+49)</option>
-                                                <option value="FR">🇫🇷 França (+33)</option>
-                                                <option value="ES">🇪🇸 Espanha (+34)</option>
-                                                <option value="IT">🇮🇹 Itália (+39)</option>
-                                                <option value="MX">🇲🇽 México (+52)</option>
-                                                <option value="AR">🇦🇷 Argentina (+54)</option>
-                                            </select>
+                                            />
+                                            <p className="text-[9px] text-white/30 mt-1 font-medium">Use o formato internacional com +, DDD e número.</p>
                                         </div>
                                     )}
 

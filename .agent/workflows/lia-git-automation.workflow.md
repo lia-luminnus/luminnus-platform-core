@@ -32,15 +32,12 @@ Husky pre-push / pre-commit (bloqueia push local sem build).
 
 PR Template + Operating Mode AntiGravity (processo padronizado, sem bypass).
 
-Hard Rules (não negociáveis)
+### Hard Rules (Revisadas)
 
-❌ Proibido push direto em main (humano ou agent).
-
-✅ Só entra via PR + CI verde + up-to-date com main.
-
-✅ Qualquer falha TS (ex: TS2307 Cannot find module @luminnus/shared) = merge bloqueado.
-
-✅ Render deve deployar apenas após merge em main (que já é verde).
+- ✅ **Push Direto em Main**: Permitido APENAS se os checks locais passarem.
+- ✅ **Verificação Obrigatória Local**: Antes de cada push, é mandatório rodar `pnpm turbo run build` e `pnpm turbo run typecheck`.
+- ✅ **Sincronia com Main**: Sempre rodar `git pull origin main --rebase` antes do push para evitar conflitos de merge no servidor.
+- ✅ **Merge Seguro**: Se houver falha nos testes locais, o push deve ser cancelado imediatamente.
 
 1) GitHub — Branch Protection (ENFORCEMENT)
 

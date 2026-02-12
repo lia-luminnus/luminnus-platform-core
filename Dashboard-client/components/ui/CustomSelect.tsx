@@ -64,7 +64,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
 
     // Variant-specific styles for the dropdown menu
     const getDropdownStyles = () => {
-        const base = "absolute z-50 w-full mt-2 overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-right";
+        const base = "absolute z-[100] w-full mt-2 overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-right";
 
         switch (variant) {
             case 'glass':

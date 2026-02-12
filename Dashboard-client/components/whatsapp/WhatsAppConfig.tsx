@@ -280,7 +280,7 @@ REGRAS:
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {/* A1) Perfil do Agente */}
-                    <div className="space-y-6">
+                    <div className="space-y-6 relative z-30">
                         <div className="flex items-center gap-2 mb-1.5">
                             <span className="material-symbols-outlined text-brand-primary text-lg">person_search</span>
                             <h4 className="font-black text-[11px] uppercase tracking-widest text-gray-500">Perfil do Agente</h4>
@@ -321,7 +321,7 @@ REGRAS:
                     </div>
 
                     {/* A2) Handoff Rules */}
-                    <div className="space-y-6">
+                    <div className="space-y-6 relative z-20">
                         <div className="flex items-center gap-2 mb-1.5">
                             <span className="material-symbols-outlined text-brand-primary text-lg">hail</span>
                             <h4 className="font-black text-[11px] uppercase tracking-widest text-gray-500">Regras de Handoff</h4>
@@ -436,7 +436,7 @@ REGRAS:
                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                        className="relative w-full max-w-2xl bg-white dark:bg-[#0a0d14] rounded-[32px] border border-gray-300 dark:border-white/10 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.3)] overflow-hidden"
+                        className="relative w-full max-w-2xl bg-white dark:bg-[#1a1f2e] border border-gray-300 dark:border-white/10 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.3)] overflow-hidden rounded-[32px]"
                     >
                         <div className="p-8 border-b border-gray-100 dark:border-white/5 flex items-center justify-between bg-gray-50/30 dark:bg-white/5">
                             <div className="flex items-center gap-4">
