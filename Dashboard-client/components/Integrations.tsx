@@ -316,17 +316,6 @@ const Integrations: React.FC = () => {
                 }
             }
             setSelectedIntegration(integration);
-        } else {
-            // WhatsApp ou outros simples
-            toast.promise(
-                new Promise((resolve) => setTimeout(resolve, 1500)),
-                {
-                    loading: `Iniciando conexão com ${integration.name}...`,
-                    success: `${integration.name} conectado com sucesso!`,
-                    error: `Falha ao conectar com ${integration.name}.`,
-                }
-            );
-            // Simulação local ou chamada real
             if (integration.id === 'whatsapp') {
                 navigate('/integrations/whatsapp');
                 return;

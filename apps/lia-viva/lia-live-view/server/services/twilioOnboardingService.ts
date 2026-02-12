@@ -53,11 +53,13 @@ function getMasterClient(): Twilio.Twilio {
         sid: MASTER_ACCOUNT_SID.substring(0, 12) + '...',
         sid_len: MASTER_ACCOUNT_SID.length,
         token_len: MASTER_AUTH_TOKEN.length,
-        method: 'AUTH_TOKEN'
+        method: 'AUTH_TOKEN',
+        region: 'us1'
     });
 
     // SEMPRE usar Auth Token para operações da classe TwilioOnboardingService (Subcontas)
-    return Twilio(MASTER_ACCOUNT_SID, MASTER_AUTH_TOKEN);
+    // Forçando US1 pois a conta do cliente é regional (visto no print do console)
+    return Twilio(MASTER_ACCOUNT_SID, MASTER_AUTH_TOKEN, { region: 'us1' });
 }
 
 export class TwilioOnboardingService {
