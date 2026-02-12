@@ -30,9 +30,9 @@ import type {
 // CONFIG
 // ==========================================================
 
-const MASTER_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
-const MASTER_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
-const WEBHOOK_BASE_URL = process.env.TWILIO_WEBHOOK_BASE_URL || 'https://api.luminnus.ai/api/twilio/webhook';
+const MASTER_ACCOUNT_SID = (process.env.TWILIO_ACCOUNT_SID || '').trim();
+const MASTER_AUTH_TOKEN = (process.env.TWILIO_AUTH_TOKEN || '').trim();
+const WEBHOOK_BASE_URL = (process.env.TWILIO_WEBHOOK_BASE_URL || 'https://api.luminnus.ai/api/twilio/webhook').trim();
 
 /**
  * Obter cliente Twilio da Conta Master.
@@ -43,12 +43,13 @@ function getMasterClient(): Twilio.Twilio {
         console.error('[TwilioOnboarding] ❌ Credenciais ausentes:', {
             has_sid: !!MASTER_ACCOUNT_SID,
             sid_prefix: MASTER_ACCOUNT_SID?.substring(0, 6) || 'EMPTY',
+            sid_length: MASTER_ACCOUNT_SID?.length || 0,
             has_token: !!MASTER_AUTH_TOKEN,
             token_length: MASTER_AUTH_TOKEN?.length || 0,
         });
         throw new Error('[TwilioOnboarding] TWILIO_ACCOUNT_SID e TWILIO_AUTH_TOKEN não configurados');
     }
-    console.log('[TwilioOnboarding] 🔑 Usando Master SID:', MASTER_ACCOUNT_SID.substring(0, 8) + '...', 'Token length:', MASTER_AUTH_TOKEN.length);
+    console.log('[TwilioOnboarding] 🔑 Master SID:', MASTER_ACCOUNT_SID.substring(0, 8) + '...', 'SID length:', MASTER_ACCOUNT_SID.length, 'Token length:', MASTER_AUTH_TOKEN.length);
     return Twilio(MASTER_ACCOUNT_SID, MASTER_AUTH_TOKEN);
 }
 
@@ -176,6 +177,13 @@ export class TwilioOnboardingService {
             };
         } catch (err: any) {
             console.error(`❌ ${TAG} Erro:`, err.message);
+            console.error(`❌ ${TAG} Detalhes:`, {
+                code: err.code,
+                status: err.status,
+                moreInfo: err.moreInfo,
+                sid_length: MASTER_ACCOUNT_SID.length,
+                token_length: MASTER_AUTH_TOKEN.length,
+            });
 
             await TwilioRepository.logAction({
                 tenant_id: tenantId,
