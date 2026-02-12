@@ -75,17 +75,19 @@ router.get('/google', async (req: Request, res: Response) => {
             }
         });
 
+        // Use a redirect_uri fornecida ou fallback dinâmico baseado na requisição
+        const fallbackUri = `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+        const callbackUri = redirect_uri || fallbackUri;
+
         // State para segurança (inclui user_id e serviços)
         const state = Buffer.from(JSON.stringify({
             user_id: user_id || 'anonymous',
             tenant_id: tenant_id || user_id || null,
             services: selectedServices,
-            redirect_to: redirect_to || 'http://localhost:3001/#/integrations',
+            redirect_to: redirect_to || 'https://luminnus.ai',
+            callback_uri: callbackUri, // 🔑 ESSENCIAL: Guardar o callback usado para o passo 2
             timestamp: Date.now()
         })).toString('base64');
-
-        // Use a redirect_uri fornecida ou fallback para a porta 3000 (callback neste servidor)
-        const callbackUri = redirect_uri || 'http://localhost:3000/api/auth/google/callback';
 
         // Construir URL de autorização do Google
         const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -145,6 +147,9 @@ router.post('/google/callback', async (req: Request, res: Response) => {
             }
         }
 
+        // 🔑 ESSENCIAL: O redirect_uri deve ser EXATAMENTE o mesmo usado no passo 1
+        const callbackUri = stateData.callback_uri || `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+
         // Trocar código por tokens
         const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
             method: 'POST',
@@ -153,7 +158,7 @@ router.post('/google/callback', async (req: Request, res: Response) => {
                 code,
                 client_id: clientId,
                 client_secret: clientSecret,
-                redirect_uri: 'http://localhost:3000/api/auth/google/callback',
+                redirect_uri: callbackUri,
                 grant_type: 'authorization_code'
             })
         });

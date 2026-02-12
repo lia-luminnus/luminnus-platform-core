@@ -295,6 +295,11 @@ const Integrations: React.FC = () => {
             return;
         }
 
+        if (integration.id === 'whatsapp') {
+            navigate('/integrations/whatsapp');
+            return;
+        }
+
         if (integration.isComposite) {
             setSelectedIntegration(integration);
 
@@ -316,10 +321,6 @@ const Integrations: React.FC = () => {
                 }
             }
             setSelectedIntegration(integration);
-            if (integration.id === 'whatsapp') {
-                navigate('/integrations/whatsapp');
-                return;
-            }
         }
     };
 

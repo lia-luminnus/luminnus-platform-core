@@ -401,15 +401,20 @@ async function startServer() {
 
 
   // ===========================================================
-  // OAUTH CALLBACK REDIRECT (Port 3000 -> Frontend 8080)
+  // OAUTH CALLBACK REDIRECT (Server -> Frontend SPA)
   // ===========================================================
-  // Google Cloud Console is configured with redirect_uri = http://localhost:3000/api/auth/google/callback
-  // This handler just redirects to the frontend's OAuthCallback page, passing along the query params.
-  // The frontend will then POST to the backend (port 5000) which has the .env with Google credentials.
+  // Google Cloud Console redireciona para este servidor.
+  // Este handler apenas repassa o usuário para o Frontend correto (Dashboard),
+  // enviando o code e state via query params.
   app.get('/api/auth/google/callback', (req, res) => {
     const query = req.query as any;
     const state = query.state;
-    let redirectUrl = 'http://localhost:8080/oauth-callback'; // Fallback admin
+
+    // Fallback: Tenta redirecionar para o dashboard de produção se nada for achado
+    const isProduction = process.env.NODE_ENV === 'production';
+    let redirectUrl = isProduction
+      ? 'https://luminnus-dashboard.onrender.com/#/integrations'
+      : 'http://localhost:5173/#/integrations';
 
     if (state) {
       try {
@@ -428,9 +433,10 @@ async function startServer() {
       ? `${redirectUrl}&${queryParams}`
       : `${redirectUrl}?${queryParams}`;
 
-    console.log(`[OAuth Redirect] Redirecting: ${finalRedirect}`);
+    console.log(`[OAuth Redirect] Redirecionando para: ${finalRedirect}`);
     res.redirect(finalRedirect);
   });
+
 
   // ===========================================================
 
