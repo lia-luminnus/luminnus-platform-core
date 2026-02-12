@@ -32,25 +32,36 @@ import type {
 
 const MASTER_ACCOUNT_SID = (process.env.TWILIO_ACCOUNT_SID || '').trim();
 const MASTER_AUTH_TOKEN = (process.env.TWILIO_AUTH_TOKEN || '').trim();
+const API_KEY_SID = (process.env.TWILIO_API_KEY_SID || '').trim();
+const API_KEY_SECRET = (process.env.TWILIO_API_KEY_SECRET || '').trim();
 const WEBHOOK_BASE_URL = (process.env.TWILIO_WEBHOOK_BASE_URL || 'https://api.luminnus.ai/api/twilio/webhook').trim();
 
 /**
  * Obter cliente Twilio da Conta Master.
- * Usado para operações administrativas (criar subcontas, comprar números, etc.)
+ * Prioriza API Key + Secret se disponíveis, caso contrário usa Master Auth Token.
  */
 function getMasterClient(): Twilio.Twilio {
-    if (!MASTER_ACCOUNT_SID || !MASTER_AUTH_TOKEN) {
-        console.error('[TwilioOnboarding] ❌ Credenciais ausentes:', {
-            has_sid: !!MASTER_ACCOUNT_SID,
-            sid_prefix: MASTER_ACCOUNT_SID?.substring(0, 6) || 'EMPTY',
-            sid_length: MASTER_ACCOUNT_SID?.length || 0,
-            has_token: !!MASTER_AUTH_TOKEN,
-            token_length: MASTER_AUTH_TOKEN?.length || 0,
+    // 1. Usar API Key se disponível (Recomendado)
+    if (API_KEY_SID && API_KEY_SECRET && MASTER_ACCOUNT_SID) {
+        console.log('[TwilioOnboarding] 🔐 Usando API Key para autenticação:', API_KEY_SID.substring(0, 8) + '...');
+        return Twilio(API_KEY_SID, API_KEY_SECRET, {
+            accountSid: MASTER_ACCOUNT_SID,
+            region: 'us1' // Forçar região us1 conforme console do usuário
         });
-        throw new Error('[TwilioOnboarding] TWILIO_ACCOUNT_SID e TWILIO_AUTH_TOKEN não configurados');
     }
-    console.log('[TwilioOnboarding] 🔑 Master SID:', MASTER_ACCOUNT_SID.substring(0, 8) + '...', 'SID length:', MASTER_ACCOUNT_SID.length, 'Token length:', MASTER_AUTH_TOKEN.length);
-    return Twilio(MASTER_ACCOUNT_SID, MASTER_AUTH_TOKEN);
+
+    // 2. Fallback para Master Auth Token
+    if (!MASTER_ACCOUNT_SID || !MASTER_AUTH_TOKEN) {
+        console.error('[TwilioOnboarding] ❌ Credenciais ausentes (SID/Token ou API Key):', {
+            has_sid: !!MASTER_ACCOUNT_SID,
+            has_token: !!MASTER_AUTH_TOKEN,
+            has_api_key: !!API_KEY_SID,
+        });
+        throw new Error('[TwilioOnboarding] Credenciais Twilio Master não configuradas corretamente no Render');
+    }
+
+    console.log('[TwilioOnboarding] 🔑 Usando Master Auth Token (Fallback). SID:', MASTER_ACCOUNT_SID.substring(0, 8) + '...');
+    return Twilio(MASTER_ACCOUNT_SID, MASTER_AUTH_TOKEN, { region: 'us1' });
 }
 
 export class TwilioOnboardingService {
