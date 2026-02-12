@@ -41,26 +41,31 @@ const WEBHOOK_BASE_URL = (process.env.TWILIO_WEBHOOK_BASE_URL || 'https://api.lu
  * Prioriza API Key + Secret se disponíveis, caso contrário usa Master Auth Token.
  */
 function getMasterClient(): Twilio.Twilio {
+    // DIAGNÓSTICO DE INICIALIZAÇÃO
+    console.log('[TwilioOnboarding] 🔍 Verificando variáveis carregadas:', {
+        has_sid: !!MASTER_ACCOUNT_SID,
+        has_token: !!MASTER_AUTH_TOKEN,
+        has_api_key: !!API_KEY_SID,
+        has_api_secret: !!API_KEY_SECRET,
+        sid_prefix: MASTER_ACCOUNT_SID?.substring(0, 10),
+        key_prefix: API_KEY_SID?.substring(0, 10)
+    });
+
     // 1. Usar API Key se disponível (Recomendado)
     if (API_KEY_SID && API_KEY_SECRET && MASTER_ACCOUNT_SID) {
-        console.log('[TwilioOnboarding] 🔐 Usando API Key para autenticação:', API_KEY_SID.substring(0, 8) + '...');
+        console.log('[TwilioOnboarding] 🔐 Inicializando com API Key:', API_KEY_SID.substring(0, 8) + '...');
         return Twilio(API_KEY_SID, API_KEY_SECRET, {
             accountSid: MASTER_ACCOUNT_SID,
-            region: 'us1' // Forçar região us1 conforme console do usuário
+            region: 'us1'
         });
     }
 
     // 2. Fallback para Master Auth Token
     if (!MASTER_ACCOUNT_SID || !MASTER_AUTH_TOKEN) {
-        console.error('[TwilioOnboarding] ❌ Credenciais ausentes (SID/Token ou API Key):', {
-            has_sid: !!MASTER_ACCOUNT_SID,
-            has_token: !!MASTER_AUTH_TOKEN,
-            has_api_key: !!API_KEY_SID,
-        });
-        throw new Error('[TwilioOnboarding] Credenciais Twilio Master não configuradas corretamente no Render');
+        throw new Error('[TwilioOnboarding] Credenciais Twilio Master não configuradas no Render');
     }
 
-    console.log('[TwilioOnboarding] 🔑 Usando Master Auth Token (Fallback). SID:', MASTER_ACCOUNT_SID.substring(0, 8) + '...');
+    console.log('[TwilioOnboarding] 🔑 Inicializando com Master Auth Token (Fallback). SID:', MASTER_ACCOUNT_SID.substring(0, 10) + '...');
     return Twilio(MASTER_ACCOUNT_SID, MASTER_AUTH_TOKEN, { region: 'us1' });
 }
 
