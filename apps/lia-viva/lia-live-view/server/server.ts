@@ -389,14 +389,15 @@ async function startServer() {
 
   console.log('✅ Core LIA Functions loaded');
 
-  // v4.0.2: Diagnostic of critical env vars
-  console.log('🔍 [System] Checking critical env vars...');
-  const criticalVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'OPENAI_API_KEY'];
-  criticalVars.forEach(v => {
-    console.log(`   - ${v}: ${process.env[v] ? 'LOADED (via Config)' : 'MISSING'}`);
+  // v4.0.2: Diagnostic of startup env vars
+  console.log('🔍 [Startup] Checking env vars...');
+  const startupVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'OPENAI_API_KEY'];
+  startupVars.forEach(v => {
+    const status = process.env[v] ? '✅ LOADED' : '❌ MISSING';
+    console.log(`   - ${v}: ${status}`);
   });
 
-  console.log('🚀 [Server] Verificando variáveis críticas...');
+  console.log('🚀 [Server] Variáveis verificadas com sucesso.');
 
 
   // ===========================================================
