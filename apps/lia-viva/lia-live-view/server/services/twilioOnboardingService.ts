@@ -40,8 +40,15 @@ const WEBHOOK_BASE_URL = process.env.TWILIO_WEBHOOK_BASE_URL || 'https://api.lum
  */
 function getMasterClient(): Twilio.Twilio {
     if (!MASTER_ACCOUNT_SID || !MASTER_AUTH_TOKEN) {
+        console.error('[TwilioOnboarding] ❌ Credenciais ausentes:', {
+            has_sid: !!MASTER_ACCOUNT_SID,
+            sid_prefix: MASTER_ACCOUNT_SID?.substring(0, 6) || 'EMPTY',
+            has_token: !!MASTER_AUTH_TOKEN,
+            token_length: MASTER_AUTH_TOKEN?.length || 0,
+        });
         throw new Error('[TwilioOnboarding] TWILIO_ACCOUNT_SID e TWILIO_AUTH_TOKEN não configurados');
     }
+    console.log('[TwilioOnboarding] 🔑 Usando Master SID:', MASTER_ACCOUNT_SID.substring(0, 8) + '...', 'Token length:', MASTER_AUTH_TOKEN.length);
     return Twilio(MASTER_ACCOUNT_SID, MASTER_AUTH_TOKEN);
 }
 
