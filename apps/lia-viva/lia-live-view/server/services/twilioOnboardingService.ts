@@ -38,33 +38,25 @@ const WEBHOOK_BASE_URL = (process.env.TWILIO_WEBHOOK_BASE_URL || 'https://api.lu
 
 /**
  * Obter cliente Twilio da Conta Master.
- * Prioriza API Key + Secret se disponíveis, caso contrário usa Master Auth Token.
+ * IMPORTANTE: Operações de Conta (criar subcontas) EXIGEM Auth Token master.
+ * API Keys não têm permissão para criar outras contas.
  */
 function getMasterClient(): Twilio.Twilio {
-    // DIAGNÓSTICO DE INICIALIZAÇÃO
-    console.log('[TwilioOnboarding] 🔍 Diagnóstico Final de Credenciais:', {
-        has_sid: !!MASTER_ACCOUNT_SID,
-        sid_len: MASTER_ACCOUNT_SID?.length,
-        sid_prefix: MASTER_ACCOUNT_SID?.substring(0, 12), // Mostrando 12 chars para ver o erro no décimo
-        has_api_key: !!API_KEY_SID,
-        key_prefix: API_KEY_SID?.substring(0, 10)
+    // 1. Validar presença do par Master (Obrigatório para subcontas)
+    if (!MASTER_ACCOUNT_SID || !MASTER_AUTH_TOKEN) {
+        console.error('[TwilioOnboarding] ❌ Credenciais Master ausentes no process.env');
+        throw new Error('[TwilioOnboarding] TWILIO_ACCOUNT_SID e TWILIO_AUTH_TOKEN são obrigatórios');
+    }
+
+    // Diagnóstico de Segurança (Log parcial)
+    console.log('[TwilioOnboarding] 🔐 Inicializando Cliente Administrativo:', {
+        sid: MASTER_ACCOUNT_SID.substring(0, 12) + '...',
+        sid_len: MASTER_ACCOUNT_SID.length,
+        token_len: MASTER_AUTH_TOKEN.length,
+        method: 'AUTH_TOKEN'
     });
 
-    // 1. Usar API Key se disponível (Recomendado)
-    if (API_KEY_SID && API_KEY_SECRET && MASTER_ACCOUNT_SID) {
-        console.log('[TwilioOnboarding] 🔐 Conectando via API Key:', API_KEY_SID.substring(0, 8) + '...');
-        return Twilio(API_KEY_SID, API_KEY_SECRET, {
-            accountSid: MASTER_ACCOUNT_SID
-            // Removida região fixa para evitar erro de endpoint
-        });
-    }
-
-    // 2. Fallback para Master Auth Token
-    if (!MASTER_ACCOUNT_SID || !MASTER_AUTH_TOKEN) {
-        throw new Error('[TwilioOnboarding] Credenciais Twilio Master incompletas no Render');
-    }
-
-    console.log('[TwilioOnboarding] 🔑 Conectando via Auth Token (Fallback). SID:', MASTER_ACCOUNT_SID.substring(0, 10) + '...');
+    // SEMPRE usar Auth Token para operações da classe TwilioOnboardingService (Subcontas)
     return Twilio(MASTER_ACCOUNT_SID, MASTER_AUTH_TOKEN);
 }
 
