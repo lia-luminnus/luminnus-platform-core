@@ -329,56 +329,9 @@ router.get('/logs', async (req: Request, res: Response) => {
 });
 
 // ==========================================================
-// DEBUG: CREDENTIAL TEST (temporary endpoint)
-// ==========================================================
-
-router.get('/debug/credentials', async (_req: Request, res: Response) => {
-    try {
-        console.log('🔍 [Twilio Debug] Testando credenciais...');
-
-        // Step 1: Test basic auth by fetching account info
-        const health = await TwilioOnboardingService.healthCheck();
-
-        res.json({
-            ok: true,
-            data: {
-                health_check: health,
-                env_info: {
-                    sid_prefix: process.env.TWILIO_ACCOUNT_SID?.substring(0, 10) || 'MISSING',
-                    sid_length: process.env.TWILIO_ACCOUNT_SID?.length || 0,
-                    token_length: process.env.TWILIO_AUTH_TOKEN?.length || 0,
-                    has_whitespace: {
-                        sid_start: process.env.TWILIO_ACCOUNT_SID?.startsWith(' '),
-                        sid_end: process.env.TWILIO_ACCOUNT_SID?.endsWith(' '),
-                        token_start: process.env.TWILIO_AUTH_TOKEN?.startsWith(' '),
-                        token_end: process.env.TWILIO_AUTH_TOKEN?.endsWith(' '),
-                    },
-                },
-                message: health.healthy
-                    ? '✅ Credenciais OK! Conta ativa.'
-                    : `⚠️ Conta status: ${health.status}. Tipo provável: ${health.friendlyName?.includes('Trial') || health.friendlyName?.includes('first') ? 'TRIAL' : 'PAID'}`,
-            },
-        });
-    } catch (error: any) {
-        console.error('❌ [Twilio Debug] Erro:', error.message, { code: error.code, status: error.status });
-        res.status(500).json({
-            ok: false,
-            error: error.message,
-            details: {
-                code: error.code,
-                status: error.status,
-                moreInfo: error.moreInfo,
-            },
-            diagnosis: error.code === 20003
-                ? '🔴 As credenciais estão sendo REJEITADAS pelo Twilio. Possíveis causas: (1) Auth Token expirado/regenerado, (2) Conta Trial com restrições, (3) Caracteres invisíveis no SID/Token'
-                : 'Erro inesperado',
-        });
-    }
-});
-
-// ==========================================================
 // EXPORT SETUP
 // ==========================================================
+
 
 export function setupTwilioOnboardingRoutes(app: any): void {
     app.use('/api/twilio', router);
