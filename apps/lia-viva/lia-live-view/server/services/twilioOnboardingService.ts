@@ -42,31 +42,30 @@ const WEBHOOK_BASE_URL = (process.env.TWILIO_WEBHOOK_BASE_URL || 'https://api.lu
  */
 function getMasterClient(): Twilio.Twilio {
     // DIAGNÓSTICO DE INICIALIZAÇÃO
-    console.log('[TwilioOnboarding] 🔍 Verificando variáveis carregadas:', {
+    console.log('[TwilioOnboarding] 🔍 Diagnóstico Final de Credenciais:', {
         has_sid: !!MASTER_ACCOUNT_SID,
-        has_token: !!MASTER_AUTH_TOKEN,
+        sid_len: MASTER_ACCOUNT_SID?.length,
+        sid_prefix: MASTER_ACCOUNT_SID?.substring(0, 12), // Mostrando 12 chars para ver o erro no décimo
         has_api_key: !!API_KEY_SID,
-        has_api_secret: !!API_KEY_SECRET,
-        sid_prefix: MASTER_ACCOUNT_SID?.substring(0, 10),
         key_prefix: API_KEY_SID?.substring(0, 10)
     });
 
     // 1. Usar API Key se disponível (Recomendado)
     if (API_KEY_SID && API_KEY_SECRET && MASTER_ACCOUNT_SID) {
-        console.log('[TwilioOnboarding] 🔐 Inicializando com API Key:', API_KEY_SID.substring(0, 8) + '...');
+        console.log('[TwilioOnboarding] 🔐 Conectando via API Key:', API_KEY_SID.substring(0, 8) + '...');
         return Twilio(API_KEY_SID, API_KEY_SECRET, {
-            accountSid: MASTER_ACCOUNT_SID,
-            region: 'us1'
+            accountSid: MASTER_ACCOUNT_SID
+            // Removida região fixa para evitar erro de endpoint
         });
     }
 
     // 2. Fallback para Master Auth Token
     if (!MASTER_ACCOUNT_SID || !MASTER_AUTH_TOKEN) {
-        throw new Error('[TwilioOnboarding] Credenciais Twilio Master não configuradas no Render');
+        throw new Error('[TwilioOnboarding] Credenciais Twilio Master incompletas no Render');
     }
 
-    console.log('[TwilioOnboarding] 🔑 Inicializando com Master Auth Token (Fallback). SID:', MASTER_ACCOUNT_SID.substring(0, 10) + '...');
-    return Twilio(MASTER_ACCOUNT_SID, MASTER_AUTH_TOKEN, { region: 'us1' });
+    console.log('[TwilioOnboarding] 🔑 Conectando via Auth Token (Fallback). SID:', MASTER_ACCOUNT_SID.substring(0, 10) + '...');
+    return Twilio(MASTER_ACCOUNT_SID, MASTER_AUTH_TOKEN);
 }
 
 export class TwilioOnboardingService {
