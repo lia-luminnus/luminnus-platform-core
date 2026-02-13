@@ -60,7 +60,8 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
       const admin_diagnostic_mode = req.body.admin_diagnostic_mode === true || liaMode === 'DIAGNOSTIC';
       const basePersona = getLiaGreeting(admin_diagnostic_mode);
 
-      const finalSystemInstruction = basePersona + '\n\n' + (session.userLocation ? `\n\n[Localização Atual: ${session.userLocation}]` : '');
+      const now = new Date();
+      const finalSystemInstruction = `${basePersona}\n\n${context.systemInstruction || ''}\n\n[Data atual do sistema: ${now.toISOString()}]\n${session.userLocation ? `[Localização Atual: ${session.userLocation}]` : ''}`;
 
       const messages = [
         { role: "system" as const, content: finalSystemInstruction },
@@ -91,6 +92,7 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
       let function_calls = aiResponse.function_calls || (aiResponse.function_call ? [aiResponse.function_call] : []);
       let finalDashboardAction = null;
       let finalImagePayload = null;
+      let forceFinalReplyFromTools: string | null = null;
 
       // 4.1 Debitar crédito por mensagem (non-blocking)
       try {
@@ -111,6 +113,7 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
         console.log(`🔄 [Chat] Turno Agêntico ${turnCount}: Processando ${function_calls.length} ferramentas`);
 
         const turnResults = [];
+        let criticalActionHandled = false;
 
         for (const call of function_calls) {
           console.log(`🔧 [Chat] Executando: ${call.name}`);
@@ -122,7 +125,8 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
               userId: finalUserId,
               tenantId: finalTenantId,
               userRole: userRole,
-              userLocation: session?.userLocation
+              userLocation: session?.userLocation,
+              userPrompt: message
             });
 
             if (!function_result || function_result.error) {
@@ -131,8 +135,31 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
           } catch (toolError: any) {
             console.error(`❌ Erro na ferramenta ${call.name}:`, toolError.message);
             // ANTI-LOOP GUARDRAIL: Falhou + por quê + plano B
-            replyText = `Falhou ao executar ${call.name}. Motivo: ${toolError.message}. Plano B: Vou tentar resolver de outra forma ou seguir sem essa informação. Quer que eu tente novamente por outro caminho ou prefere seguir para o próximo tópico? (A/B)`;
+            replyText = `Falhou ao executar ${call.name}. Motivo: ${toolError.message}. Vou tentar uma alternativa automática na próxima tentativa.`;
             function_calls = []; // Abortar loop agêntico
+            break;
+          }
+
+          // TRATAMENTO CRÍTICO: Ferramentas de execução devem responder com verdade factual
+          if (['sendGmail', 'createCalendarEvent', 'updateCalendarEvent', 'deleteCalendarEvent'].includes(call.name)) {
+            const toolSuccess = !!function_result?.success;
+            const toolMessage = function_result?.message || '';
+            const calendarLink = function_result?.link || function_result?.event?.link || '';
+            const meetLink = function_result?.meetLink || '';
+
+            if (toolSuccess) {
+              const confirmations: string[] = [toolMessage];
+              if (calendarLink) confirmations.push(`Link do evento: ${calendarLink}`);
+              if (meetLink) confirmations.push(`Link do Meet: ${meetLink}`);
+              forceFinalReplyFromTools = confirmations.filter(Boolean).join('\n');
+            } else {
+              forceFinalReplyFromTools = toolMessage || `Não consegui concluir ${call.name} nesta tentativa.`;
+            }
+
+            messages.push({ role: 'assistant', content: null, function_call: call });
+            messages.push({ role: 'function', name: call.name, content: JSON.stringify(function_result) });
+            function_calls = [];
+            criticalActionHandled = true;
             break;
           }
 
@@ -183,6 +210,11 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
           turnResults.push(function_result);
         }
 
+        if (criticalActionHandled) {
+          if (forceFinalReplyFromTools) replyText = forceFinalReplyFromTools;
+          break;
+        }
+
         // Se gerou imagem ou ação de dashboard, encerramos o loop para o frontend agir
         if (finalImagePayload || finalDashboardAction) break;
 
@@ -201,6 +233,10 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
 
         replyText = nextResponse.text || replyText;
         function_calls = nextResponse.function_calls || (nextResponse.function_call ? [nextResponse.function_call] : []);
+      }
+
+      if (forceFinalReplyFromTools) {
+        replyText = forceFinalReplyFromTools;
       }
 
       // 5.1 Retornos Especiais (Imagem)

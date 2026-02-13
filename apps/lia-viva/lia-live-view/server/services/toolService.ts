@@ -5,6 +5,41 @@ import { geospatialService } from './geospatialService.js';
 import { diagnosticService } from './diagnosticService.js';
 
 export class ToolService {
+    private static deriveCalendarWindowFromPrompt(prompt: string, existingStart?: string, existingEnd?: string): { start?: string; end?: string } {
+        if (!prompt) return { start: existingStart, end: existingEnd };
+
+        if (existingStart && existingEnd) return { start: existingStart, end: existingEnd };
+
+        const normalized = prompt.toLowerCase();
+        const hasTomorrow = /\bamanh[aã]\b|\btomorrow\b/.test(normalized);
+        const hasToday = /\bhoje\b|\btoday\b/.test(normalized);
+
+        // Captura "10:00", "10h", "10 horas"
+        const hourMatch = normalized.match(/\b(\d{1,2})(?::(\d{2}))?\s*(h|horas?)?\b/);
+        const hour = hourMatch ? Math.min(Math.max(parseInt(hourMatch[1], 10), 0), 23) : 9;
+        const minute = hourMatch && hourMatch[2] ? Math.min(Math.max(parseInt(hourMatch[2], 10), 0), 59) : 0;
+
+        // Captura duração em minutos/horas
+        const durationMinutesMatch = normalized.match(/\b(\d{1,3})\s*min(?:uto)?s?\b/);
+        const durationHoursMatch = normalized.match(/\b(\d{1,2})\s*h(?:ora)?s?\b/);
+        let durationMs = 30 * 60 * 1000;
+        if (durationMinutesMatch) durationMs = parseInt(durationMinutesMatch[1], 10) * 60 * 1000;
+        else if (durationHoursMatch) durationMs = parseInt(durationHoursMatch[1], 10) * 60 * 60 * 1000;
+
+        if (!hasTomorrow && !hasToday && !existingStart) {
+            return { start: existingStart, end: existingEnd };
+        }
+
+        const base = new Date();
+        if (hasTomorrow) base.setDate(base.getDate() + 1);
+        base.setHours(hour, minute, 0, 0);
+
+        const start = existingStart || base.toISOString();
+        const end = existingEnd || new Date(new Date(start).getTime() + durationMs).toISOString();
+
+        return { start, end };
+    }
+
     static getTools() {
         return [
             {
@@ -732,7 +767,7 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
         ];
     }
 
-    static async execute(name: string, args: any, context: { userId: string; tenantId: string; userRole?: string; userLocation?: any }) {
+    static async execute(name: string, args: any, context: { userId: string; tenantId: string; userRole?: string; userLocation?: any; userPrompt?: string }) {
         const { userId, tenantId, userRole = 'client' } = context;
         console.log(`🔧 [ToolService] Executando: ${name} (Role: ${userRole})`);
 
@@ -848,7 +883,26 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                     return await GoogleWorkspaceTools.createGoogleDoc(userId, tenantId, args.title, args.content, args.aiPrompt);
                 }
                 case 'sendGmail': {
-                    return await GoogleWorkspaceTools.sendGmail(userId, tenantId, args.to, args.subject, args.body);
+                    let recipient = args.to;
+                    if (!recipient) {
+                        try {
+                            const { getUserProfile } = await import('../config/supabase.js');
+                            const profile = await getUserProfile(userId);
+                            recipient = profile?.email || profile?.user_metadata?.email || null;
+                        } catch (err) {
+                            console.warn('⚠️ [ToolService] Falha ao resolver e-mail padrão do usuário:', err);
+                        }
+                    }
+
+                    if (!recipient) {
+                        return {
+                            success: false,
+                            error: 'MISSING_RECIPIENT',
+                            message: 'Não consegui identificar o destinatário do e-mail. Informe apenas o e-mail de destino.'
+                        };
+                    }
+
+                    return await GoogleWorkspaceTools.sendGmail(userId, tenantId, recipient, args.subject, args.body);
                 }
                 case 'listGmailMessages': {
                     return await GoogleWorkspaceTools.listGmailMessages(userId, tenantId, args.maxResults, args.query);
@@ -863,6 +917,49 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                     return await GoogleWorkspaceTools.deleteGmailMessage(userId, tenantId, args.messageId);
                 }
                 case 'createCalendarEvent': {
+                    const prompt = (context.userPrompt || '').toLowerCase();
+
+                    const inferred = this.deriveCalendarWindowFromPrompt(prompt, args?.start, args?.end);
+                    if (!args.start && inferred.start) args.start = inferred.start;
+                    if (!args.end && inferred.end) args.end = inferred.end;
+
+                    if (!args.start || !args.end) {
+                        return {
+                            success: false,
+                            error: 'MISSING_DATETIME',
+                            message: 'Faltou data/horário para criar o evento. Se preferir, diga em linguagem natural (ex: "amanhã às 10h por 30 minutos").'
+                        };
+                    }
+
+                    // Guardrail temporal: evita agendar data antiga por alucinação de ano.
+                    if (args?.start && args?.end) {
+                        const parsedStart = new Date(args.start);
+                        const parsedEnd = new Date(args.end);
+                        const now = new Date();
+                        const looksRelativeTomorrow = /\bamanh[aã]\b|\btomorrow\b/.test(prompt);
+                        const tooOld = !Number.isNaN(parsedStart.getTime()) && parsedStart.getTime() < (now.getTime() - (1000 * 60 * 60 * 24 * 2));
+
+                        if (looksRelativeTomorrow && tooOld) {
+                            const durationMs = Math.max(parsedEnd.getTime() - parsedStart.getTime(), 30 * 60 * 1000);
+                            const tomorrow = new Date(now);
+                            tomorrow.setDate(now.getDate() + 1);
+
+                            const fixedStart = new Date(tomorrow);
+                            fixedStart.setHours(parsedStart.getHours(), parsedStart.getMinutes(), 0, 0);
+                            const fixedEnd = new Date(fixedStart.getTime() + durationMs);
+
+                            console.warn('⚠️ [ToolService] Data antiga detectada para "amanhã". Corrigindo automaticamente.', {
+                                originalStart: args.start,
+                                originalEnd: args.end,
+                                fixedStart: fixedStart.toISOString(),
+                                fixedEnd: fixedEnd.toISOString()
+                            });
+
+                            args.start = fixedStart.toISOString();
+                            args.end = fixedEnd.toISOString();
+                        }
+                    }
+
                     console.log(`📅 [ToolService] createCalendarEvent args:`, JSON.stringify(args, null, 2));
                     const result = await GoogleWorkspaceTools.createCalendarEvent(
                         userId, tenantId, args.title, args.start, args.end, args.description

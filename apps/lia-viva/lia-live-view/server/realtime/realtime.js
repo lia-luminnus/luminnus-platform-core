@@ -196,8 +196,9 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
 
       // Build messages array with system context + history + CURRENT message
       // CRITICAL FIX: Include context.systemInstruction which contains ALL MEMORIES!
+      const now = new Date();
       const messages = [
-        { role: "system", content: basePersona + '\n\n' + (context.systemInstruction || '') + (contextOptions.userLocation ? `\n\n[Localização Atual: ${contextOptions.userLocation}]` : '') },
+        { role: "system", content: `${basePersona}\n\n${context.systemInstruction || ''}\n\n[Data atual do sistema: ${now.toISOString()}]${contextOptions.userLocation ? `\n[Localização Atual: ${contextOptions.userLocation}]` : ''}` },
         ...context.history.map(msg => ({
           role: msg.role === 'assistant' ? 'assistant' : 'user',
           content: msg.content
