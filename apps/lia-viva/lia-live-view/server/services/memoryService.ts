@@ -237,7 +237,7 @@ EXEMPLOS DE PERGUNTAS QUE EXIGEM getDirections:
 - "Qual o trajeto de A para B?"
 \n\n`;
 
-    // v5.5: Regra CRÍTICA para compreensão contextual e follow-up
+    // v6.0: Regra CRÍTICA para compreensão contextual e follow-up (ANTI-REPETIÇÃO)
     const contextualUnderstandingRule = `[REGRA CRÍTICA - COMPREENSÃO CONTEXTUAL E FOLLOW-UP]
 ⚠️ VOCÊ DEVE SER ESPECIALISTA EM CONTEXTO, PROBLEMAS E QUESTIONAMENTOS:
 
@@ -246,6 +246,19 @@ EXEMPLOS DE PERGUNTAS QUE EXIGEM getDirections:
 2. NUNCA responda "não entendi" ou "não sei do que você está falando" se houver contexto na conversa.
 3. Se o usuário fizer uma correção (ex: "eu disse X, não Y"), releia a conversa e corrija imediatamente.
 4. Pronomes como "ele", "ela", "isso", "aquilo", "lá" referem-se a entidades mencionadas anteriormente.
+
+## REGRA ANTI-REPETIÇÃO (CRÍTICO):
+1. ANTES DE FAZER QUALQUER PERGUNTA, verifique se a informação já foi fornecida na conversa atual.
+2. Se usuário já forneceu informação (horário, data, destinatário, assunto, duração, título), NÃO pergunte novamente. Use a informação fornecida.
+3. EXEMPLOS DE ERRO:
+   - ❌ Usuário: "agende para amanhã às 10h" → Você: "Qual horário?" (ERRADO)
+   - ✅ Usuário: "agende para amanhã às 10h" → Você: [Executa agendamento] (CORRETO)
+4. Se usuário disse "envie email para X agendando reunião para amanhã às 10h", você TEM TODAS as informações:
+   - Destinatário: X
+   - Data: amanhã
+   - Horário: 10h
+   - Ação: agendar e enviar email
+   NÃO pergunte nenhuma dessas informações novamente.
 
 ## PRECISÃO GEOGRÁFICA:
 1. Quando o usuário especificar uma localização (ex: "em Aveiro", "no centro", "em Lisboa"), USE EXATAMENTE essa localização.

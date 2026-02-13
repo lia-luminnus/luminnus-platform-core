@@ -8,7 +8,47 @@ export class ToolService {
     private static deriveCalendarWindowFromPrompt(prompt: string, existingStart?: string, existingEnd?: string): { start?: string; end?: string } {
         if (!prompt) return { start: existingStart, end: existingEnd };
 
-        if (existingStart && existingEnd) return { start: existingStart, end: existingEnd };
+        if (existingStart && existingEnd) {
+            // Validar que as datas existentes não estão no passado se o prompt menciona "amanhã"
+            const normalized = prompt.toLowerCase();
+            const hasTomorrow = /\bamanh[aã]\b|\btomorrow\b/.test(normalized);
+            if (hasTomorrow) {
+                const parsedExisting = new Date(existingStart);
+                const now = new Date();
+                const currentYear = now.getFullYear();
+                const existingYear = parsedExisting.getFullYear();
+                
+                // Se a data existente está em um ano passado, recalcular
+                if (existingYear < currentYear || parsedExisting.getTime() < now.getTime()) {
+                    // Recalcular baseado no prompt
+                    const hourMatch = normalized.match(/\b(\d{1,2})(?::(\d{2}))?\s*(h|horas?)?\b/);
+                    const hour = hourMatch ? Math.min(Math.max(parseInt(hourMatch[1], 10), 0), 23) : 10;
+                    const minute = hourMatch && hourMatch[2] ? Math.min(Math.max(parseInt(hourMatch[2], 10), 0), 59) : 0;
+                    
+                    const durationMinutesMatch = normalized.match(/\b(\d{1,3})\s*min(?:uto)?s?\b/);
+                    const durationHoursMatch = normalized.match(/\b(\d{1,2})\s*h(?:ora)?s?\b/);
+                    let durationMs = 60 * 60 * 1000; // Padrão 1 hora
+                    if (durationMinutesMatch) durationMs = parseInt(durationMinutesMatch[1], 10) * 60 * 1000;
+                    else if (durationHoursMatch) durationMs = parseInt(durationHoursMatch[1], 10) * 60 * 60 * 1000;
+                    
+                    const tomorrow = new Date(now);
+                    tomorrow.setDate(now.getDate() + 1);
+                    tomorrow.setHours(hour, minute, 0, 0);
+                    
+                    const fixedStart = tomorrow.toISOString();
+                    const fixedEnd = new Date(tomorrow.getTime() + durationMs).toISOString();
+                    
+                    console.warn('⚠️ [ToolService] Data existente estava no passado. Recalculando para amanhã.', {
+                        originalStart: existingStart,
+                        fixedStart,
+                        fixedEnd
+                    });
+                    
+                    return { start: fixedStart, end: fixedEnd };
+                }
+            }
+            return { start: existingStart, end: existingEnd };
+        }
 
         const normalized = prompt.toLowerCase();
         const hasTomorrow = /\bamanh[aã]\b|\btomorrow\b/.test(normalized);
@@ -16,13 +56,13 @@ export class ToolService {
 
         // Captura "10:00", "10h", "10 horas"
         const hourMatch = normalized.match(/\b(\d{1,2})(?::(\d{2}))?\s*(h|horas?)?\b/);
-        const hour = hourMatch ? Math.min(Math.max(parseInt(hourMatch[1], 10), 0), 23) : 9;
+        const hour = hourMatch ? Math.min(Math.max(parseInt(hourMatch[1], 10), 0), 23) : 10;
         const minute = hourMatch && hourMatch[2] ? Math.min(Math.max(parseInt(hourMatch[2], 10), 0), 59) : 0;
 
         // Captura duração em minutos/horas
         const durationMinutesMatch = normalized.match(/\b(\d{1,3})\s*min(?:uto)?s?\b/);
         const durationHoursMatch = normalized.match(/\b(\d{1,2})\s*h(?:ora)?s?\b/);
-        let durationMs = 30 * 60 * 1000;
+        let durationMs = 60 * 60 * 1000; // Padrão 1 hora para reuniões
         if (durationMinutesMatch) durationMs = parseInt(durationMinutesMatch[1], 10) * 60 * 1000;
         else if (durationHoursMatch) durationMs = parseInt(durationHoursMatch[1], 10) * 60 * 60 * 1000;
 
@@ -30,9 +70,13 @@ export class ToolService {
             return { start: existingStart, end: existingEnd };
         }
 
+        // SEMPRE usar data atual como base - nunca hardcoded
         const base = new Date();
-        if (hasTomorrow) base.setDate(base.getDate() + 1);
+        if (hasTomorrow) {
+            base.setDate(base.getDate() + 1);
+        }
         base.setHours(hour, minute, 0, 0);
+        base.setSeconds(0, 0); // Garantir precisão
 
         const start = existingStart || base.toISOString();
         const end = existingEnd || new Date(new Date(start).getTime() + durationMs).toISOString();
@@ -952,6 +996,24 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                 }
                 case 'createCalendarEvent': {
                     const prompt = (context.userPrompt || '').toLowerCase();
+                    const fullPrompt = context.userPrompt || '';
+
+                    // Detectar intenção de envio de email junto com agendamento
+                    const shouldSendEmail = /\b(enviar|mandar|enviar e-?mail|enviar email|enviar convite|mandar e-?mail|mandar email|mandar convite)\b/i.test(fullPrompt);
+                    
+                    // Extrair destinatário do prompt se mencionado
+                    let emailRecipient: string | null = null;
+                    if (shouldSendEmail) {
+                        // Tentar extrair email do prompt (formato: "para email@exemplo.com" ou "para email@exemplo.com")
+                        const emailMatch = fullPrompt.match(/\b(?:para|to|enviar para|mandar para)\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/i);
+                        if (emailMatch) {
+                            emailRecipient = emailMatch[1];
+                        }
+                        // Se não encontrou email explícito, tentar extrair do args se disponível
+                        if (!emailRecipient && args.emailTo) {
+                            emailRecipient = args.emailTo;
+                        }
+                    }
 
                     const inferred = this.deriveCalendarWindowFromPrompt(prompt, args?.start, args?.end);
                     if (!args.start && inferred.start) args.start = inferred.start;
@@ -971,20 +1033,43 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                         const parsedEnd = new Date(args.end);
                         const now = new Date();
                         const looksRelativeTomorrow = /\bamanh[aã]\b|\btomorrow\b/.test(prompt);
-                        const tooOld = !Number.isNaN(parsedStart.getTime()) && parsedStart.getTime() < (now.getTime() - (1000 * 60 * 60 * 24 * 2));
+                        
+                        // Validação rigorosa: verifica se a data está no passado (comparando ano e data completa)
+                        const currentYear = now.getFullYear();
+                        const startYear = parsedStart.getFullYear();
+                        const isPastYear = startYear < currentYear;
+                        const isPastDate = !Number.isNaN(parsedStart.getTime()) && parsedStart.getTime() < now.getTime();
+                        const tooOld = isPastYear || isPastDate;
 
                         if (looksRelativeTomorrow && tooOld) {
                             const durationMs = Math.max(parsedEnd.getTime() - parsedStart.getTime(), 30 * 60 * 1000);
                             const tomorrow = new Date(now);
                             tomorrow.setDate(now.getDate() + 1);
+                            tomorrow.setHours(0, 0, 0, 0); // Reset para início do dia
 
+                            // Preservar horário original se válido, senão usar horário do prompt ou padrão
                             const fixedStart = new Date(tomorrow);
-                            fixedStart.setHours(parsedStart.getHours(), parsedStart.getMinutes(), 0, 0);
+                            const originalHour = parsedStart.getHours();
+                            const originalMinute = parsedStart.getMinutes();
+                            
+                            // Se o horário original é válido (0-23 horas), preservar
+                            if (originalHour >= 0 && originalHour <= 23) {
+                                fixedStart.setHours(originalHour, originalMinute, 0, 0);
+                            } else {
+                                // Tentar extrair horário do prompt
+                                const hourMatch = prompt.match(/\b(\d{1,2})(?::(\d{2}))?\s*(h|horas?)?\b/);
+                                const hour = hourMatch ? Math.min(Math.max(parseInt(hourMatch[1], 10), 0), 23) : 10;
+                                const minute = hourMatch && hourMatch[2] ? Math.min(Math.max(parseInt(hourMatch[2], 10), 0), 59) : 0;
+                                fixedStart.setHours(hour, minute, 0, 0);
+                            }
+                            
                             const fixedEnd = new Date(fixedStart.getTime() + durationMs);
 
                             console.warn('⚠️ [ToolService] Data antiga detectada para "amanhã". Corrigindo automaticamente.', {
                                 originalStart: args.start,
                                 originalEnd: args.end,
+                                originalYear: startYear,
+                                currentYear: currentYear,
                                 fixedStart: fixedStart.toISOString(),
                                 fixedEnd: fixedEnd.toISOString()
                             });
@@ -998,6 +1083,120 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                     const result = await GoogleWorkspaceTools.createCalendarEvent(
                         userId, tenantId, args.title, args.start, args.end, args.description
                     );
+
+                    // Se evento foi criado com sucesso E usuário pediu para enviar email, enviar automaticamente
+                    if (result.success && shouldSendEmail && emailRecipient) {
+                        try {
+                            // Formatar data/hora para o email
+                            const startDate = new Date(args.start);
+                            const endDate = new Date(args.end);
+                            const dateStr = startDate.toLocaleDateString('pt-BR', { 
+                                weekday: 'long', 
+                                day: 'numeric', 
+                                month: 'long', 
+                                year: 'numeric' 
+                            });
+                            const timeStr = startDate.toLocaleTimeString('pt-BR', { 
+                                hour: '2-digit', 
+                                minute: '2-digit' 
+                            });
+                            const endTimeStr = endDate.toLocaleTimeString('pt-BR', { 
+                                hour: '2-digit', 
+                                minute: '2-digit' 
+                            });
+
+                            // Extrair assunto do prompt ou usar padrão
+                            let emailSubject = args.title || 'Reunião de alinhamento';
+                            const subjectMatch = fullPrompt.match(/\bassunto[:\s]+(.+?)(?:\s+e\s+|\s+env|$)/i);
+                            if (subjectMatch) {
+                                emailSubject = subjectMatch[1].trim();
+                            }
+
+                            // Construir corpo do email com link do Meet se disponível
+                            let emailBody = `Olá,\n\nGostaria de confirmar nossa reunião:\n\n`;
+                            emailBody += `**${args.title || 'Reunião'}**\n`;
+                            emailBody += `📅 Data: ${dateStr}\n`;
+                            emailBody += `🕐 Horário: ${timeStr} às ${endTimeStr}\n\n`;
+                            
+                            if (result.meetLink) {
+                                emailBody += `🔗 Link do Google Meet: ${result.meetLink}\n\n`;
+                            }
+                            
+                            if (result.link) {
+                                emailBody += `📋 Link do evento no calendário: ${result.link}\n\n`;
+                            }
+                            
+                            emailBody += `Aguardo sua confirmação.\n\nAtenciosamente,\nLIA | Luminnus`;
+
+                            console.log(`📧 [ToolService] Enviando email automaticamente para ${emailRecipient} após criar evento`);
+                            const emailResult = await GoogleWorkspaceTools.sendGmail(
+                                userId, 
+                                tenantId, 
+                                emailRecipient, 
+                                emailSubject, 
+                                emailBody
+                            );
+
+                            if (emailResult.success) {
+                                return {
+                                    ...result,
+                                    emailSent: true,
+                                    emailRecipient: emailRecipient,
+                                    message: `${result.message} E-mail enviado para ${emailRecipient} com sucesso.`,
+                                    ack: {
+                                        action: 'CALENDAR_CREATE_EVENT_WITH_EMAIL',
+                                        status: 'applied',
+                                        evidence: {
+                                            title: args.title,
+                                            start: args.start,
+                                            end: args.end,
+                                            emailSent: true,
+                                            emailRecipient: emailRecipient,
+                                            meetLink: result.meetLink
+                                        }
+                                    }
+                                };
+                            } else {
+                                console.warn('⚠️ [ToolService] Evento criado mas falha ao enviar email:', emailResult.error);
+                                return {
+                                    ...result,
+                                    emailSent: false,
+                                    emailError: emailResult.error,
+                                    message: `${result.message} Aviso: Não foi possível enviar o e-mail automaticamente. ${emailResult.message}`,
+                                    ack: {
+                                        action: 'CALENDAR_CREATE_EVENT',
+                                        status: 'applied',
+                                        evidence: {
+                                            title: args.title,
+                                            start: args.start,
+                                            end: args.end,
+                                            emailSent: false,
+                                            emailError: emailResult.error
+                                        }
+                                    }
+                                };
+                            }
+                        } catch (emailError: any) {
+                            console.error('❌ [ToolService] Erro ao enviar email automaticamente:', emailError);
+                            return {
+                                ...result,
+                                emailSent: false,
+                                emailError: emailError.message,
+                                message: `${result.message} Aviso: Erro ao enviar e-mail automaticamente: ${emailError.message}`,
+                                ack: {
+                                    action: 'CALENDAR_CREATE_EVENT',
+                                    status: 'applied',
+                                    evidence: {
+                                        title: args.title,
+                                        start: args.start,
+                                        end: args.end,
+                                        emailSent: false,
+                                        emailError: emailError.message
+                                    }
+                                }
+                            };
+                        }
+                    }
 
                     // ACK detalhado conforme lia-core-architecture.md
                     return {

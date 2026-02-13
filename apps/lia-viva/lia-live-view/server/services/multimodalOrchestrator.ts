@@ -175,7 +175,7 @@ async function processarRequisicaoMultimodal({
 }) {
   try {
     // v7.5: Payload Contract & Sanitization (Deep Defense)
-    // Garantir que images estejam no formato { mimeType, base64 } sem prefixo
+    // v18.3: Validação rigorosa de imagens antes do processamento
     const sanitizedImages = images.map((img, idx) => {
       let cleanBase64 = img.base64 || (img as any).data || '';
       // Remover prefixo se ainda existir (fallback)
@@ -183,18 +183,38 @@ async function processarRequisicaoMultimodal({
         cleanBase64 = cleanBase64.replace(/^data:image\/\w+;base64,/, '');
       }
 
-      if (!img.mimeType || !cleanBase64) {
-        console.warn(`⚠️ [Orquestrador] Imagem ${idx} inválida/corrompida no payload.`);
+      // Validar que base64 não está vazio e tem tamanho mínimo
+      if (!cleanBase64 || cleanBase64.length < 100) {
+        console.warn(`⚠️ [Orquestrador] Imagem ${idx} inválida: base64 vazio ou muito pequeno (${cleanBase64?.length || 0} chars)`);
+        return null;
+      }
+
+      // Validar mimeType
+      const mimeType = img.mimeType || 'image/jpeg';
+      const validMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+      if (!validMimeTypes.includes(mimeType.toLowerCase())) {
+        console.warn(`⚠️ [Orquestrador] Imagem ${idx} com mimeType inválido: ${mimeType}`);
+        // Tentar inferir do base64 se possível
+        const inferredMimeType = 'image/jpeg'; // Fallback seguro
+        return {
+          mimeType: inferredMimeType,
+          base64: cleanBase64
+        };
       }
 
       return {
-        mimeType: img.mimeType || 'image/jpeg',
+        mimeType: mimeType,
         base64: cleanBase64
       };
-    }).filter(i => i.base64.length > 0);
+    }).filter((i): i is { mimeType: string; base64: string } => i !== null && i.base64.length > 0);
 
     if (sanitizedImages.length > 0 && sanitizedImages.length !== images.length) {
       console.warn(`⚠️ [Orquestrador] ${images.length - sanitizedImages.length} imagens removidas por falha de contrato.`);
+    }
+
+    // v18.4: Validar que temos pelo menos uma imagem válida
+    if (images.length > 0 && sanitizedImages.length === 0) {
+      throw new Error('Nenhuma imagem válida encontrada após sanitização. Verifique se os arquivos estão em formato suportado (PNG, JPG, WEBP) e não estão corrompidos.');
     }
 
     // Atualizar referência para uso posterior
@@ -330,9 +350,32 @@ async function processarRequisicaoMultimodal({
 
     return response;
 
-  } catch (error) {
-    console.error('❌ Erro no orquestrador multimodal:', error);
-    throw error;
+  } catch (error: any) {
+    console.error('❌ Erro no orquestrador multimodal:', error?.message || error);
+    
+    // v18.2: Retornar resposta útil mesmo em caso de erro
+    const errorMessage = error?.message || 'Erro desconhecido';
+    const hasImages = images && images.length > 0;
+    const hasDocuments = documents && documents.length > 0;
+    
+    let fallbackMessage = '';
+    if (hasImages) {
+      fallbackMessage = `Encontrei dificuldades técnicas ao processar ${images.length === 1 ? 'a imagem' : 'as imagens'}. `;
+      fallbackMessage += `Erro: ${errorMessage}. Por favor, verifique se o arquivo está em formato válido (PNG, JPG, WEBP) e tente reenviar.`;
+    } else if (hasDocuments) {
+      fallbackMessage = `Encontrei dificuldades técnicas ao processar o documento. `;
+      fallbackMessage += `Erro: ${errorMessage}. Por favor, tente reenviar o arquivo ou descreva o que você precisa que eu analise.`;
+    } else {
+      fallbackMessage = `Erro ao processar a requisição: ${errorMessage}. Por favor, tente novamente.`;
+    }
+    
+    return {
+      mode: 'multimodal',
+      contentType: 'error',
+      content: fallbackMessage,
+      toolResults: [],
+      error: errorMessage
+    };
   }
 }
 
@@ -613,19 +656,25 @@ async function processarComGeminiVision({
   let result;
   let response;
 
-  if (validContents.length > 0) {
-    const chat = model.startChat({
-      history: validContents,
-      generationConfig: {
-        maxOutputTokens: 2048,
-        temperature: 0.7
-      }
-    });
-    result = await chat.sendMessage(currentParts);
-    response = result.response;
-  } else {
-    result = await model.generateContent(currentParts);
-    response = result.response;
+  try {
+    if (validContents.length > 0) {
+      const chat = model.startChat({
+        history: validContents,
+        generationConfig: {
+          maxOutputTokens: 2048,
+          temperature: 0.7
+        }
+      });
+      result = await chat.sendMessage(currentParts);
+      response = result.response;
+    } else {
+      result = await model.generateContent(currentParts);
+      response = result.response;
+    }
+  } catch (modelError: any) {
+    console.error('❌ [Vision] Erro ao chamar modelo Gemini:', modelError?.message || modelError);
+    // Se houver erro na chamada do modelo, tentar fallback básico
+    throw new Error(`Erro ao processar imagem: ${modelError?.message || 'Erro desconhecido'}. Verifique se a imagem está em formato válido (PNG, JPG, WEBP) e tente novamente.`);
   }
 
   // v3.0: Verificar se há chamadas de ferramentas
@@ -657,7 +706,29 @@ async function processarComGeminiVision({
     }
   }
 
-  const text = response.text();
+  // v18.0: CRITICAL FIX - Tratamento robusto de resposta do Gemini
+  let text = '';
+  try {
+    text = response.text() || '';
+    console.log(`✅ [Vision] Texto extraído com sucesso: ${text.length} caracteres`);
+  } catch (textError: any) {
+    console.warn('⚠️ [Vision] response.text() falhou, tentando extrair texto alternativamente:', textError?.message);
+    console.log(`🔍 [Vision] Debug - response structure:`, {
+      hasCandidates: !!response.candidates,
+      candidatesLength: response.candidates?.length || 0,
+      firstCandidateParts: response.candidates?.[0]?.content?.parts?.length || 0,
+      partsTypes: response.candidates?.[0]?.content?.parts?.map((p: any) => Object.keys(p)).flat() || []
+    });
+    
+    // Tentar extrair texto das partes da resposta
+    const textParts = response.candidates?.[0]?.content?.parts?.filter((p: any) => p.text);
+    if (textParts && textParts.length > 0) {
+      text = textParts.map((p: any) => p.text).join(' ');
+      console.log(`✅ [Vision] Texto extraído das partes: ${text.length} caracteres`);
+    } else {
+      console.error('❌ [Vision] Nenhum texto encontrado nas partes da resposta');
+    }
+  }
 
   const extractUserRequest = (rawMessage: string): string => {
     const markerRegex = /===\s*pedido do usuário\s*===/i;
@@ -678,11 +749,13 @@ async function processarComGeminiVision({
     hasText: !!text,
     textLength: text?.length || 0,
     hasFunctionCalls: toolResults.length > 0,
-    functionCallCount: toolResults.length
+    functionCallCount: toolResults.length,
+    responseCandidates: response.candidates?.length || 0,
+    responseParts: response.candidates?.[0]?.content?.parts?.length || 0
   }));
 
   // v7.0: Se houve chamadas de ferramentas, precisamos de um SEGUNDO TURNO para o link real
-  let finalText = text;
+  let finalText = text || '';
   if (toolResults.length > 0) {
     console.log(`🔄 [Vision] Iniciando segundo turno para integrar resultados das ferramentas.`);
 
@@ -713,11 +786,28 @@ async function processarComGeminiVision({
       ]
     });
 
-    const followUp = await chat.sendMessage("Finalize a resposta agora fornecendo o link real e confirmando a execução.");
-    finalText = followUp.response.text();
+    try {
+      const followUp = await chat.sendMessage("Finalize a resposta agora fornecendo o link real e confirmando a execução.");
+      try {
+        finalText = followUp.response.text() || '';
+      } catch (textError: any) {
+        console.warn('⚠️ [Vision] Erro ao extrair texto do segundo turno:', textError?.message);
+        // Tentar extrair texto das partes
+        const textParts = followUp.response.candidates?.[0]?.content?.parts?.filter((p: any) => p.text);
+        if (textParts && textParts.length > 0) {
+          finalText = textParts.map((p: any) => p.text).join(' ');
+        }
+      }
 
-    // v17.5: Log do segundo turno
-    console.log(`🔄 [Vision] Segundo turno concluído. Texto final: ${finalText?.length || 0} caracteres`);
+      // v17.5: Log do segundo turno
+      console.log(`🔄 [Vision] Segundo turno concluído. Texto final: ${finalText?.length || 0} caracteres`);
+    } catch (followUpError: any) {
+      console.error('❌ [Vision] Erro no segundo turno:', followUpError);
+      // Se o segundo turno falhar, usar o texto original se disponível
+      if (!finalText && text) {
+        finalText = text;
+      }
+    }
   }
 
   // v17.5: FALLBACK CRÍTICO - Garantir que content nunca seja vazio em Vision
@@ -744,7 +834,18 @@ Pedido do usuário: ${userRequest || message}`;
         { text: recoveryPrompt },
         ...currentParts,
       ]);
-      const recoveredText = recoveryResult.response?.text?.() || '';
+      
+      let recoveredText = '';
+      try {
+        recoveredText = recoveryResult.response?.text?.() || '';
+      } catch (textError: any) {
+        console.warn('⚠️ [Vision] Erro ao extrair texto do recovery pass:', textError?.message);
+        // Tentar extrair texto das partes
+        const textParts = recoveryResult.response?.candidates?.[0]?.content?.parts?.filter((p: any) => p.text);
+        if (textParts && textParts.length > 0) {
+          recoveredText = textParts.map((p: any) => p.text).join(' ');
+        }
+      }
 
       console.log(JSON.stringify({
         timestamp: new Date().toISOString(),
@@ -756,31 +857,55 @@ Pedido do usuário: ${userRequest || message}`;
       if (recoveredText.trim().length > 0) {
         finalText = recoveredText;
       }
-    } catch (recoveryError) {
-      console.error('❌ [Vision] Recovery pass falhou:', recoveryError);
+    } catch (recoveryError: any) {
+      console.error('❌ [Vision] Recovery pass falhou:', recoveryError?.message || recoveryError);
     }
 
     // Recovery pass 2 (compacto): reduz contexto para evitar falhas de prompt longo.
     if (!finalText || finalText.trim().length === 0) {
       try {
         const minimalParts = currentParts.filter((p: any) => p.inlineData).slice(0, 1);
-        const compactPrompt = `Responda objetivamente à pergunta do usuário sobre o anexo. Sem introduções.\nPergunta: ${userRequest || message}`;
-        const compactResult = await model.generateContent([
-          { text: compactPrompt },
-          ...minimalParts,
-        ]);
+        if (minimalParts.length > 0) {
+          const compactPrompt = `Responda objetivamente à pergunta do usuário sobre o anexo. Sem introduções.\nPergunta: ${userRequest || message}`;
+          const compactResult = await model.generateContent([
+            { text: compactPrompt },
+            ...minimalParts,
+          ]);
 
-        const compactText = compactResult.response?.text?.() || '';
-        if (compactText.trim().length > 0) {
-          finalText = compactText;
+          let compactText = '';
+          try {
+            compactText = compactResult.response?.text?.() || '';
+          } catch (textError: any) {
+            console.warn('⚠️ [Vision] Erro ao extrair texto do recovery pass 2:', textError?.message);
+            // Tentar extrair texto das partes
+            const textParts = compactResult.response?.candidates?.[0]?.content?.parts?.filter((p: any) => p.text);
+            if (textParts && textParts.length > 0) {
+              compactText = textParts.map((p: any) => p.text).join(' ');
+            }
+          }
+          
+          if (compactText.trim().length > 0) {
+            finalText = compactText;
+          }
         }
-      } catch (compactRecoveryError) {
-        console.error('❌ [Vision] Recovery pass 2 falhou:', compactRecoveryError);
+      } catch (compactRecoveryError: any) {
+        console.error('❌ [Vision] Recovery pass 2 falhou:', compactRecoveryError?.message || compactRecoveryError);
       }
     }
 
+    // v18.1: Último fallback - tentar análise básica mesmo sem texto
     if (!finalText || finalText.trim().length === 0) {
-      finalText = 'Não consegui concluir a leitura do anexo nesta tentativa por uma falha técnica de processamento multimodal. Tente reenviar o arquivo ou fazer a pergunta novamente.';
+      // Se temos imagens mas não conseguimos processar, dar uma resposta mais útil
+      if (images.length > 0) {
+        const imageInfo = images.length === 1 ? 'a imagem' : `${images.length} imagens`;
+        finalText = `Recebi ${imageInfo}, mas encontrei dificuldades técnicas ao processá-la completamente. `;
+        finalText += `Por favor, descreva o que você precisa que eu analise na ${imageInfo} ou tente reenviar o arquivo em outro formato (PNG, JPG).`;
+      } else if (documents.length > 0) {
+        finalText = `Recebi o documento, mas encontrei dificuldades técnicas ao processá-lo completamente. `;
+        finalText += `Por favor, tente reenviar o arquivo ou descreva o que você precisa que eu analise.`;
+      } else {
+        finalText = 'Não consegui concluir a leitura do anexo nesta tentativa por uma falha técnica de processamento multimodal. Tente reenviar o arquivo ou fazer a pergunta novamente.';
+      }
     }
 
     if (toolResults.some(tr => tr.error)) {
