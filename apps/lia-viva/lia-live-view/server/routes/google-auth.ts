@@ -13,30 +13,36 @@ const GOOGLE_SCOPES: Record<string, string[]> = {
     gmail: [
         'https://www.googleapis.com/auth/gmail.readonly',
         'https://www.googleapis.com/auth/gmail.send',
-        'https://www.googleapis.com/auth/gmail.modify'
+        'https://www.googleapis.com/auth/gmail.modify',
+        'https://www.googleapis.com/auth/gmail.labels'
     ],
     calendar: [
+        'https://www.googleapis.com/auth/calendar',
+        'https://www.googleapis.com/auth/calendar.events',
         'https://www.googleapis.com/auth/calendar.readonly',
-        'https://www.googleapis.com/auth/calendar.events'
+        'https://www.googleapis.com/auth/calendar.settings.readonly'
     ],
     meet: [
-        'https://www.googleapis.com/auth/calendar.events'
+        'https://www.googleapis.com/auth/meetings.space.created',
+        'https://www.googleapis.com/auth/meetings.space.readonly',
+        'https://www.googleapis.com/auth/meetings.space.settings'
     ],
     drive: [
-        'https://www.googleapis.com/auth/drive.readonly',
-        'https://www.googleapis.com/auth/drive.file'
+        'https://www.googleapis.com/auth/drive',
+        'https://www.googleapis.com/auth/drive.file',
+        'https://www.googleapis.com/auth/drive.readonly'
     ],
     sheets: [
-        'https://www.googleapis.com/auth/spreadsheets.readonly',
-        'https://www.googleapis.com/auth/spreadsheets'
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/spreadsheets.readonly'
     ],
     docs: [
-        'https://www.googleapis.com/auth/documents.readonly',
-        'https://www.googleapis.com/auth/documents'
+        'https://www.googleapis.com/auth/documents',
+        'https://www.googleapis.com/auth/documents.readonly'
     ],
     slides: [
-        'https://www.googleapis.com/auth/presentations.readonly',
-        'https://www.googleapis.com/auth/presentations'
+        'https://www.googleapis.com/auth/presentations',
+        'https://www.googleapis.com/auth/presentations.readonly'
     ],
     maps: [
         'https://www.googleapis.com/auth/userinfo.profile'
@@ -80,14 +86,20 @@ router.get('/google', async (req: Request, res: Response) => {
         const callbackUri = redirect_uri || fallbackUri;
 
         // State para segurança (inclui user_id e serviços)
-        const state = Buffer.from(JSON.stringify({
-            user_id: user_id || 'anonymous',
-            tenant_id: tenant_id || user_id || null,
+        // Garantir que IDs não sejam strings 'undefined' ou 'unknown' vindas do frontend
+        const cleanUserId = (user_id && user_id !== 'undefined' && user_id !== 'unknown') ? user_id : 'anonymous';
+        const cleanTenantId = (tenant_id && tenant_id !== 'undefined' && tenant_id !== 'unknown') ? tenant_id : (cleanUserId !== 'anonymous' ? cleanUserId : null);
+
+        const statePayload: any = {
+            user_id: cleanUserId,
+            tenant_id: cleanTenantId,
             services: selectedServices,
             redirect_to: redirect_to || 'https://luminnus.ai',
-            callback_uri: callbackUri, // 🔑 ESSENCIAL: Guardar o callback usado para o passo 2
+            callback_uri: callbackUri,
             timestamp: Date.now()
-        })).toString('base64');
+        };
+
+        const state = Buffer.from(JSON.stringify(statePayload)).toString('base64');
 
         // Construir URL de autorização do Google
         const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -204,9 +216,13 @@ router.post('/google/callback', async (req: Request, res: Response) => {
 
             if (userIntError) {
                 console.error('[OAuth Google] Erro ao salvar em integrations_connections:', userIntError);
-            } else {
-                console.log(`[OAuth Google] Tokens salvos com sucesso para user: ${stateData.user_id} (tenant: ${tenantId})`);
+                return res.status(500).json({
+                    error: 'Erro ao salvar conexão no banco de dados',
+                    details: userIntError.message
+                });
             }
+
+            console.log(`[OAuth Google] Tokens salvos com sucesso para user: ${stateData.user_id} (tenant: ${tenantId})`);
         }
 
         res.json({
