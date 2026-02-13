@@ -119,7 +119,10 @@ Equipe Luminnus
             'criar documento', 'gerar doc', 'create spreadsheet', 'make a sheet',
             'sheets', 'docs', 'no excel', 'excel', 'listar emails', 'ver emails',
             'quais emails', 'emails de hoje', 'meus emails', 'procurar email',
-            'buscar email', 'search emails', 'list emails'
+            'buscar email', 'search emails', 'list emails',
+            'o que está agendado', 'o que esta agendado', 'agenda de amanhã', 'agenda de amanha',
+            'compromissos de amanhã', 'compromissos de amanha', 'mesmo horário', 'mesmo horario',
+            'listar agenda', 'ver agenda', 'calendar events', 'list calendar'
         ],
         incident: [
             'está errado', 'não foi isso que eu pedi', 'corrija isso', 're-audite',
@@ -449,6 +452,7 @@ Independente da simplicidade do pedido do usuário, a saída deve ser um e-mail 
 🔐 PERMISSÕES E LINKS:
 - Link-Safe: Proibido placeholders e proibido usar 'meet.google.com/new'. Busque o link real do Meet no histórico ou use a ferramenta de criação de evento antes de redigir.
 - EXECUÇÃO DIRETA: Se o usuário já deu comando explícito de envio/agendamento e os dados mínimos estiverem presentes, EXECUTE sem pedir "posso prosseguir?".
+- AGENDAR + MEET: Se o usuário pedir reunião com Meet, gere o link criando evento no Calendar; não pergunte qual opção prefere.
 - Só peça confirmação adicional se faltar dado crítico real (destinatário, horário ou assunto).`,
                 outputRules: [
                     'ESTRUTURA: Se já houver comando explícito de envio, EXECUTE e responda com status factual; não pare em prévia.',
@@ -459,6 +463,8 @@ Independente da simplicidade do pedido do usuário, a saída deve ser um e-mail 
                     'PROIBIÇÃO MEET: Nunca use meet.google.com/new. Gere um link real via calendar se necessário.',
                     'INTERAÇÃO: Não exigir confirmação extra quando já houver comando explícito + dados mínimos.',
                     'TEMPO RELATIVO: Se usuário disser "amanhã/hoje", converta para data real automaticamente sem pedir dia/mês/ano.',
+                    'CALENDAR QUERY: Se o usuário perguntar "o que está agendado" ou "mesmo horário", usar listCalendarEvents/searchCalendarEvents e responder com dados reais.',
+                    'SEM CÓDIGO: Nunca responder com bloco de código (```), pseudocódigo ou scripts para tarefas de negócio.',
                     'GMAIL DO USUÁRIO: Para "meus e-mails"/"caixa de entrada", NUNCA pedir o endereço do próprio usuário; usar conta autenticada.'
                 ]
             },
@@ -482,6 +488,8 @@ Independente da simplicidade do pedido do usuário, a saída deve ser um e-mail 
 4. DIRETO: Nunca dê passos manuais. EXECUTE e entregue o link.
 5. REUTILIZAÇÃO: Use o spreadsheetId do contexto para edições (updateGoogleSheet).
 6. DOCUMENTOS: Ao criar arquivos, use os dados discutidos. NÃO resuma o que vai fazer; FAÇA e entregue. Evite frases como "Aqui estão as próximas ações possíveis".
+7. CALENDAR LISTAGEM: Quando o usuário perguntar "o que está agendado" ou "mesmo horário", use listCalendarEvents e responda com os eventos reais.
+8. SEM CÓDIGO: É proibido responder com blocos de código, scripts Python, ou "tool_code" em contexto de negócio.
 
 📋 COMO ENCONTRAR O spreadsheetId:
         - Procure no histórico da conversa por links do Google Sheets: https://docs.google.com/spreadsheets/d/XXXXXX

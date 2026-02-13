@@ -760,6 +760,25 @@ Pedido do usuário: ${userRequest || message}`;
       console.error('❌ [Vision] Recovery pass falhou:', recoveryError);
     }
 
+    // Recovery pass 2 (compacto): reduz contexto para evitar falhas de prompt longo.
+    if (!finalText || finalText.trim().length === 0) {
+      try {
+        const minimalParts = currentParts.filter((p: any) => p.inlineData).slice(0, 1);
+        const compactPrompt = `Responda objetivamente à pergunta do usuário sobre o anexo. Sem introduções.\nPergunta: ${userRequest || message}`;
+        const compactResult = await model.generateContent([
+          { text: compactPrompt },
+          ...minimalParts,
+        ]);
+
+        const compactText = compactResult.response?.text?.() || '';
+        if (compactText.trim().length > 0) {
+          finalText = compactText;
+        }
+      } catch (compactRecoveryError) {
+        console.error('❌ [Vision] Recovery pass 2 falhou:', compactRecoveryError);
+      }
+    }
+
     if (!finalText || finalText.trim().length === 0) {
       finalText = 'Não consegui concluir a leitura do anexo nesta tentativa por uma falha técnica de processamento multimodal. Tente reenviar o arquivo ou fazer a pergunta novamente.';
     }

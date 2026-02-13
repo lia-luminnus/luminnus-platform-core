@@ -59,6 +59,11 @@ export class ResponseFormatter {
             markdown = SchemaValidator.maskSecrets(markdown).masked;
         }
 
+        // Guardrail UX: em contexto de negócio, nunca mostrar bloco técnico/código para o usuário final.
+        if (contractType === 'email_standard' || contractType === 'action_execution') {
+            markdown = this.stripTechnicalCodeBlocks(markdown);
+        }
+
         // Gerar voice script para LiveMode
         const voiceScript = this.generateVoiceScript(rawResponse, contractType, hasJson, secretsDetected);
 
@@ -172,6 +177,29 @@ export class ResponseFormatter {
         }
 
         return result || lines[0].slice(0, 150);
+    }
+
+    private static stripTechnicalCodeBlocks(text: string): string {
+        if (!text) return text;
+
+        let cleaned = text;
+
+        // Remove blocos fenced e mantém só conteúdo textual quando possível.
+        cleaned = cleaned.replace(/```[a-zA-Z0-9_-]*\s*([\s\S]*?)```/g, (_, inner) => {
+            const innerText = String(inner || '').trim();
+            if (!innerText) return '';
+
+            // Se aparenta script/código, não exibir para usuário final.
+            const looksLikeCode = /(from\s+\w+\s+import|def\s+\w+\(|class\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|function\s+\w+\(|print\(|return\s+\{|datetime\.|timedelta)/i.test(innerText);
+            if (looksLikeCode) {
+                return 'Usei as ferramentas internas para buscar os dados reais, sem exibir script técnico.';
+            }
+
+            return innerText;
+        });
+
+        cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
+        return cleaned;
     }
 
     /**

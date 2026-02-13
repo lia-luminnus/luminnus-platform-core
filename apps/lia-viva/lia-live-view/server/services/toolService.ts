@@ -40,6 +40,40 @@ export class ToolService {
         return { start, end };
     }
 
+    private static deriveCalendarListRangeFromPrompt(prompt: string, existingMin?: string, existingMax?: string): { timeMin?: string; timeMax?: string } {
+        if (existingMin || existingMax) return { timeMin: existingMin, timeMax: existingMax };
+        if (!prompt) return { timeMin: existingMin, timeMax: existingMax };
+
+        const normalized = prompt.toLowerCase();
+        const hasTomorrow = /\bamanh[aã]\b|\btomorrow\b/.test(normalized);
+        const hasToday = /\bhoje\b|\btoday\b/.test(normalized);
+        const sameTime = /mesmo\s+hor[aá]rio/.test(normalized);
+        const hourMatch = normalized.match(/\b(\d{1,2})(?::(\d{2}))?\s*(h|horas?)?\b/);
+
+        if (!hasTomorrow && !hasToday && !sameTime && !hourMatch) {
+            return { timeMin: existingMin, timeMax: existingMax };
+        }
+
+        const base = new Date();
+        if (hasTomorrow || sameTime) base.setDate(base.getDate() + 1);
+
+        if (hourMatch) {
+            const hour = Math.min(Math.max(parseInt(hourMatch[1], 10), 0), 23);
+            const minute = hourMatch[2] ? Math.min(Math.max(parseInt(hourMatch[2], 10), 0), 59) : 0;
+            const start = new Date(base);
+            start.setHours(hour, minute, 0, 0);
+            const end = new Date(start.getTime() + 60 * 60 * 1000);
+            return { timeMin: start.toISOString(), timeMax: end.toISOString() };
+        }
+
+        // "mesmo horário" sem hora explícita -> janela útil para turno da manhã (caso mais comum de reuniões 9-12h)
+        const start = new Date(base);
+        const end = new Date(base);
+        start.setHours(9, 0, 0, 0);
+        end.setHours(12, 0, 0, 0);
+        return { timeMin: start.toISOString(), timeMax: end.toISOString() };
+    }
+
     static getTools() {
         return [
             {
@@ -981,7 +1015,10 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                     };
                 }
                 case 'listCalendarEvents': {
-                    return await GoogleWorkspaceTools.listCalendarEvents(userId, tenantId, args.timeMin, args.timeMax);
+                    const inferred = this.deriveCalendarListRangeFromPrompt(context.userPrompt || '', args?.timeMin, args?.timeMax);
+                    const timeMin = args?.timeMin || inferred.timeMin;
+                    const timeMax = args?.timeMax || inferred.timeMax;
+                    return await GoogleWorkspaceTools.listCalendarEvents(userId, tenantId, timeMin, timeMax);
                 }
                 case 'updateCalendarEvent': {
                     console.log(`📅 [ToolService] updateCalendarEvent args:`, JSON.stringify(args, null, 2));
