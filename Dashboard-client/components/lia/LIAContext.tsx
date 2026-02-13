@@ -1572,6 +1572,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         };
 
         const handleLIAMessage = (payload: any) => processLIAResponse(payload);
+        const handleChatReply = (payload: any) => processLIAResponse(payload?.payload || payload);
         const handleAudioResponse = (payload: any) => processLIAResponse(payload);
 
         // v3.0: Handler para quando o dashboard gera um snapshot (awareness)
@@ -1647,6 +1648,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
         socket.on('lia-typing', handleLIATyping);
         socket.on('lia-stop-typing', handleLIAStopTyping);
         socket.on('lia-message', handleLIAMessage);
+        socket.on('chat:reply', handleChatReply);
         socket.on('audio-response', handleAudioResponse);
         socket.on('lia:render-table', (table: any) => {
             console.log('📊 [LIAContext] Evento lia:render-table recebido');
@@ -1662,6 +1664,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
             socket.off('lia-typing', handleLIATyping);
             socket.off('lia-stop-typing', handleLIAStopTyping);
             socket.off('lia-message', handleLIAMessage);
+            socket.off('chat:reply', handleChatReply);
             socket.off('audio-response', handleAudioResponse);
             socket.off('audio-ack');
             window.removeEventListener('lia-dashboard-snapshot-ready', handleSnapshotReady);

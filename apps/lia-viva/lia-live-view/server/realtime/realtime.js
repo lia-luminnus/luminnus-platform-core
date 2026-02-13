@@ -3,7 +3,7 @@
 // ======================================================================
 
 import { buscarNaWeb } from "../search/web-search.js";
-import { textToAudio, runGpt4Mini } from "../assistants/gpt4-mini.js";
+import { textToAudio } from "../assistants/gpt4-mini.js";
 import { runGemini } from "../assistants/gemini.js";
 import fetch from "node-fetch";
 import { getOpenAIVoice } from "../config/openai-voices.js";
@@ -236,10 +236,13 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
       const MAX_TURNS = 3;
       let finalDashboardAction = null;
       let finalImagePayload = null;
+      let forceFinalReplyFromTools = null;
 
       while (turnCalls.length > 0 && turnCount < MAX_TURNS) {
         turnCount++;
         console.log(`🔄 [Realtime] Turno ${turnCount}: ${turnCalls.length} ferramentas`);
+
+        let criticalActionHandled = false;
 
         for (const call of turnCalls) {
           console.log(`🔧 [Realtime] Executando: ${call.name}`);
@@ -251,7 +254,8 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
               userId,
               tenantId,
               userRole: contextOptions.userRole,
-              userLocation: contextOptions.userLocation
+              userLocation: contextOptions.userLocation,
+              userPrompt: userMessage
             });
 
             if (!function_result || function_result.error) {
@@ -259,9 +263,32 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
             }
           } catch (toolError) {
             console.error(`❌ [Realtime] Erro na ferramenta ${call.name}:`, toolError.message);
-            // ANTI-LOOP GUARDRAIL: Falhou + por quê + plano B
-            finalReply = `Falhou ao executar ${call.name}. Motivo: ${toolError.message}. Plano B: Vou tentar resolver de outra forma ou seguir sem essa informação. Quer que eu tente novamente por outro caminho ou prefere seguir para o próximo tópico? (A/B)`;
+            // ANTI-LOOP GUARDRAIL: falha direta sem travar em A/B
+            finalReply = `Falhou ao executar ${call.name}. Motivo: ${toolError.message}. Vou tentar uma alternativa automática na próxima tentativa.`;
             turnCalls = []; // Abortar loop agêntico
+            break;
+          }
+
+          // TRATAMENTO CRÍTICO: ações reais devem responder com retorno factual da ferramenta
+          if (["sendGmail", "createCalendarEvent", "updateCalendarEvent", "deleteCalendarEvent"].includes(call.name)) {
+            const toolSuccess = !!function_result?.success;
+            const toolMessage = function_result?.message || "";
+            const calendarLink = function_result?.link || function_result?.event?.link || "";
+            const meetLink = function_result?.meetLink || "";
+
+            if (toolSuccess) {
+              const confirmations = [toolMessage];
+              if (calendarLink) confirmations.push(`Link do evento: ${calendarLink}`);
+              if (meetLink) confirmations.push(`Link do Meet: ${meetLink}`);
+              forceFinalReplyFromTools = confirmations.filter(Boolean).join("\n");
+            } else {
+              forceFinalReplyFromTools = toolMessage || `Não consegui concluir ${call.name} nesta tentativa.`;
+            }
+
+            messages.push({ role: "assistant", content: null, function_call: call });
+            messages.push({ role: "function", name: call.name, content: JSON.stringify(function_result) });
+            turnCalls = [];
+            criticalActionHandled = true;
             break;
           }
 
@@ -310,17 +337,26 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
           messages.push({ role: "function", name: call.name, content: JSON.stringify(function_result) });
         }
 
+        if (criticalActionHandled) {
+          if (forceFinalReplyFromTools) finalReply = forceFinalReplyFromTools;
+          break;
+        }
+
         if (finalImagePayload || finalDashboardAction) break;
 
-        // Chama AI de novo
-        const nextCall = await runGpt4Mini("Continue a conversa com base nos resultados.", {
+        // Chama AI de novo com o mesmo provedor para manter consistência entre chat e voz
+        const nextCall = await runGemini("Continue a conversa com base nos resultados.", {
           conversationId,
-          temperature: 0.7,
+          temperature: 0.3,
           messages
         });
 
         finalReply = nextCall.text || finalReply;
-        turnCalls = nextCall.tool_calls || (nextCall.function_call ? [nextCall.function_call] : []);
+        turnCalls = nextCall.function_calls || (nextCall.function_call ? [nextCall.function_call] : []);
+      }
+
+      if (forceFinalReplyFromTools) {
+        finalReply = forceFinalReplyFromTools;
       }
 
       // v6.0: Stable response ID based on client ID (if available) for assistant idempotency (ALREADY DECLARED)
@@ -550,13 +586,22 @@ export function setupRealtime(io, ensureSession) {
           latency: Date.now() - startTime
         });
 
-        // Legado (Compatibilidade)
-        socket.emit("lia-message", respostaFiltrada);
+        // Legado (Compatibilidade) - manter conversationId para render imediato no frontend
+        socket.emit("lia-message", {
+          text: (typeof respostaFiltrada === 'string' ? respostaFiltrada : respostaFiltrada.text),
+          conversationId: convId,
+          mode: 'chat',
+          payload: respostaFiltrada
+        });
 
       } catch (err) {
         console.error("❌ [Realtime] Erro chat:send:", err);
         socket.emit("chat:reply", { messageId, error: "Erro ao processar.", status: "failed" });
-        socket.emit("lia-message", "Erro ao processar.");
+        socket.emit("lia-message", {
+          text: "Erro ao processar.",
+          conversationId: convId,
+          mode: 'chat'
+        });
       }
     }
 
@@ -608,7 +653,7 @@ export function setupRealtime(io, ensureSession) {
       try {
         if (!socket.audioBuffer || socket.audioBuffer.length === 0) {
           socket.emit("voice:ack", { messageId: finalMessageId, status: "failed", reason: "empty_audio" });
-          socket.emit("lia-message", "Áudio vazio.");
+          socket.emit("lia-message", { text: "Áudio vazio.", conversationId: convId, mode: 'live' });
           processingLocks.delete(convId);
           return;
         }
@@ -623,7 +668,7 @@ export function setupRealtime(io, ensureSession) {
         if (fullBuffer.length < 5000) { // Reduzido de 10k para ser mais sensível
           console.warn(`⚠️ Áudio muito curto: ${fullBuffer.length} bytes.`);
           socket.emit("voice:ack", { messageId: finalMessageId, status: "failed", reason: "too_short" });
-          socket.emit("lia-message", "Áudio muito curto.");
+          socket.emit("lia-message", { text: "Áudio muito curto.", conversationId: convId, mode: 'live' });
           processingLocks.delete(convId);
           return;
         }
@@ -646,7 +691,7 @@ export function setupRealtime(io, ensureSession) {
 
         if (!texto) {
           socket.emit("voice:ack", { messageId: finalMessageId, status: "failed", reason: "stt_failed" });
-          socket.emit("lia-message", "Não entendi o áudio.");
+          socket.emit("lia-message", { text: "Não entendi o áudio.", conversationId: convId, mode: 'live' });
           processingLocks.delete(convId);
           return;
         }
@@ -692,13 +737,13 @@ export function setupRealtime(io, ensureSession) {
         if (audioBuffer) {
           socket.emit("audio-response", { audio: Array.from(audioBuffer), text: chatText, conversationId: convId });
         } else {
-          socket.emit("lia-message", chatText);
+          socket.emit("lia-message", { text: chatText, conversationId: convId, mode: 'live' });
         }
 
       } catch (err) {
         console.error("❌ [Realtime] Erro voice:send:", err);
         socket.emit("voice:ack", { messageId: finalMessageId, status: "failed", reason: "error" });
-        socket.emit("lia-message", "Erro ao processar áudio.");
+        socket.emit("lia-message", { text: "Erro ao processar áudio.", conversationId: convId, mode: 'live' });
       } finally {
         processingLocks.delete(convId);
       }
