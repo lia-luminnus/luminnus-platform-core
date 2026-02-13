@@ -1043,61 +1043,56 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                         }
                     }
 
-                    // Guardrail temporal: evita agendar data antiga por alucinação de ano.
-                    if (args?.start && args?.end) {
-                        const parsedStart = new Date(args.start);
-                        const parsedEnd = new Date(args.end);
-                        const now = new Date();
-                        const looksRelativeTomorrow = /\bamanh[aã]\b|\btomorrow\b/.test(prompt);
+                    // v16.2: Extração de Lembretes Customizados (ex: "me avise 2 dias antes")
+                    let reminders: { method: 'popup' | 'email'; minutes: number }[] | undefined = undefined;
+                    const reminderMatch = prompt.match(/me avise (\d+)\s*(dia|mês|semana|hora|minuto)s? antes/i);
+                    if (reminderMatch) {
+                        const value = parseInt(reminderMatch[1], 10);
+                        const unit = reminderMatch[2].toLowerCase();
+                        let minutes = 0;
+                        if (unit.startsWith('dia')) minutes = value * 24 * 60;
+                        else if (unit.startsWith('semana')) minutes = value * 7 * 24 * 60;
+                        else if (unit.startsWith('hora')) minutes = value * 60;
+                        else if (unit.startsWith('minuto')) minutes = value;
+                        else if (unit.startsWith('mês')) minutes = value * 30 * 24 * 60;
 
-                        // Validação rigorosa: verifica se a data está no passado (comparando ano e data completa)
-                        const currentYear = now.getFullYear();
-                        const startYear = parsedStart.getFullYear();
-                        const isPastYear = startYear < currentYear;
-                        const isPastDate = !Number.isNaN(parsedStart.getTime()) && parsedStart.getTime() < now.getTime();
-                        const tooOld = isPastYear || isPastDate;
-
-                        if (looksRelativeTomorrow && tooOld) {
-                            const durationMs = Math.max(parsedEnd.getTime() - parsedStart.getTime(), 30 * 60 * 1000);
-                            const tomorrow = new Date(now);
-                            tomorrow.setDate(now.getDate() + 1);
-                            tomorrow.setHours(0, 0, 0, 0); // Reset para início do dia
-
-                            // Preservar horário original se válido, senão usar horário do prompt ou padrão
-                            const fixedStart = new Date(tomorrow);
-                            const originalHour = parsedStart.getHours();
-                            const originalMinute = parsedStart.getMinutes();
-
-                            // Se o horário original é válido (0-23 horas), preservar
-                            if (originalHour >= 0 && originalHour <= 23) {
-                                fixedStart.setHours(originalHour, originalMinute, 0, 0);
-                            } else {
-                                // Tentar extrair horário do prompt
-                                const hourMatch = prompt.match(/\b(\d{1,2})(?::(\d{2}))?\s*(h|horas?)?\b/);
-                                const hour = hourMatch ? Math.min(Math.max(parseInt(hourMatch[1], 10), 0), 23) : 10;
-                                const minute = hourMatch && hourMatch[2] ? Math.min(Math.max(parseInt(hourMatch[2], 10), 0), 59) : 0;
-                                fixedStart.setHours(hour, minute, 0, 0);
-                            }
-
-                            const fixedEnd = new Date(fixedStart.getTime() + durationMs);
-
-                            console.warn('⚠️ [ToolService] Data antiga detectada para "amanhã". Corrigindo automaticamente.', {
-                                originalStart: args.start,
-                                originalEnd: args.end,
-                                originalYear: startYear,
-                                currentYear: currentYear,
-                                fixedStart: fixedStart.toISOString(),
-                                fixedEnd: fixedEnd.toISOString()
-                            });
-
-                            args.start = fixedStart.toISOString();
-                            args.end = fixedEnd.toISOString();
+                        if (minutes > 0) {
+                            reminders = [{ method: 'popup', minutes }];
+                            console.log(`⏰ [ToolService] Lembrete customizado detectado: ${value} ${unit}(s) -> ${minutes} min`);
                         }
+                    }
+
+                    // v16.3: Toggles de Meet link (Desligado por padrão, exceto se solicitado)
+                    // Ativa se o usuário explicitamente mencionar reunion/meet/chamada ou enviar e-mail
+                    const wantsMeet = /\b(meet|reuniã?o|chamada|vídeo|videochamada)\b/i.test(fullPrompt) || shouldSendEmail;
+                    const explicitlyNoMeet = /\b(sem link|sem meet|não precisa de link)\b/i.test(prompt);
+                    const createMeet = wantsMeet && !explicitlyNoMeet;
+
+                    // v16.4: Guardrail Rigoroso de Ano (Evita hallucinations de 2024/2028 se estamos em 2026)
+                    const now = new Date();
+                    const currentYear = now.getFullYear();
+                    const forceStart = new Date(args.start);
+                    const forceEnd = new Date(args.end);
+
+                    if (forceStart.getFullYear() !== currentYear && !fullPrompt.includes(forceStart.getFullYear().toString())) {
+                        console.warn(`🚨 [ToolService] Detectado ano incorreto (${forceStart.getFullYear()}). Forçando ano atual (${currentYear}).`);
+                        forceStart.setFullYear(currentYear);
+                        forceEnd.setFullYear(currentYear);
+                        args.start = forceStart.toISOString();
+                        args.end = forceEnd.toISOString();
                     }
 
                     console.log(`📅 [ToolService] createCalendarEvent args:`, JSON.stringify(args, null, 2));
                     const result = await GoogleWorkspaceTools.createCalendarEvent(
-                        userId, tenantId, args.title, args.start, args.end, args.description
+                        userId,
+                        tenantId,
+                        args.title,
+                        args.start,
+                        args.end,
+                        args.description,
+                        args.forceCreate || false,
+                        reminders,
+                        createMeet
                     );
 
                     // Se evento foi criado com sucesso E usuário pediu para enviar email, enviar automaticamente

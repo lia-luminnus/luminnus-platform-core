@@ -45,10 +45,19 @@ export async function runGemini(userText, options = {}) {
     // v12.0: Prioritize system instruction from options, otherwise use default
     const currentSystemInstruction = options.systemInstruction || LIA_FULL_PERSONALITY;
 
+    // v17.0: Configurações de Segurança permissivas para evitar bloqueios de prints técnicos/código
+    const safetySettings = [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' }
+    ];
+
     const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash", // Atualizado para v2.0 (Stable/Latest)
+        model: "gemini-2.5-flash", // Atualizado para v2.5 (Padrão LIA)
         systemInstruction: currentSystemInstruction,
-        tools
+        tools,
+        safetySettings
     });
 
     const messages = options.messages || [];

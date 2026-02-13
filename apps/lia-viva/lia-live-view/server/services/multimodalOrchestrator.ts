@@ -46,7 +46,7 @@ function decidirModelo(input) {
     return { model: 'gemini-imagen', reason: 'Geração visual' };
   }
 
-  return { model: 'gemini-brain', reason: 'Cérebro LIA (Gemini 2.0 Flash)' };
+  return { model: 'gemini-brain', reason: 'Cérebro LIA (Gemini 2.5 Flash)' };
 }
 
 /**
@@ -585,10 +585,19 @@ async function processarComGeminiVision({
     - Se ${intent} for 'CREATE' ou 'ACTION': Execute a ferramenta necessária (Sheets/Docs) e reporte o link real.
     - PROIBIDO: Placeholders como [Veja aqui].`;
 
+  // v17.0: Configurações de Segurança permissivas para evitar bloqueios de prints técnicos/código
+  const safetySettings = [
+    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
+    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' }
+  ];
+
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     systemInstruction: currentSystemInstruction,
     tools: geminiTools as any,
+    safetySettings: safetySettings as any,
     toolConfig: (intent === 'CREATE' || intent === 'CORRECT' || intent === 'HYBRID') ? {
       functionCallingConfig: {
         mode: 'ANY' as any
@@ -727,6 +736,11 @@ async function processarComGeminiVision({
       console.log(`✅ [Vision] Texto extraído das partes: ${text.length} caracteres`);
     } else {
       console.error('❌ [Vision] Nenhum texto encontrado nas partes da resposta');
+      console.log(`🔍 [Vision] Debug - Blocagem de Segurança ou Erro de Modelo:`, {
+        finishReason: response.candidates?.[0]?.finishReason,
+        safetyRatings: response.candidates?.[0]?.safetyRatings,
+        citationMetadata: response.candidates?.[0]?.citationMetadata
+      });
     }
   }
 

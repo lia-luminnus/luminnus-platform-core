@@ -481,10 +481,10 @@ export async function createGoogleDoc(userId: string, tenantId: string, title: s
         if (!content || content.trim().length === 0) {
             console.error('[GoogleWorkspace] EMPTY_CONTENT: Tentativa de criar documento sem conteúdo.');
             await AuditService.log(userId, tenantId, 'google', 'execution_failed', 'error', 'Tentativa de criar documento vazio.');
-            return { 
-                success: false, 
-                message: 'Não é possível criar um documento vazio. Por favor, forneça o conteúdo baseado na análise anterior ou especifique o que deve ser incluído.', 
-                error: 'EMPTY_CONTENT' 
+            return {
+                success: false,
+                message: 'Não é possível criar um documento vazio. Por favor, forneça o conteúdo baseado na análise anterior ou especifique o que deve ser incluído.',
+                error: 'EMPTY_CONTENT'
             };
         }
 
@@ -648,7 +648,9 @@ export async function createCalendarEvent(
     start: string,
     end: string,
     description?: string,
-    forceCreate: boolean = false
+    forceCreate: boolean = false,
+    reminders?: { method: 'popup' | 'email'; minutes: number }[],
+    createMeet: boolean = false
 ): Promise<GoogleActionResponse & { conflictDetected?: boolean; existingEvents?: any[]; meetLink?: string }> {
     try {
         await AuditService.log(userId, tenantId, 'google', 'execution_requested', 'success', `Solicitado agendamento de evento: ${title}`);
@@ -672,8 +674,6 @@ export async function createCalendarEvent(
                 console.log(`⚠️ [GoogleWorkspace] Conflito detectado: ${conflictNames}`);
                 await AuditService.log(userId, tenantId, 'google', 'execution_requested', 'success', `Conflito detectado: ${conflictNames}`);
 
-
-
                 return {
                     success: false,
                     message: `⚠️ **CONFLITO DETECTADO!** Já existe(m) evento(s) neste horário: ${conflictNames}. Deseja agendar mesmo assim? (diga "sim, pode agendar")`,
@@ -688,21 +688,35 @@ export async function createCalendarEvent(
             }
         }
 
+        const eventBody: any = {
+            summary: title,
+            description: description || 'Agendado via LIA | Luminnus',
+            start: { dateTime: startDate.toISOString() },
+            end: { dateTime: endDate.toISOString() },
+        };
+
+        // v16.0: Configuração de Lembretes Customizados
+        if (reminders && reminders.length > 0) {
+            eventBody.reminders = {
+                useDefault: false,
+                overrides: reminders.map(r => ({ method: r.method, minutes: r.minutes }))
+            };
+        }
+
+        // v16.1: Configuração de conferência (Meet) - agora OPICIONAL
+        if (createMeet) {
+            eventBody.conferenceData = {
+                createRequest: {
+                    requestId: `lia-${Date.now()}`,
+                    conferenceSolutionKey: { type: 'hangoutsMeet' }
+                }
+            };
+        }
+
         const event = await calendar.events.insert({
             calendarId: 'primary',
-            conferenceDataVersion: 1, // Ativar geração de Meet
-            requestBody: {
-                summary: title,
-                description: description || 'Agendado via LIA | Luminnus',
-                start: { dateTime: startDate.toISOString() },
-                end: { dateTime: endDate.toISOString() },
-                conferenceData: {
-                    createRequest: {
-                        requestId: `lia-${Date.now()}`,
-                        conferenceSolutionKey: { type: 'hangoutsMeet' }
-                    }
-                }
-            }
+            conferenceDataVersion: createMeet ? 1 : 0,
+            requestBody: eventBody
         });
 
         // Extrair link do Meet se gerado

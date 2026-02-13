@@ -226,6 +226,7 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
         conversationId,
         functions: functions.map(f => f),
         messages,
+        systemInstruction: messages[0].content, // Garante que a data/hora atual (contida na system msg) seja respeitada
         temperature: 0.2 // Rigidez para execução de ferramentas
       });
 
@@ -349,7 +350,8 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
         const nextCall = await runGemini("Continue a conversa com base nos resultados.", {
           conversationId,
           temperature: 0.3,
-          messages
+          messages,
+          systemInstruction: messages[0].content // Sincronização de contexto
         });
 
         finalReply = nextCall.text || finalReply;

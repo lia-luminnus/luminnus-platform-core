@@ -429,7 +429,7 @@ Detectei que você quer **${effectiveRequest.action.replace('_', ' ')}**. Esta e
             userId: req.userId,
             tenantId: req.tenantId,
             provider: 'hybrid',
-            model: `gemini-2.0-flash-v17.5`,
+            model: `gemini-2.5-flash`,
             inputTokens: 0,
             outputTokens: 0,
             toolCallsCount: toolResults.length,
