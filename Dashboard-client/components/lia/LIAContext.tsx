@@ -547,9 +547,21 @@ export function LIAProvider({ children }: LIAProviderProps) {
     // v4.4: CRITICAL FIX - Atribuir addMessageToScope à ref para os handlers de socket usarem
     useEffect(() => {
         addToScopeRef.current = (message: Message, mode?: 'chat' | 'multimodal' | 'live', convId?: string) => {
-            const scopeKey = convId && mode
-                ? getScopeKey(mode, convId)
-                : (convId || activeScopeRef.current || '');
+            let scopeKey = activeScopeRef.current || '';
+
+            if (convId && mode) {
+                scopeKey = getScopeKey(mode, convId);
+            } else if (convId) {
+                if (convId.includes(':')) {
+                    scopeKey = convId;
+                } else if ((activeScopeRef.current || '').endsWith(`:${convId}`)) {
+                    scopeKey = activeScopeRef.current || convId;
+                } else {
+                    const inferredMode = activeModeRef.current || 'chat';
+                    scopeKey = getScopeKey(inferredMode, convId);
+                }
+            }
+
             if (scopeKey) {
                 addMessageToScope(scopeKey, message);
             }
@@ -1375,7 +1387,17 @@ export function LIAProvider({ children }: LIAProviderProps) {
                 scope: activeScopeRef.current
             });
 
-            const scopeKey = activeScopeRef.current;
+            const convId = payload.conversationId || payload.convId || null;
+            const mode = payload.mode || null;
+
+            const scopeKey = convId
+                ? (mode
+                    ? getScopeKey(mode, convId)
+                    : ((activeScopeRef.current || '').endsWith(`:${convId}`)
+                        ? (activeScopeRef.current || '')
+                        : getScopeKey(activeModeRef.current || 'chat', convId)))
+                : activeScopeRef.current;
+
             if (scopeKey) setTypingByScope(prev => ({ ...prev, [scopeKey]: false }));
             setIsTyping(false);
             setIsSpeaking(false);
@@ -1383,8 +1405,6 @@ export function LIAProvider({ children }: LIAProviderProps) {
             setLiaStatus(null); // Limpar qualquer status pendente
 
             const text = typeof payload === 'string' ? payload : (payload.text || payload.reply || '');
-            const convId = payload.conversationId || payload.convId || null;
-            const mode = payload.mode || null;
             const audio = payload.audio || null;
             const functionCall = payload.function_call || payload.action || null;
 
