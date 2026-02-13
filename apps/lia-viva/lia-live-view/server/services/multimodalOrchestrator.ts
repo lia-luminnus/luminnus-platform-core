@@ -352,12 +352,12 @@ async function processarRequisicaoMultimodal({
 
   } catch (error: any) {
     console.error('❌ Erro no orquestrador multimodal:', error?.message || error);
-    
+
     // v18.2: Retornar resposta útil mesmo em caso de erro
     const errorMessage = error?.message || 'Erro desconhecido';
     const hasImages = images && images.length > 0;
     const hasDocuments = documents && documents.length > 0;
-    
+
     let fallbackMessage = '';
     if (hasImages) {
       fallbackMessage = `Encontrei dificuldades técnicas ao processar ${images.length === 1 ? 'a imagem' : 'as imagens'}. `;
@@ -368,7 +368,7 @@ async function processarRequisicaoMultimodal({
     } else {
       fallbackMessage = `Erro ao processar a requisição: ${errorMessage}. Por favor, tente novamente.`;
     }
-    
+
     return {
       mode: 'multimodal',
       contentType: 'error',
@@ -443,7 +443,7 @@ async function processarComGeminiBrain({
         const args = typeof call.arguments === 'string' ? JSON.parse(call.arguments) : call.arguments;
         console.log(`🔧 [Orquestrador] Executando: ${call.name}`, args);
 
-        const toolResult = await ToolService.execute(call.name, args, { userId, tenantId });
+        const toolResult = await ToolService.execute(call.name, args, { userId, tenantId, userPrompt: message });
         toolResults.push({
           name: call.name,
           result: toolResult
@@ -689,7 +689,7 @@ async function processarComGeminiVision({
       try {
         console.log(`🔧 [Vision] Executando: ${call.name}`, call.args);
 
-        const toolResult = await ToolService.execute(call.name, call.args, { userId, tenantId });
+        const toolResult = await ToolService.execute(call.name, call.args, { userId, tenantId, userPrompt: message });
         toolResults.push({
           name: call.name,
           result: toolResult
@@ -719,7 +719,7 @@ async function processarComGeminiVision({
       firstCandidateParts: response.candidates?.[0]?.content?.parts?.length || 0,
       partsTypes: response.candidates?.[0]?.content?.parts?.map((p: any) => Object.keys(p)).flat() || []
     });
-    
+
     // Tentar extrair texto das partes da resposta
     const textParts = response.candidates?.[0]?.content?.parts?.filter((p: any) => p.text);
     if (textParts && textParts.length > 0) {
@@ -834,7 +834,7 @@ Pedido do usuário: ${userRequest || message}`;
         { text: recoveryPrompt },
         ...currentParts,
       ]);
-      
+
       let recoveredText = '';
       try {
         recoveredText = recoveryResult.response?.text?.() || '';
@@ -883,7 +883,7 @@ Pedido do usuário: ${userRequest || message}`;
               compactText = textParts.map((p: any) => p.text).join(' ');
             }
           }
-          
+
           if (compactText.trim().length > 0) {
             finalText = compactText;
           }

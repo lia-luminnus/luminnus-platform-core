@@ -42,9 +42,12 @@ export async function runGemini(userText, options = {}) {
         }];
     }
 
+    // v12.0: Prioritize system instruction from options, otherwise use default
+    const currentSystemInstruction = options.systemInstruction || LIA_FULL_PERSONALITY;
+
     const model = genAI.getGenerativeModel({
         model: "gemini-2.0-flash", // Atualizado para v2.0 (Stable/Latest)
-        systemInstruction: LIA_FULL_PERSONALITY,
+        systemInstruction: currentSystemInstruction,
         tools
     });
 
@@ -61,8 +64,16 @@ export async function runGemini(userText, options = {}) {
         };
     });
 
+    // v12.1: Se houver instruções extras nas mensagens (role: system), anexar ao prompt final para garantir atenção
+    const extraInstructions = messages
+        .filter(m => m.role === 'system')
+        .map(m => m.content)
+        .join('\n\n');
+
     // v7.1: Suporte a arquivos (Imagens e Documentos) nativamente no Gemini 2.0
-    const parts = [{ text: userText }];
+    // v12.2: Anexar instruções extras se houver (provenientes de role: system no histórico)
+    const promptText = extraInstructions ? `${extraInstructions}\n\nREQUISIÇÃO ATUAL: ${userText}` : userText;
+    const parts = [{ text: promptText }];
 
     if (options.images && options.images.length > 0) {
         options.images.forEach(img => {

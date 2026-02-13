@@ -17,33 +17,33 @@ export class ToolService {
                 const now = new Date();
                 const currentYear = now.getFullYear();
                 const existingYear = parsedExisting.getFullYear();
-                
+
                 // Se a data existente está em um ano passado, recalcular
                 if (existingYear < currentYear || parsedExisting.getTime() < now.getTime()) {
                     // Recalcular baseado no prompt
                     const hourMatch = normalized.match(/\b(\d{1,2})(?::(\d{2}))?\s*(h|horas?)?\b/);
                     const hour = hourMatch ? Math.min(Math.max(parseInt(hourMatch[1], 10), 0), 23) : 10;
                     const minute = hourMatch && hourMatch[2] ? Math.min(Math.max(parseInt(hourMatch[2], 10), 0), 59) : 0;
-                    
+
                     const durationMinutesMatch = normalized.match(/\b(\d{1,3})\s*min(?:uto)?s?\b/);
                     const durationHoursMatch = normalized.match(/\b(\d{1,2})\s*h(?:ora)?s?\b/);
                     let durationMs = 60 * 60 * 1000; // Padrão 1 hora
                     if (durationMinutesMatch) durationMs = parseInt(durationMinutesMatch[1], 10) * 60 * 1000;
                     else if (durationHoursMatch) durationMs = parseInt(durationHoursMatch[1], 10) * 60 * 60 * 1000;
-                    
+
                     const tomorrow = new Date(now);
                     tomorrow.setDate(now.getDate() + 1);
                     tomorrow.setHours(hour, minute, 0, 0);
-                    
+
                     const fixedStart = tomorrow.toISOString();
                     const fixedEnd = new Date(tomorrow.getTime() + durationMs).toISOString();
-                    
+
                     console.warn('⚠️ [ToolService] Data existente estava no passado. Recalculando para amanhã.', {
                         originalStart: existingStart,
                         fixedStart,
                         fixedEnd
                     });
-                    
+
                     return { start: fixedStart, end: fixedEnd };
                 }
             }
@@ -75,10 +75,17 @@ export class ToolService {
         if (hasTomorrow) {
             base.setDate(base.getDate() + 1);
         }
-        base.setHours(hour, minute, 0, 0);
+
+        // v13.0: Se o usuário especificou um horário, usar. Senão, e se pediu para hoje/amanhã, usar 10:00 (proativo)
+        if (hourMatch) {
+            base.setHours(hour, minute, 0, 0);
+        } else if (hasToday || hasTomorrow) {
+            base.setHours(10, 0, 0, 0); // Default proativo: 10 da manhã
+        }
         base.setSeconds(0, 0); // Garantir precisão
 
         const start = existingStart || base.toISOString();
+        // v13.1: Garantir duração padrão de 1 hora se não houver existingEnd ou durationMs explícito
         const end = existingEnd || new Date(new Date(start).getTime() + durationMs).toISOString();
 
         return { start, end };
@@ -1000,7 +1007,7 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
 
                     // Detectar intenção de envio de email junto com agendamento
                     const shouldSendEmail = /\b(enviar|mandar|enviar e-?mail|enviar email|enviar convite|mandar e-?mail|mandar email|mandar convite)\b/i.test(fullPrompt);
-                    
+
                     // Extrair destinatário do prompt se mencionado
                     let emailRecipient: string | null = null;
                     if (shouldSendEmail) {
@@ -1020,11 +1027,20 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                     if (!args.end && inferred.end) args.end = inferred.end;
 
                     if (!args.start || !args.end) {
-                        return {
-                            success: false,
-                            error: 'MISSING_DATETIME',
-                            message: 'Faltou data/horário para criar o evento. Se preferir, diga em linguagem natural (ex: "amanhã às 10h por 30 minutos").'
-                        };
+                        // v13.2: Tentar inferência de emergência se o dia for conhecido mas o horário não
+                        if (!args.start && (prompt.includes('amanhã') || prompt.includes('hoje'))) {
+                            const base = new Date();
+                            if (prompt.includes('amanhã')) base.setDate(base.getDate() + 1);
+                            base.setHours(10, 0, 0, 0);
+                            args.start = base.toISOString();
+                            args.end = new Date(base.getTime() + (60 * 60 * 1000)).toISOString();
+                        } else {
+                            return {
+                                success: false,
+                                error: 'MISSING_DATETIME',
+                                message: 'Faltou me dizer o horário para o agendamento. Se preferir, diga apenas "amanhã às 10h" ou algo parecido.'
+                            };
+                        }
                     }
 
                     // Guardrail temporal: evita agendar data antiga por alucinação de ano.
@@ -1033,7 +1049,7 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                         const parsedEnd = new Date(args.end);
                         const now = new Date();
                         const looksRelativeTomorrow = /\bamanh[aã]\b|\btomorrow\b/.test(prompt);
-                        
+
                         // Validação rigorosa: verifica se a data está no passado (comparando ano e data completa)
                         const currentYear = now.getFullYear();
                         const startYear = parsedStart.getFullYear();
@@ -1051,7 +1067,7 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                             const fixedStart = new Date(tomorrow);
                             const originalHour = parsedStart.getHours();
                             const originalMinute = parsedStart.getMinutes();
-                            
+
                             // Se o horário original é válido (0-23 horas), preservar
                             if (originalHour >= 0 && originalHour <= 23) {
                                 fixedStart.setHours(originalHour, originalMinute, 0, 0);
@@ -1062,7 +1078,7 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                                 const minute = hourMatch && hourMatch[2] ? Math.min(Math.max(parseInt(hourMatch[2], 10), 0), 59) : 0;
                                 fixedStart.setHours(hour, minute, 0, 0);
                             }
-                            
+
                             const fixedEnd = new Date(fixedStart.getTime() + durationMs);
 
                             console.warn('⚠️ [ToolService] Data antiga detectada para "amanhã". Corrigindo automaticamente.', {
@@ -1090,19 +1106,19 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                             // Formatar data/hora para o email
                             const startDate = new Date(args.start);
                             const endDate = new Date(args.end);
-                            const dateStr = startDate.toLocaleDateString('pt-BR', { 
-                                weekday: 'long', 
-                                day: 'numeric', 
-                                month: 'long', 
-                                year: 'numeric' 
+                            const dateStr = startDate.toLocaleDateString('pt-BR', {
+                                weekday: 'long',
+                                day: 'numeric',
+                                month: 'long',
+                                year: 'numeric'
                             });
-                            const timeStr = startDate.toLocaleTimeString('pt-BR', { 
-                                hour: '2-digit', 
-                                minute: '2-digit' 
+                            const timeStr = startDate.toLocaleTimeString('pt-BR', {
+                                hour: '2-digit',
+                                minute: '2-digit'
                             });
-                            const endTimeStr = endDate.toLocaleTimeString('pt-BR', { 
-                                hour: '2-digit', 
-                                minute: '2-digit' 
+                            const endTimeStr = endDate.toLocaleTimeString('pt-BR', {
+                                hour: '2-digit',
+                                minute: '2-digit'
                             });
 
                             // Extrair assunto do prompt ou usar padrão
@@ -1117,23 +1133,23 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                             emailBody += `**${args.title || 'Reunião'}**\n`;
                             emailBody += `📅 Data: ${dateStr}\n`;
                             emailBody += `🕐 Horário: ${timeStr} às ${endTimeStr}\n\n`;
-                            
+
                             if (result.meetLink) {
                                 emailBody += `🔗 Link do Google Meet: ${result.meetLink}\n\n`;
                             }
-                            
+
                             if (result.link) {
                                 emailBody += `📋 Link do evento no calendário: ${result.link}\n\n`;
                             }
-                            
+
                             emailBody += `Aguardo sua confirmação.\n\nAtenciosamente,\nLIA | Luminnus`;
 
                             console.log(`📧 [ToolService] Enviando email automaticamente para ${emailRecipient} após criar evento`);
                             const emailResult = await GoogleWorkspaceTools.sendGmail(
-                                userId, 
-                                tenantId, 
-                                emailRecipient, 
-                                emailSubject, 
+                                userId,
+                                tenantId,
+                                emailRecipient,
+                                emailSubject,
                                 emailBody
                             );
 
