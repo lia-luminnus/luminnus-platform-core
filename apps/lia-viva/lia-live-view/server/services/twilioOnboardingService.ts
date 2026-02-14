@@ -35,6 +35,7 @@ const MASTER_AUTH_TOKEN = (process.env.TWILIO_AUTH_TOKEN || '').trim();
 const API_KEY_SID = (process.env.TWILIO_API_KEY_SID || '').trim();
 const API_KEY_SECRET = (process.env.TWILIO_API_KEY_SECRET || '').trim();
 const WEBHOOK_BASE_URL = (process.env.TWILIO_WEBHOOK_BASE_URL || 'https://api.luminnus.ai/api/twilio/webhook').trim();
+const TWILIO_REGION = (process.env.TWILIO_REGION || '').trim();
 
 /**
  * Obter cliente Twilio da Conta Master.
@@ -54,12 +55,16 @@ function getMasterClient(): Twilio.Twilio {
         sid_len: MASTER_ACCOUNT_SID.length,
         token_len: MASTER_AUTH_TOKEN.length,
         method: 'AUTH_TOKEN',
-        region: 'us1'
+        region: TWILIO_REGION || 'global'
     });
 
     // SEMPRE usar Auth Token para operações da classe TwilioOnboardingService (Subcontas)
-    // Forçando US1 pois a conta do cliente é regional (visto no print do console)
-    return Twilio(MASTER_ACCOUNT_SID, MASTER_AUTH_TOKEN, { region: 'us1' });
+    const options: any = {};
+    if (TWILIO_REGION) {
+        options.region = TWILIO_REGION;
+    }
+
+    return Twilio(MASTER_ACCOUNT_SID, MASTER_AUTH_TOKEN, options);
 }
 
 export class TwilioOnboardingService {
