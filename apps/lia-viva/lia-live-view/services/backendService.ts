@@ -223,21 +223,9 @@ export class BackendService {
         navigator.geolocation.getCurrentPosition(
           async (position) => {
             const { latitude, longitude } = position.coords;
-
-            // Try to get address from Nominatim
-            let address = null;
-            try {
-              const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=pt`;
-              const response = await fetch(url, {
-                headers: { 'User-Agent': 'LIA-Assistant/1.0' }
-              });
-              if (response.ok) {
-                const data = await response.json();
-                address = data.display_name;
-              }
-            } catch (e) {
-              console.warn('[BackendService] Could not get address:', e);
-            }
+            // v9.6: Avoid browser-side reverse geocode (Nominatim blocks CORS in production).
+            // Send raw coordinates and let backend resolve address when needed.
+            const address = null;
 
             // Send to backend
             try {

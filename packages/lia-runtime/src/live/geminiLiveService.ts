@@ -112,6 +112,8 @@ export class GeminiLiveService {
     // v4.23: Fail-safe & Watchdog
     private watchdogTimer: any = null;
     private responseSent: boolean = false;
+    private reconnectAttempts: number = 0;
+    private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     private isWaitingForTool: boolean = false;
     private toolCallCount: number = 0;
 
@@ -251,6 +253,13 @@ export class GeminiLiveService {
         // Ex: "p r e c i s a" → "precisa"
         normalized = normalized.replace(/(\p{L})\s+(?=\p{L}\s+\p{L})/gu, '$1');
 
+        // v9.6: Colapsar sílabas fragmentadas em blocos longos ("lo ca li za ção" → "localização")
+        // sem afetar preposições curtas legítimas.
+        normalized = normalized.replace(/\b(?:\p{L}{1,2}\s+){2,}\p{L}{1,3}\b/gu, (match) => {
+            const compact = match.replace(/\s+/g, '');
+            return compact.length >= 6 ? compact : match;
+        });
+
         // Segunda passada mais agressiva para casos como "á udio" → "áudio"
         // MAS CUIDADO: Não juntar "de a", "e o", "é a"
         // Lista de palavras curtas válidas que não devem ser fundidas
@@ -313,6 +322,10 @@ export class GeminiLiveService {
     /**
      * Atualiza estado de conexão
      */
+    private shouldTryReconnect(eventCode: number): boolean {
+        return (eventCode === 1006 || eventCode === 1008) && this.reconnectAttempts < 1;
+    }
+
     private setState(newState: ConnectionState): void {
         const oldState = this.connectionState;
         this.connectionState = newState;
@@ -484,6 +497,11 @@ export class GeminiLiveService {
                     onopen: () => {
                         console.log('✅ Conectado ao Gemini Live (v2.0-flash-exp)');
                         this.setState(ConnState.OPEN);
+                        this.reconnectAttempts = 0;
+                        if (this.reconnectTimer) {
+                            clearTimeout(this.reconnectTimer);
+                            this.reconnectTimer = null;
+                        }
                         this.emitEvent({ type: 'connected' });
                         this.emitEvent({ type: 'listening' });
                     },
@@ -516,8 +534,23 @@ export class GeminiLiveService {
                             console.error('❌ [Erro 1007] Dados inválidos recebidos.');
                         }
 
-                        this.stopSession();
+                        const shouldTryReconnect = this.shouldTryReconnect(event.code);
+
+                        // O socket já foi encerrado pelo servidor.
+                        // Evitar close() redundante para não gerar "WebSocket is already in CLOSING or CLOSED state".
+                        this.stopSession({ skipLiveSessionClose: true });
                         this.emitEvent({ type: 'end', data: `WebSocket closed: ${event.code}` });
+
+                        // v9.6: Recuperação automática (1 tentativa) em fechamentos anormais/unsupported.
+                        if (shouldTryReconnect) {
+                            this.reconnectAttempts += 1;
+                            console.warn(`♻️ [GeminiLive] Tentando reconectar automaticamente (tentativa ${this.reconnectAttempts})...`);
+                            this.reconnectTimer = setTimeout(() => {
+                                this.startSession().catch((reconnectErr) => {
+                                    console.error('❌ [GeminiLive] Falha ao reconectar automaticamente:', reconnectErr);
+                                });
+                            }, 1200);
+                        }
                     },
                 },
             });
@@ -883,11 +916,10 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
             if (this.isWaitingForTool && (window as any).DEBUG_LIA_LOGS) {
                 console.log('⏳ [Interrupção] Usuário falou durante Tool Call.');
             }
-            // v5.7: CORREÇÃO - Gemini NÃO envia espaços entre fragmentos de transcrição
-            // Adicionar espaço antes de cada chunk se o acumulador já tiver texto
-            if (this.accumulatedUserText.length > 0 && !this.accumulatedUserText.endsWith(' ')) {
-                this.accumulatedUserText += ' ';
-            }
+
+            // v9.6: NÃO inserir espaços artificiais entre chunks.
+            // O stream do Gemini pode quebrar no meio da palavra e o espaço forçado
+            // causava textos como "lo caliza ção" e "en de re ço".
             this.accumulatedUserText += inputText;
         }
 
@@ -1332,14 +1364,40 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
     }
 
     private async injectToGemini(text: string) {
-        if (this.liveSession) {
-            const session = this.liveSession as any;
+        if (!this.liveSession || this.connectionState !== ConnState.OPEN) {
+            console.warn('⚠️ [GeminiLive] Tentativa de injeção sem sessão ativa/aberta');
+            return;
+        }
+
+        const session = this.liveSession as any;
+        const ws = session?._ws || session?.ws;
+        if (ws && ws.readyState !== 1) {
+            console.warn('⚠️ [GeminiLive] WebSocket não está OPEN, injeção cancelada');
+            return;
+        }
+
+        const payload = {
+            turns: [{ role: 'user', parts: [{ text }] }],
+            turnComplete: true,
+        };
+
+        try {
             if (session.sendClientContent) {
-                await session.sendClientContent({
-                    turns: [{ role: 'user', parts: [{ text }] }],
-                    turnComplete: true
-                });
+                await session.sendClientContent(payload);
+                return;
             }
+
+            if (session.send_client_content) {
+                await session.send_client_content({
+                    turns: [{ role: 'user', parts: [{ text }] }],
+                    turn_complete: true,
+                });
+                return;
+            }
+
+            console.warn('⚠️ [GeminiLive] SDK sem método sendClientContent/send_client_content');
+        } catch (error) {
+            console.error('❌ [GeminiLive] Falha ao injetar conteúdo na sessão:', error);
         }
     }
 
@@ -1669,7 +1727,7 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
     /**
      * Encerra sessão
      */
-    async stopSession(): Promise<void> {
+    async stopSession(options: { skipLiveSessionClose?: boolean } = {}): Promise<void> {
         // v4.32: Idempotência - evitar fechar duas vezes (especialmente em dev/StrictMode)
         if (this.connectionState === ConnState.IDLE) {
             console.log('⚠️ [GeminiLiveService] Tentativa de parar sessão inexistente (IDLE)');
@@ -1705,10 +1763,13 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
             this.mediaStream = null;
         }
 
-        if (this.liveSession) {
+        if (this.liveSession && !options.skipLiveSessionClose) {
             try {
                 await this.liveSession.close();
             } catch (e) { /* ignore */ }
+            this.liveSession = null;
+        } else if (this.liveSession && options.skipLiveSessionClose) {
+            console.log('ℹ️ [GeminiLiveService] Pulando close() explícito da liveSession (onclose já ocorreu)');
             this.liveSession = null;
         }
 
@@ -1717,6 +1778,11 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
                 await this.audioContext.close();
             } catch (e) { /* ignore */ }
             this.audioContext = null;
+        }
+
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
         }
 
         this.currentSession = null;
