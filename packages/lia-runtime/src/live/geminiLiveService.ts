@@ -114,7 +114,6 @@ export class GeminiLiveService {
     private responseSent: boolean = false;
     private reconnectAttempts: number = 0;
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    private userInitiatedStop: boolean = false;
     private isWaitingForTool: boolean = false;
     private toolCallCount: number = 0;
 
@@ -495,7 +494,6 @@ export class GeminiLiveService {
                         console.log('✅ Conectado ao Gemini Live (v2.0-flash-exp)');
                         this.setState(ConnState.OPEN);
                         this.reconnectAttempts = 0;
-                        this.userInitiatedStop = false;
                         if (this.reconnectTimer) {
                             clearTimeout(this.reconnectTimer);
                             this.reconnectTimer = null;
@@ -532,7 +530,7 @@ export class GeminiLiveService {
                             console.error('❌ [Erro 1007] Dados inválidos recebidos.');
                         }
 
-                        const shouldTryReconnect = !this.userInitiatedStop && (event.code === 1006 || event.code === 1008) && this.reconnectAttempts < 1;
+                        const shouldTryReconnect = (event.code === 1006 || event.code === 1008) && this.reconnectAttempts < 1;
 
                         // O socket já foi encerrado pelo servidor.
                         // Evitar close() redundante para não gerar "WebSocket is already in CLOSING or CLOSED state".
@@ -1725,7 +1723,7 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
     /**
      * Encerra sessão
      */
-    async stopSession(options: { skipLiveSessionClose?: boolean; userInitiated?: boolean } = {}): Promise<void> {
+    async stopSession(options: { skipLiveSessionClose?: boolean } = {}): Promise<void> {
         // v4.32: Idempotência - evitar fechar duas vezes (especialmente em dev/StrictMode)
         if (this.connectionState === ConnState.IDLE) {
             console.log('⚠️ [GeminiLiveService] Tentativa de parar sessão inexistente (IDLE)');
@@ -1737,7 +1735,6 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
         }
 
         console.log('🛑 Encerrando sessão...');
-        this.userInitiatedStop = options.userInitiated ?? !options.skipLiveSessionClose;
         this.isSessionActive = false;
         this.setState(ConnState.CLOSING);
 
