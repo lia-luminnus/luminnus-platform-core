@@ -112,6 +112,8 @@ export class GeminiLiveService {
     // v4.23: Fail-safe & Watchdog
     private watchdogTimer: any = null;
     private responseSent: boolean = false;
+    private reconnectAttempts: number = 0;
+    private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     private isWaitingForTool: boolean = false;
     private toolCallCount: number = 0;
 
@@ -250,6 +252,13 @@ export class GeminiLiveService {
         // Padrão: letra + espaço + letra, repetido 3+ vezes
         // Ex: "p r e c i s a" → "precisa"
         normalized = normalized.replace(/(\p{L})\s+(?=\p{L}\s+\p{L})/gu, '$1');
+
+        // v9.6: Colapsar sílabas fragmentadas em blocos longos ("lo ca li za ção" → "localização")
+        // sem afetar preposições curtas legítimas.
+        normalized = normalized.replace(/\b(?:\p{L}{1,2}\s+){2,}\p{L}{1,3}\b/gu, (match) => {
+            const compact = match.replace(/\s+/g, '');
+            return compact.length >= 6 ? compact : match;
+        });
 
         // Segunda passada mais agressiva para casos como "á udio" → "áudio"
         // MAS CUIDADO: Não juntar "de a", "e o", "é a"
@@ -484,6 +493,11 @@ export class GeminiLiveService {
                     onopen: () => {
                         console.log('✅ Conectado ao Gemini Live (v2.0-flash-exp)');
                         this.setState(ConnState.OPEN);
+                        this.reconnectAttempts = 0;
+                        if (this.reconnectTimer) {
+                            clearTimeout(this.reconnectTimer);
+                            this.reconnectTimer = null;
+                        }
                         this.emitEvent({ type: 'connected' });
                         this.emitEvent({ type: 'listening' });
                     },
@@ -516,10 +530,26 @@ export class GeminiLiveService {
                             console.error('❌ [Erro 1007] Dados inválidos recebidos.');
                         }
 
+codex/fix-location-access-error-in-multimodal-93mu7a
+                        const shouldTryReconnect = (event.code === 1006 || event.code === 1008) && this.reconnectAttempts < 1;
+
+
+main
                         // O socket já foi encerrado pelo servidor.
                         // Evitar close() redundante para não gerar "WebSocket is already in CLOSING or CLOSED state".
                         this.stopSession({ skipLiveSessionClose: true });
                         this.emitEvent({ type: 'end', data: `WebSocket closed: ${event.code}` });
+
+                        // v9.6: Recuperação automática (1 tentativa) em fechamentos anormais/unsupported.
+                        if (shouldTryReconnect) {
+                            this.reconnectAttempts += 1;
+                            console.warn(`♻️ [GeminiLive] Tentando reconectar automaticamente (tentativa ${this.reconnectAttempts})...`);
+                            this.reconnectTimer = setTimeout(() => {
+                                this.startSession().catch((reconnectErr) => {
+                                    console.error('❌ [GeminiLive] Falha ao reconectar automaticamente:', reconnectErr);
+                                });
+                            }, 1200);
+                        }
                     },
                 },
             });
@@ -885,11 +915,10 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
             if (this.isWaitingForTool && (window as any).DEBUG_LIA_LOGS) {
                 console.log('⏳ [Interrupção] Usuário falou durante Tool Call.');
             }
-            // v5.7: CORREÇÃO - Gemini NÃO envia espaços entre fragmentos de transcrição
-            // Adicionar espaço antes de cada chunk se o acumulador já tiver texto
-            if (this.accumulatedUserText.length > 0 && !this.accumulatedUserText.endsWith(' ')) {
-                this.accumulatedUserText += ' ';
-            }
+
+            // v9.6: NÃO inserir espaços artificiais entre chunks.
+            // O stream do Gemini pode quebrar no meio da palavra e o espaço forçado
+            // causava textos como "lo caliza ção" e "en de re ço".
             this.accumulatedUserText += inputText;
         }
 
@@ -1748,6 +1777,11 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
                 await this.audioContext.close();
             } catch (e) { /* ignore */ }
             this.audioContext = null;
+        }
+
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
         }
 
         this.currentSession = null;
