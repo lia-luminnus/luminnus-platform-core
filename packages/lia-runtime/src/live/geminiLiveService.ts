@@ -322,10 +322,6 @@ export class GeminiLiveService {
     /**
      * Atualiza estado de conexão
      */
-    private shouldTryReconnect(eventCode: number): boolean {
-        return (eventCode === 1006 || eventCode === 1008) && this.reconnectAttempts < 1;
-    }
-
     private setState(newState: ConnectionState): void {
         const oldState = this.connectionState;
         this.connectionState = newState;
@@ -534,7 +530,7 @@ export class GeminiLiveService {
                             console.error('❌ [Erro 1007] Dados inválidos recebidos.');
                         }
 
-                        const shouldTryReconnect = this.shouldTryReconnect(event.code);
+                        const shouldTryReconnect = (event.code === 1006 || event.code === 1008) && this.reconnectAttempts < 1;
 
                         // O socket já foi encerrado pelo servidor.
                         // Evitar close() redundante para não gerar "WebSocket is already in CLOSING or CLOSED state".
