@@ -530,8 +530,11 @@ export class GeminiLiveService {
                             console.error('❌ [Erro 1007] Dados inválidos recebidos.');
                         }
 
+codex/fix-location-access-error-in-multimodal-93mu7a
                         const shouldTryReconnect = (event.code === 1006 || event.code === 1008) && this.reconnectAttempts < 1;
 
+
+main
                         // O socket já foi encerrado pelo servidor.
                         // Evitar close() redundante para não gerar "WebSocket is already in CLOSING or CLOSED state".
                         this.stopSession({ skipLiveSessionClose: true });
