@@ -516,7 +516,9 @@ export class GeminiLiveService {
                             console.error('❌ [Erro 1007] Dados inválidos recebidos.');
                         }
 
-                        this.stopSession();
+                        // O socket já foi encerrado pelo servidor.
+                        // Evitar close() redundante para não gerar "WebSocket is already in CLOSING or CLOSED state".
+                        this.stopSession({ skipLiveSessionClose: true });
                         this.emitEvent({ type: 'end', data: `WebSocket closed: ${event.code}` });
                     },
                 },
@@ -1332,14 +1334,40 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
     }
 
     private async injectToGemini(text: string) {
-        if (this.liveSession) {
-            const session = this.liveSession as any;
+        if (!this.liveSession || this.connectionState !== ConnState.OPEN) {
+            console.warn('⚠️ [GeminiLive] Tentativa de injeção sem sessão ativa/aberta');
+            return;
+        }
+
+        const session = this.liveSession as any;
+        const ws = session?._ws || session?.ws;
+        if (ws && ws.readyState !== 1) {
+            console.warn('⚠️ [GeminiLive] WebSocket não está OPEN, injeção cancelada');
+            return;
+        }
+
+        const payload = {
+            turns: [{ role: 'user', parts: [{ text }] }],
+            turnComplete: true,
+        };
+
+        try {
             if (session.sendClientContent) {
-                await session.sendClientContent({
-                    turns: [{ role: 'user', parts: [{ text }] }],
-                    turnComplete: true
-                });
+                await session.sendClientContent(payload);
+                return;
             }
+
+            if (session.send_client_content) {
+                await session.send_client_content({
+                    turns: [{ role: 'user', parts: [{ text }] }],
+                    turn_complete: true,
+                });
+                return;
+            }
+
+            console.warn('⚠️ [GeminiLive] SDK sem método sendClientContent/send_client_content');
+        } catch (error) {
+            console.error('❌ [GeminiLive] Falha ao injetar conteúdo na sessão:', error);
         }
     }
 
@@ -1669,7 +1697,7 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
     /**
      * Encerra sessão
      */
-    async stopSession(): Promise<void> {
+    async stopSession(options: { skipLiveSessionClose?: boolean } = {}): Promise<void> {
         // v4.32: Idempotência - evitar fechar duas vezes (especialmente em dev/StrictMode)
         if (this.connectionState === ConnState.IDLE) {
             console.log('⚠️ [GeminiLiveService] Tentativa de parar sessão inexistente (IDLE)');
@@ -1705,10 +1733,13 @@ registerProcessor('gemini-live-processor', GeminiLiveAudioProcessor);
             this.mediaStream = null;
         }
 
-        if (this.liveSession) {
+        if (this.liveSession && !options.skipLiveSessionClose) {
             try {
                 await this.liveSession.close();
             } catch (e) { /* ignore */ }
+            this.liveSession = null;
+        } else if (this.liveSession && options.skipLiveSessionClose) {
+            console.log('ℹ️ [GeminiLiveService] Pulando close() explícito da liveSession (onclose já ocorreu)');
             this.liveSession = null;
         }
 
