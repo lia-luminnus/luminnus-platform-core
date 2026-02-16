@@ -39,7 +39,7 @@ const Onboarding: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   // 🔒 CRITICAL: Prevent returning users from seeing onboarding
-  const { user, refreshProfile, onboardingCompleted, initialized, completeSessionOnboarding: completeSessionOnboardingAuth } = useDashboardAuth();
+  const { user, profile, isAdmin, refreshProfile, onboardingCompleted, initialized, completeSessionOnboarding: completeSessionOnboardingAuth } = useDashboardAuth();
 
   React.useEffect(() => {
     if (initialized && onboardingCompleted) {
@@ -91,19 +91,9 @@ const Onboarding: React.FC = () => {
     try {
       // Salvar no banco apenas se o usuário estiver autenticado
       if (user) {
-        // 🔒 SECURITY: Get tenant from user context
-        const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
-
-        // 🔑 Admin detection (same logic as DashboardAuthContext)
-        const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
-        const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
-
-        // v13.1: Moved hook to top level, using authProfile from destructuring
-        const isAdmin = adminEmails.includes(user?.email?.toLowerCase() || '') || authProfile?.role === 'admin';
-
-        // 🔒 SECURITY: Admin uses default admin tenant, clients require their own tenant
+        // v14.0: Admin uses admin tenant, clients use profile?.tenant_id
         const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
-        const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
+        const tenantId = isAdmin ? ADMIN_TENANT_ID : (profile?.tenant_id || user?.id || null);
 
         await completeOnboardingDB(user.id, {
           segment: selectedCategory || 'custom_other',
@@ -124,7 +114,7 @@ const Onboarding: React.FC = () => {
         }
 
         console.log('[Onboarding] Finalizando no banco e forçando refresh...');
-        await refreshProfile(user, true);
+        await refreshProfile(user);
       }
 
       // Sempre atualiza estado local (funciona mesmo sem autenticação)
@@ -282,19 +272,9 @@ const Onboarding: React.FC = () => {
                   try {
                     const setupPromise = (async () => {
                       if (user) {
-                        // 🔒 SECURITY: Get tenant from user context
-                        const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
-
-                        // 🔑 Admin detection (same logic as DashboardAuthContext)
-                        const adminEmailsEnv = import.meta.env.VITE_ADMIN_EMAILS || 'luminnus.lia.ai@gmail.com';
-                        const adminEmails = adminEmailsEnv.split(',').map((e: string) => e.trim().toLowerCase());
-
-                        // v13.1: Use top-level authProfile
-                        const isAdmin = adminEmails.includes(user?.email?.toLowerCase() || '') || authProfile?.role === 'admin';
-
-                        // 🔒 SECURITY: Admin uses default admin tenant, clients require their own tenant
+                        // v14.0: Admin uses admin tenant, clients use profile?.tenant_id
                         const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
-                        const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
+                        const tenantId = isAdmin ? ADMIN_TENANT_ID : (profile?.tenant_id || user?.id || null);
 
                         console.log('[Onboarding] Salvando perfil no banco...');
                         await completeOnboardingDB(user.id, {
@@ -314,7 +294,7 @@ const Onboarding: React.FC = () => {
                         }
 
                         console.log('[Onboarding] Atualizando perfil local (forçado)...');
-                        await refreshProfile(user, true);
+                        await refreshProfile(user);
                       }
                       setBusinessInfo(selectedCategory || 'other', selectedDescription || 'Personalizado');
                       setModules(tempModules.length > 0 ? tempModules : ['dashboard', 'lia', 'settings']);

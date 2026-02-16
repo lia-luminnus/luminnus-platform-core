@@ -20,14 +20,11 @@ const Automations: React.FC = () => {
     const [isWizardOpen, setIsWizardOpen] = useState(false);
     const [selectedAutoId, setSelectedAutoId] = useState<string | null>(null);
 
-    const { user, isAdmin } = useDashboardAuth();
+    const { user, isAdmin, profile } = useDashboardAuth();
 
-    // 🔒 SECURITY: Get tenant from user context
-    const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
-
-    // 🔒 SECURITY: Admin uses admin tenant, clients use their own tenant_id OR user.id as fallback
+    // v14.0: Admin uses admin tenant, clients use profile.tenant_id
     const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
-    const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : user?.id || null);
+    const tenantId = isAdmin ? ADMIN_TENANT_ID : (profile?.tenant_id || user?.id || null);
 
     const API_URL = import.meta.env.VITE_API_URL || 'https://luminnus-platform-core.onrender.com';
 

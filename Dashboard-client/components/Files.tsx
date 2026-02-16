@@ -38,7 +38,7 @@ interface BreadcrumbItem {
 
 const Files: React.FC = () => {
    const { t } = useContext(LanguageContext);
-   const { user, isAdmin } = useDashboardAuth();
+   const { user, isAdmin, profile } = useDashboardAuth();
 
    // States
    const [folders, setFolders] = useState<FileFolder[]>([]);
@@ -54,11 +54,9 @@ const Files: React.FC = () => {
    const [isDeletingBatch, setIsDeletingBatch] = useState(false);
    const fileInputRef = useRef<HTMLInputElement>(null);
 
-   // 🔒 SECURITY: Get tenant from user context
-   // Prioridade: 1. metadata.tenant_id, 2. Admin UUID (se admin), 3. user.id (fallback para clientes)
-   const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
+   // v14.0: Admin uses admin tenant, clients use profile.tenant_id
    const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
-   const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : user?.id || null);
+   const tenantId = isAdmin ? ADMIN_TENANT_ID : (profile?.tenant_id || user?.id || null);
 
    // Selection Handlers
    const toggleSelect = (id: string) => {

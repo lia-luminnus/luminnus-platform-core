@@ -398,8 +398,11 @@ export function LIAProvider({ children }: LIAProviderProps) {
                         // NORMALIZATION: Ensure plan is string to prevent "Object valid as React child" crash
                         const activePlan = effectivePlanName || storedPlan;
 
+                        // v14.0: Use profile.tenant_id as primary, fallback to uId
+                        const tId = authProfile?.tenant_id || uId;
+
                         setUserId(uId);
-                        setContextTenantId(uId);
+                        setContextTenantId(tId);
                         // Apenas atualizar se tiver valor válido para não sobrescrever com null durante loading
                         if (activePlan) {
                             setPlanState(activePlan);
@@ -537,7 +540,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
             const updated = { ...prev, [scopeKey]: [...scopeMessages, message] };
             // 🔒 SECURITY: Prefix with tenantId
-            const curTenantId = (authUser as any)?.user_metadata?.tenant_id || (authUser as any)?.tenant_id || (isAdmin ? '00000000-0000-0000-0000-000000000001' : 'guest');
+            // v14.0: Use profile.tenant_id as primary
+            const curTenantId = isAdmin ? '00000000-0000-0000-0000-000000000001' : (authProfile?.tenant_id || authUser?.user_metadata?.tenant_id || authUser?.tenant_id || 'guest');
             try { localStorage.setItem(`lia_scope_${curTenantId}_${scopeKey}`, JSON.stringify(updated[scopeKey])); } catch (e) { }
             return updated;
         });
@@ -573,7 +577,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
         setMessagesByScope(prev => {
             const updated = { ...prev };
             delete updated[scopeKey];
-            const curTenantId = (authUser as any)?.user_metadata?.tenant_id || (authUser as any)?.tenant_id || (isAdmin ? '00000000-0000-0000-0000-000000000001' : 'guest');
+            // v14.0: Use profile.tenant_id as primary
+            const curTenantId = isAdmin ? '00000000-0000-0000-0000-000000000001' : (authProfile?.tenant_id || authUser?.user_metadata?.tenant_id || authUser?.tenant_id || 'guest');
             try {
                 localStorage.removeItem(`lia_scope_${curTenantId}_${scopeKey}`);
                 const legacyConversationId = getConversationIdFromScopeKey(scopeKey);
@@ -592,7 +597,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
     ) => {
         try {
             // 🔒 SECURITY: Prefix with tenantId
-            const curTenantId = (authUser as any)?.user_metadata?.tenant_id || (authUser as any)?.tenant_id || (isAdmin ? '00000000-0000-0000-0000-000000000001' : 'guest');
+            // v14.0: Use profile.tenant_id as primary
+            const curTenantId = isAdmin ? '00000000-0000-0000-0000-000000000001' : (authProfile?.tenant_id || authUser?.user_metadata?.tenant_id || authUser?.tenant_id || 'guest');
             localStorage.setItem(`lia_conversations_v4_${curTenantId}`, JSON.stringify({ conversations: convs, currentId: currentId, activeIdsByMode: activeIds }));
             const targetId = specificConvId || currentId;
             const uId = userIdRef.current;
@@ -643,7 +649,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
             }
 
             // 🔒 SECURITY: Prefix with tenantId
-            const curTenantId = (authUser as any)?.user_metadata?.tenant_id || (authUser as any)?.tenant_id || (isAdmin ? '00000000-0000-0000-0000-000000000001' : 'guest');
+            // v14.0: Use profile.tenant_id as primary
+            const curTenantId = isAdmin ? '00000000-0000-0000-0000-000000000001' : (authProfile?.tenant_id || authUser?.user_metadata?.tenant_id || authUser?.tenant_id || 'guest');
             try {
                 const legacyConversationId = getConversationIdFromScopeKey(scopeKey);
                 const stored = localStorage.getItem(`lia_scope_${curTenantId}_${scopeKey}`)

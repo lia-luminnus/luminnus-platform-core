@@ -359,10 +359,9 @@ const Integrations: React.FC = () => {
             // v2.3: Redirecionamento unificado (porta 3000 via proxy) sem prefixo /lia
             const callbackUrl = window.location.origin + '/#/integrations';
 
-            // 🔒 SECURITY: Get tenant from user context
-            const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
+            // v14.0: Admin uses admin tenant, clients use profile.tenant_id
             const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
-            const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : null);
+            const tenantId = isAdmin ? ADMIN_TENANT_ID : (profile?.tenant_id || user?.id || null);
 
             // Passamos redirect_to no state para o unificado (3000) saber para onde voltar
             const apiUrl = `${getApiUrl()}/api/auth/google?services=${selectedGoogleServices.join(',')}&user_id=${userId}&tenant_id=${tenantId || 'undefined'}&redirect_to=${encodeURIComponent(callbackUrl)}&redirect_uri=${encodeURIComponent(getApiUrl() + '/api/auth/google/callback')}`;

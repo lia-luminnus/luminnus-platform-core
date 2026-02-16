@@ -12,7 +12,7 @@ import CustomSelect from '../ui/CustomSelect';
 const WhatsAppIntegration: React.FC = () => {
     const navigate = useNavigate();
     const { t } = useContext(LanguageContext);
-    const { user, isAdmin } = useDashboardAuth();
+    const { user, isAdmin, profile } = useDashboardAuth();
 
     const [loading, setLoading] = useState(true);
 
@@ -25,12 +25,9 @@ const WhatsAppIntegration: React.FC = () => {
     const [twilioFriendlyName, setTwilioFriendlyName] = useState('');
     const [twilioPhoneNumber, setTwilioPhoneNumber] = useState('');
 
-    // 🔒 SECURITY: Get tenant from user context
-    const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
-
-    // 🔒 SECURITY: Admin uses admin tenant, clients use their own tenant_id OR user.id as fallback
+    // v14.0: Admin uses admin tenant, clients use profile.tenant_id
     const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
-    const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : user?.id || null);
+    const tenantId = isAdmin ? ADMIN_TENANT_ID : (profile?.tenant_id || user?.id || null);
 
     // 🛡️ SECURITY: Block ONLY if not admin AND no tenant - ensures no client data leakage
     if (!tenantId && !isAdmin) {
