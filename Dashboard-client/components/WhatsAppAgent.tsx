@@ -15,19 +15,16 @@ import { LIAProvider } from './lia/LIAContext';
 
 const WhatsAppAgentContent: React.FC = () => {
     const { t } = useContext(LanguageContext);
-    const { user, isAdmin } = useDashboardAuth();
+    const { user, isAdmin, profile } = useDashboardAuth();
     const [activeTab, setActiveTab] = useState<'config' | 'inbox' | 'summaries' | 'kanban' | 'audio' | 'briefings'>('config');
     const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
     const [notification, setNotification] = useState<{ message: string, type: 'success' | 'info' | 'error' } | null>(null);
     const [status, setStatus] = useState<any>(null);
     const [loadingStatus, setLoadingStatus] = useState(true);
 
-    // 🔒 SECURITY: Get tenant from user context
-    const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
-
-    // 🔒 SECURITY: Admin uses admin tenant, clients use their own tenant_id OR user.id as fallback
+    // v14.0: Use profile.tenant_id as primary, fallback to user.id
     const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
-    const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : user?.id || null);
+    const tenantId = isAdmin ? ADMIN_TENANT_ID : (profile?.tenant_id || user?.id || null);
 
     const fetchStatus = async () => {
         // 🔒 SECURITY: Block fetch if no tenant (non-admin users only)

@@ -67,16 +67,15 @@ const DashboardProvider = lazy(() =>
 
 const AppContent: React.FC = () => {
   const { t } = React.useContext(LanguageContext);
-  const { user, onboardingCompleted, loading, initialized, plan: authPlan, isAdmin } = useDashboardAuth();
+  const { user, onboardingCompleted, loading, initialized, plan: authPlan, isAdmin, profile } = useDashboardAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { resetOnboarding, planType: storePlanType } = useAppStore();
   const [updateAvailable, setUpdateAvailable] = useState<{ version?: string, force?: boolean } | null>(null);
 
-  // 🔒 SECURITY: Get tenant from user context, admin uses default admin tenant
-  const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
+  // v14.0: Admin uses admin tenant, clients use profile.tenant_id
   const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
-  const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : user?.id || null);
+  const tenantId = isAdmin ? ADMIN_TENANT_ID : (profile?.tenant_id || user?.id || null);
 
   const userPlan = (authPlan?.name?.toLowerCase() as 'start' | 'plus' | 'pro') || (storePlanType?.toLowerCase() as 'start' | 'plus' | 'pro') || 'pro';
 

@@ -31,16 +31,13 @@ const Dashboard: React.FC = () => {
   const [timeRange, setTimeRange] = useState('weekly');
   const [loading, setLoading] = useState(true);
   const [showEditor, setShowEditor] = useState(false);
-  const { user, plan: authPlan, isAdmin } = useDashboardAuth();
+  const { user, plan: authPlan, isAdmin, profile } = useDashboardAuth();
   const { planType: storePlanType } = useAppStore();
   const navigate = useNavigate();
 
-  // 🔒 SECURITY: Get tenant from user context
-  const userTenantId = (user as any)?.user_metadata?.tenant_id || (user as any)?.tenant_id || null;
-
-  // 🔒 SECURITY: Admin uses admin tenant, clients use their own tenant_id OR user.id as fallback
+  // v14.0: Admin uses admin tenant, clients use profile.tenant_id
   const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
-  const tenantId = userTenantId || (isAdmin ? ADMIN_TENANT_ID : user?.id || null);
+  const tenantId = isAdmin ? ADMIN_TENANT_ID : (profile?.tenant_id || user?.id || null);
 
   // Use authPlan from backend if available, otherwise fallback to store plan (which defaults to 'Pro')
   const userPlan = (authPlan?.name?.toLowerCase() as 'start' | 'plus' | 'pro') || (storePlanType?.toLowerCase() as 'start' | 'plus' | 'pro') || 'pro';
