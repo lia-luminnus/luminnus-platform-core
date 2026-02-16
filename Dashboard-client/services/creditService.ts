@@ -31,6 +31,7 @@ export interface CreditPackage {
     stripe_price_id: string | null;
     destaque: string | null;
     ativo: boolean;
+    ordem: number;
 }
 
 /**

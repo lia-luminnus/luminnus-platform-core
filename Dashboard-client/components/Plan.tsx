@@ -10,6 +10,8 @@ import { useCredits } from '../hooks/useCredits';
 import { supabase } from '../lib/supabase';
 import Header from './Header';
 import { toast } from 'react-hot-toast';
+import RechargeSelector from './RechargeSelector';
+import { CreditPackage } from '../services/creditService';
 
 const Plan: React.FC = () => {
    const { t } = useContext(LanguageContext);
@@ -17,6 +19,7 @@ const Plan: React.FC = () => {
    const { user, profile, plan: authPlan, setPlanName } = useDashboardAuth();
    const { subscription, invoices, loading: loadingSub } = useSubscription();
    const [isAnnual, setIsAnnual] = useState(true);
+   const [isRechargeModalOpen, setIsRechargeModalOpen] = useState(false);
    const navigate = useNavigate();
 
    // Credits system
@@ -78,6 +81,41 @@ const Plan: React.FC = () => {
             const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
             window.location.href = `${API_URL}/api/stripe/create-checkout?plan=${plan.name.toLowerCase()}&annual=${isAnnual}`;
          }, 1000);
+      }
+   };
+
+   const handlePkgSelect = async (pkg: CreditPackage) => {
+      if (!supabase) {
+         toast.error('Supabase não configurado corretamente.');
+         return;
+      }
+
+      try {
+         toast.loading(`Iniciando checkout para ${pkg.nome}...`, { id: 'checkout' });
+
+         const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+            body: {
+               priceId: pkg.stripe_price_id,
+               userId: user?.id,
+               tenantId: user?.id, // Assumindo que o userId é o tenantId no dashboard-client
+               userEmail: user?.email,
+               mode: 'payment',
+               credits: pkg.creditos,
+               successUrl: `${window.location.origin}/#/financial?checkout=success`,
+               cancelUrl: `${window.location.origin}/#/financial?checkout=canceled`,
+            },
+         });
+
+         if (error) throw error;
+
+         if (data?.url) {
+            window.location.href = data.url;
+         } else {
+            throw new Error('URL de checkout não retornada.');
+         }
+      } catch (err: any) {
+         console.error('[Plan] Erro no checkout:', err);
+         toast.error('Erro ao processar pagamento: ' + (err.message || 'Desconhecido'), { id: 'checkout' });
       }
    };
 
@@ -177,7 +215,7 @@ const Plan: React.FC = () => {
                            )}
                         </div>
                         <button
-                           onClick={() => toast('Em breve: Recarga de créditos! 🔋')}
+                           onClick={() => setIsRechargeModalOpen(true)}
                            className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#7C3AED] to-[#FF2E9E] text-white font-black text-[10px] uppercase tracking-wider hover:shadow-lg hover:shadow-brand-primary/20 transition-all active:scale-95"
                         >
                            + Recarregar
@@ -375,6 +413,13 @@ const Plan: React.FC = () => {
             </div>
 
          </div>
+
+         <RechargeSelector
+            isOpen={isRechargeModalOpen}
+            onClose={() => setIsRechargeModalOpen(false)}
+            onSelect={handlePkgSelect}
+            currentPlan={currentPlanName}
+         />
       </div>
    );
 };
