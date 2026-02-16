@@ -15,6 +15,7 @@ interface UserProfile {
     modules?: string[]; // Módulos ativados
     plan_type?: PlanType; // v9.5: Campo de plano no perfil
     role?: 'admin' | 'client'; // v6.1: Role based access
+    tenant_id?: string; // v14.0: ID do tenant real
     company_name?: string;
     company_logo_url?: string;
     company_primary_color?: string;
@@ -64,18 +65,30 @@ async function getOrCreateProfile(userId: string, email: string): Promise<UserPr
     }
 
     if (data) {
-        profileCache[userId] = data;
+        // v14.0: Buscar tenant_id vinculado na tabela tenant_members
+        const { data: memberData } = await supabase
+            .from('tenant_members')
+            .select('tenant_id')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+        const profileData = {
+            ...data,
+            tenant_id: memberData?.tenant_id || data.id // Fallback para o ID do user se não houver member
+        };
+
+        profileCache[userId] = profileData;
 
         // v9.7: Salvar no localStorage também para resiliência entre refreshes
         try {
             const cacheKey = `profile_cache_${userId}`;
             localStorage.setItem(cacheKey, JSON.stringify({
-                data,
+                data: profileData,
                 timestamp: Date.now()
             }));
         } catch (e) { console.warn('Falha ao salvar cache key', e); }
 
-        return data;
+        return profileData;
     }
 
     // 2. Se não existe, criar perfil básico (Silent Onboarding Start)
