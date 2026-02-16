@@ -133,10 +133,32 @@ const WhatsAppIntegration: React.FC = () => {
 
             const json = await res.json();
             if (json.ok) {
-                toast.success(twilioFlow === 'new_number'
-                    ? `✅ Número Twilio provisionado: ${json.data.phone_number}`
-                    : '✅ Subconta criada! Associe seu número agora.');
-                fetchTwilioStatus();
+                if (twilioFlow === 'new_number') {
+                    toast.success(`✅ Número Twilio provisionado: ${json.data.phone_number}`);
+                    fetchTwilioStatus();
+                } else {
+                    // BYON: after creating subaccount, call callback to register the phone number
+                    toast.success('✅ Subconta criada! Registrando seu número...');
+                    try {
+                        const callbackRes = await fetch(`${getApiUrl()}/api/twilio/onboard/byon/callback`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                tenant_id: tenantId,
+                                phone_number: twilioPhoneNumber,
+                            }),
+                        });
+                        const callbackJson = await callbackRes.json();
+                        if (callbackRes.ok && callbackJson.ok) {
+                            toast.success(`✅ WhatsApp conectado com ${twilioPhoneNumber}!`);
+                        } else {
+                            toast.error(`❌ Erro ao registrar número: ${callbackJson.error || 'Erro desconhecido'}`);
+                        }
+                    } catch (cbErr: any) {
+                        toast.error(`❌ Erro na finalização BYON: ${cbErr.message}`);
+                    }
+                    fetchTwilioStatus();
+                }
             } else {
                 toast.error(`❌ ${json.error || 'Erro no onboarding Twilio'}`);
             }
