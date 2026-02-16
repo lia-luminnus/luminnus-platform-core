@@ -80,8 +80,12 @@ export async function adminGate(
         const { data, error } = await supabaseAdmin.auth.getUser(token);
 
         if (error || !data?.user) {
-            console.warn(`🔒 [AdminGate] Blocked: Invalid token (trace_id: ${traceId})`);
-            res.status(403).json({ error: 'Forbidden' });
+            console.warn(`🔒 [AdminGate] Blocked: Invalid token (trace_id: ${traceId}) | Error:`, error?.message || 'No user found');
+            res.status(403).json({
+                error: 'Forbidden',
+                details: 'Invalid or expired session',
+                traceId
+            });
             return;
         }
 

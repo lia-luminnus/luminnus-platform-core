@@ -41,13 +41,13 @@ const WhatsAppAgentContent: React.FC = () => {
         try {
             // 🔒 SECURITY: Always include tenantId in API calls
             const response = await fetch(`${getApiUrl()}/api/integrations/whatsapp/status?tenantId=${tenantId}`);
-            
+
             if (!response.ok) {
                 console.error('Failed to fetch status:', response.status);
                 setStatus(null);
                 return;
             }
-            
+
             const data = await response.json().catch(() => ({}));
 
             // 🔒 SECURITY: Validate response belongs to current tenant
@@ -121,12 +121,12 @@ const WhatsAppAgentContent: React.FC = () => {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ tenant_id: tenantId })
                     });
-                    
+
                     if (!response.ok) {
                         showNotify('⚠️ Erro no webhook: resposta inválida', 'error');
                         return;
                     }
-                    
+
                     const data = await response.json().catch(() => ({ success: false, error: 'Erro ao processar resposta' }));
                     if (data.success) {
                         showNotify('✅ Webhook funcionando!', 'success');
@@ -155,6 +155,8 @@ const WhatsAppAgentContent: React.FC = () => {
         { id: 'summaries', label: t('waSummaries'), icon: 'description' }
     ];
 
+    const isOnline = ['online', 'active', 'connected'].includes(status?.status);
+
     return (
         <div className="flex flex-col h-full bg-[#f1f5f9] dark:bg-[#06080f] overflow-hidden">
             <Header title={t('whatsappAgent' as any) || 'WhatsApp (Agente)'} />
@@ -165,18 +167,18 @@ const WhatsAppAgentContent: React.FC = () => {
                     {loadingStatus ? (
                         <div className="w-20 h-6 bg-gray-200 dark:bg-white/5 animate-pulse rounded-full"></div>
                     ) : (
-                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${status?.status === 'online'
+                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${isOnline
                             ? "bg-green-500/10 text-green-500 border-green-500/20"
                             : "bg-red-500/10 text-red-500 border-red-500/20"
                             }`}>
-                            <div className={`w-2 h-2 rounded-full ${status?.status === 'online' ? 'bg-green-500' : 'bg-red-500'} ${status?.status === 'online' ? 'animate-pulse' : ''}`}></div>
+                            <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} ${isOnline ? 'animate-pulse' : ''}`}></div>
                             <span className="text-[10px] font-black uppercase tracking-widest">
-                                {status?.status === 'online' ? t('waConnected') : 'Desconectado'}
+                                {isOnline ? t('waConnected') : 'Desconectado'}
                             </span>
                         </div>
                     )}
                     <p className="text-[10px] font-bold text-gray-400 font-mono">
-                        {status && (!status.tenant_id || status.tenant_id === tenantId) 
+                        {status && (!status.tenant_id || status.tenant_id === tenantId)
                             ? (status.phone || 'Número não definido')
                             : 'Número não definido'
                         }
@@ -190,7 +192,7 @@ const WhatsAppAgentContent: React.FC = () => {
                         <span className="material-symbols-outlined text-xs">settings_ethernet</span>
                         Gerenciar Conexão
                     </button>
-                    {status?.status === 'online' ? (
+                    {isOnline ? (
                         <button
                             onClick={() => handleAction('webhook')}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-gray-300 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5 transition-all text-brand-primary font-black"
@@ -207,25 +209,27 @@ const WhatsAppAgentContent: React.FC = () => {
                         </button>
                     )}
                 </div>
-            </div>
+            </div >
 
             {/* Banner de Erro/CTA */}
-            {!loadingStatus && status?.status !== 'online' && (
-                <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-2.5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-amber-500 text-lg">warning</span>
-                        <p className="text-[11px] font-bold text-amber-700 dark:text-amber-500">
-                            Integração Pendente: Seu agente não pode responder mensagens até que a conexão seja configurada.
-                        </p>
+            {
+                !loadingStatus && !isOnline && (
+                    <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-2.5 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <span className="material-symbols-outlined text-amber-500 text-lg">warning</span>
+                            <p className="text-[11px] font-bold text-amber-700 dark:text-amber-500">
+                                Integração Pendente: Seu agente não pode responder mensagens até que a conexão seja configurada.
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => handleAction('hub')}
+                            className="text-[10px] font-black text-amber-700 dark:text-amber-500 underline underline-offset-4 hover:opacity-70"
+                        >
+                            IR PARA HUB DE INTEGRAÇÕES
+                        </button>
                     </div>
-                    <button
-                        onClick={() => handleAction('hub')}
-                        className="text-[10px] font-black text-amber-700 dark:text-amber-500 underline underline-offset-4 hover:opacity-70"
-                    >
-                        IR PARA HUB DE INTEGRAÇÕES
-                    </button>
-                </div>
-            )}
+                )
+            }
 
             {/* Sub-menu Interno */}
             <div className="px-6 pt-1 border-b border-gray-200 dark:border-white/5 bg-white dark:bg-[#07090e] shadow-sm transition-colors">
@@ -292,7 +296,7 @@ const WhatsAppAgentContent: React.FC = () => {
                     )}
                 </AnimatePresence>
             </div>
-        </div>
+        </div >
     );
 };
 
