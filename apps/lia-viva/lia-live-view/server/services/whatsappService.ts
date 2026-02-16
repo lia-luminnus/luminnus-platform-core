@@ -22,7 +22,7 @@ export const WhatsAppService = {
      */
     async getCredentials(tenantId: string): Promise<MetaCredentials | null> {
         try {
-            const connection = await WhatsAppRepository.getConnection(tenantId, 'meta');
+            const connection = await WhatsAppRepository.getActiveConnection(tenantId);
             if (!connection) return null;
             return connection.config_json as unknown as MetaCredentials;
         } catch (err) {

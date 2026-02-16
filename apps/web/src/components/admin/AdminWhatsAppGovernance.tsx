@@ -4,7 +4,7 @@ import {
     Users, MessageCircle, AlertCircle, RefreshCw,
     Search, Shield, Activity, Globe, Save,
     CheckCircle2, XCircle, Info, ChevronRight,
-    ShieldCheck, Smartphone, Settings
+    ShieldCheck, Smartphone, Settings, Phone
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { apiUrl } from "@/lib/api";
 
 /**
- * AdminWhatsAppGovernance
+ * AdminWhatsAppGovernance — Twilio BYON Edition
+ * Painel admin para gerenciar integrações WhatsApp via Twilio
  */
 const AdminWhatsAppGovernance = () => {
     const { session } = useAuth();
@@ -26,13 +27,10 @@ const AdminWhatsAppGovernance = () => {
     const [initialLoading, setInitialLoading] = useState(true);
     const [search, setSearch] = useState("");
 
-    // Platform Settings State
+    // Platform Settings State (Twilio BYON model — only webhook config)
     const [platformConfig, setPlatformConfig] = useState({
-        phoneNumberId: "",
-        wabaId: "",
-        accessToken: "",
         verifyToken: "",
-        webhookUrl: "https://api.luminnus.ai/api/whatsapp/webhook"
+        webhookUrl: "https://api.luminnus.ai/api/twilio/webhook"
     });
 
     const [overview, setOverview] = useState({
@@ -62,7 +60,10 @@ const AdminWhatsAppGovernance = () => {
                 }
                 const data = await response.json();
                 if (data.config) {
-                    setPlatformConfig(data.config);
+                    setPlatformConfig({
+                        verifyToken: data.config.verifyToken || '',
+                        webhookUrl: data.config.webhookUrl || 'https://api.luminnus.ai/api/twilio/webhook'
+                    });
                 }
             } catch (error) {
                 console.error('❌ Error fetching config:', error);
@@ -202,7 +203,7 @@ const AdminWhatsAppGovernance = () => {
 
     return (
         <div className="space-y-6">
-            {/* Header Summary */}
+            {/* Header Summary KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <Card className="bg-emerald-500/10 border-emerald-500/20">
                     <CardContent className="p-4 flex items-center gap-4">
@@ -210,7 +211,7 @@ const AdminWhatsAppGovernance = () => {
                             <Users size={20} />
                         </div>
                         <div>
-                            <p className="text-xs font-bold text-emerald-600/60 uppercase">Total de Clientes</p>
+                            <p className="text-xs font-bold text-emerald-600/60 uppercase">Tenants Conectados</p>
                             <h3 className="text-2xl font-black text-emerald-700">{overview.totalTenants}</h3>
                         </div>
                     </CardContent>
@@ -240,30 +241,30 @@ const AdminWhatsAppGovernance = () => {
                     </CardContent>
                 </Card>
 
-                <Card className="bg-amber-500/10 border-amber-500/20">
-                    <CardContent className="p-4 flex items-center gap-4">
-                        <div className="p-3 bg-amber-500/20 rounded-xl text-amber-500">
-                            <MessageCircle size={20} />
-                        </div>
-                        <div>
-                            <p className="text-xs font-bold text-amber-600/60 uppercase">Mgs Hoje (Meta)</p>
-                            <h3 className="text-2xl font-black text-amber-700">{overview.messagesToday}</h3>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {twilioOverview && (
+                {twilioOverview ? (
                     <Card className="bg-purple-500/10 border-purple-500/20">
                         <CardContent className="p-4 flex items-center gap-4">
                             <div className="p-3 bg-purple-500/20 rounded-xl text-purple-500">
                                 <Smartphone size={20} />
                             </div>
                             <div>
-                                <p className="text-xs font-bold text-purple-600/60 uppercase">Twilio Master Balance</p>
+                                <p className="text-xs font-bold text-purple-600/60 uppercase">Twilio Balance</p>
                                 <h3 className="text-2xl font-black text-purple-700">
                                     {twilioOverview.master_balance?.currency === 'USD' ? '$' : ''}
                                     {twilioOverview.master_balance?.balance || '0.00'}
                                 </h3>
+                            </div>
+                        </CardContent>
+                    </Card>
+                ) : (
+                    <Card className="bg-amber-500/10 border-amber-500/20">
+                        <CardContent className="p-4 flex items-center gap-4">
+                            <div className="p-3 bg-amber-500/20 rounded-xl text-amber-500">
+                                <MessageCircle size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-amber-600/60 uppercase">Mensagens Hoje</p>
+                                <h3 className="text-2xl font-black text-amber-700">{overview.messagesToday}</h3>
                             </div>
                         </CardContent>
                     </Card>
@@ -274,17 +275,17 @@ const AdminWhatsAppGovernance = () => {
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-3 bg-slate-900/50 border border-white/10">
                     <TabsTrigger value="tenants" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white uppercase text-[10px] font-black tracking-widest">
-                        <Globe className="w-4 h-4 mr-2" /> Meta Cloud (Clientes)
+                        <Phone className="w-4 h-4 mr-2" /> Conexões WhatsApp
                     </TabsTrigger>
                     <TabsTrigger value="twilio" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white uppercase text-[10px] font-black tracking-widest">
                         <Smartphone className="w-4 h-4 mr-2" /> Ecossistema Twilio
                     </TabsTrigger>
                     <TabsTrigger value="settings" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white uppercase text-[10px] font-black tracking-widest">
-                        <Shield className="w-4 h-4 mr-2" /> Configuração da Plataforma
+                        <Shield className="w-4 h-4 mr-2" /> Configuração
                     </TabsTrigger>
                 </TabsList>
 
-                {/* Tab: Tenant Governance */}
+                {/* Tab: Tenant Connections */}
                 <TabsContent value="tenants" className="space-y-4 pt-4">
                     <div className="flex items-center gap-4 mb-4">
                         <div className="relative flex-1">
@@ -296,8 +297,8 @@ const AdminWhatsAppGovernance = () => {
                                 onChange={(e) => setSearch(e.target.value)}
                             />
                         </div>
-                        <Button variant="outline" size="sm" className="border-white/10 text-xs">
-                            <RefreshCw className="w-3 h-3 mr-2" /> Atualizar Tudo
+                        <Button variant="outline" size="sm" className="border-white/10 text-xs" onClick={() => fetchTenants()}>
+                            <RefreshCw className="w-3 h-3 mr-2" /> Atualizar
                         </Button>
                     </div>
 
@@ -305,8 +306,9 @@ const AdminWhatsAppGovernance = () => {
                         <table className="w-full text-left text-sm">
                             <thead className="bg-white/5 uppercase text-[10px] font-black tracking-widest text-gray-400">
                                 <tr>
-                                    <th className="px-6 py-4">Empresa / ID</th>
+                                    <th className="px-6 py-4">Tenant / ID</th>
                                     <th className="px-6 py-4">Número</th>
+                                    <th className="px-6 py-4">Provider</th>
                                     <th className="px-6 py-4">Status</th>
                                     <th className="px-6 py-4">Qualidade</th>
                                     <th className="px-6 py-4">Webhook</th>
@@ -321,6 +323,15 @@ const AdminWhatsAppGovernance = () => {
                                             <div className="text-[10px] text-gray-500 font-mono tracking-tighter">{tenant.id}</div>
                                         </td>
                                         <td className="px-6 py-4 text-gray-400 font-mono text-xs">{tenant.phone}</td>
+                                        <td className="px-6 py-4">
+                                            <Badge variant="outline" className={
+                                                tenant.provider === 'twilio'
+                                                    ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                                                    : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                                            }>
+                                                {tenant.provider === 'twilio' ? 'Twilio' : 'Meta'}
+                                            </Badge>
+                                        </td>
                                         <td className="px-6 py-4">
                                             <Badge variant="outline" className={tenant.status === 'online' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-slate-500/10 text-slate-400 border-slate-500/20"}>
                                                 {tenant.status === 'online' ? 'Online' : 'Offline'}
@@ -353,6 +364,13 @@ const AdminWhatsAppGovernance = () => {
                                         </td>
                                     </tr>
                                 ))}
+                                {tenants.length === 0 && (
+                                    <tr>
+                                        <td colSpan={7} className="px-6 py-12 text-center text-gray-500 italic">
+                                            Nenhuma conexão WhatsApp encontrada.
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -461,23 +479,23 @@ const AdminWhatsAppGovernance = () => {
                     </div>
                 </TabsContent>
 
-                {/* Tab: Platform Configuration */}
+                {/* Tab: Platform Configuration (Twilio BYON) */}
                 <TabsContent value="settings" className="space-y-6 pt-4">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <Card className="bg-slate-900/30 border-white/10 shadow-xl">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-white">
                                     <ShieldCheck className="text-indigo-400" />
-                                    Segurança & Protocolo
+                                    Webhook & Segurança
                                 </CardTitle>
                                 <CardDescription>
-                                    Configurações de validação para o Webhook LIA
+                                    Configurações do webhook Twilio para a plataforma LIA
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl mb-4">
-                                    <p className="text-xs text-indigo-300 leading-relaxed font-bold">
-                                        Status BYO (Bring Your Own): As credenciais de envio (Token/WABA) agora são gerenciadas individualmente por cada cliente no Hub de Integrações.
+                                <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl mb-4">
+                                    <p className="text-xs text-purple-300 leading-relaxed font-bold">
+                                        🔐 Modelo BYON (Bring Your Own Number): Cada cliente usa sua própria subconta Twilio. O admin gerencia apenas configurações globais de webhook.
                                     </p>
                                 </div>
 
@@ -489,7 +507,18 @@ const AdminWhatsAppGovernance = () => {
                                         placeholder="Token de verificação do Webhook"
                                         className="bg-slate-900/50 border-white/10 font-mono text-sm h-11"
                                     />
-                                    <p className="text-[9px] text-gray-500 uppercase tracking-widest">Este valor deve ser o mesmo configurado no painel da Meta para validar o Webhook.</p>
+                                    <p className="text-[9px] text-gray-500 uppercase tracking-widest">Token compartilhado para validar webhooks de entrada.</p>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Webhook URL</label>
+                                    <Input
+                                        value={platformConfig.webhookUrl}
+                                        onChange={(e) => setPlatformConfig({ ...platformConfig, webhookUrl: e.target.value })}
+                                        placeholder="URL do webhook Twilio"
+                                        className="bg-slate-900/50 border-white/10 font-mono text-sm h-11"
+                                    />
+                                    <p className="text-[9px] text-gray-500 uppercase tracking-widest">URL onde o Twilio envia eventos das subcontas.</p>
                                 </div>
 
                                 <div className="pt-4 flex justify-end">
@@ -499,7 +528,7 @@ const AdminWhatsAppGovernance = () => {
                                         disabled={loading}
                                     >
                                         {loading ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                                        Salvar Configuração
+                                        Salvar
                                     </Button>
                                 </div>
                             </CardContent>
@@ -511,19 +540,26 @@ const AdminWhatsAppGovernance = () => {
                                     <Smartphone size={120} />
                                 </div>
                                 <CardHeader>
-                                    <CardTitle className="text-white text-lg">Webhook Endpoint</CardTitle>
+                                    <CardTitle className="text-white text-lg">Twilio Master Account</CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
-                                    <p className="text-sm text-gray-400">O URL de recepção de eventos da Meta deve apontar para:</p>
-                                    <div className="p-3 bg-black/40 rounded-lg border border-white/10 font-mono text-xs text-indigo-400 select-all">
-                                        {platformConfig.webhookUrl}
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-3 h-3 rounded-full ${twilioOverview?.master_healthy ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                                        <span className="text-sm font-bold text-white">
+                                            {twilioOverview?.master_healthy ? 'Master Account Online' : twilioOverview ? 'Master Account Error' : 'Verificando...'}
+                                        </span>
                                     </div>
+                                    {twilioOverview?.account_sid && (
+                                        <div className="p-3 bg-black/40 rounded-lg border border-white/10 font-mono text-xs text-purple-400 select-all">
+                                            SID: {twilioOverview.account_sid}
+                                        </div>
+                                    )}
 
                                     <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl flex gap-3">
                                         <Info className="text-amber-500 shrink-0" size={18} />
                                         <p className="text-[11px] text-amber-500/80 leading-relaxed">
-                                            Lembre-se de configurar o <strong>Verify Token</strong> no painel de desenvolvedores do Facebook
-                                            para corresponder ao valor definido no servidor LIA Core.
+                                            As credenciais Twilio (Account SID, Auth Token, API Keys) são configuradas via <strong>variáveis de ambiente</strong> no servidor.
+                                            Nunca exponha tokens diretamente no painel.
                                         </p>
                                     </div>
                                 </CardContent>
@@ -531,26 +567,34 @@ const AdminWhatsAppGovernance = () => {
 
                             <Card className="bg-slate-900/30 border-white/10">
                                 <CardHeader className="py-4">
-                                    <CardTitle className="text-sm">Status da Conexão</CardTitle>
+                                    <CardTitle className="text-sm">Status da Plataforma</CardTitle>
                                 </CardHeader>
-                                <CardContent className="pb-6">
-                                    {platformConfig.phoneNumberId && platformConfig.accessToken ? (
-                                        <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                                <span className="text-xs font-bold text-emerald-400 uppercase">API Online</span>
-                                            </div>
-                                            <span className="text-[10px] text-emerald-500/60 font-mono">META_v19.0</span>
+                                <CardContent className="pb-6 space-y-3">
+                                    {/* Twilio Status */}
+                                    <div className={`flex items-center justify-between p-3 rounded-lg ${twilioOverview?.master_healthy
+                                        ? 'bg-emerald-500/5 border border-emerald-500/20'
+                                        : 'bg-red-500/5 border border-red-500/20 opacity-60'}`}>
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-2 h-2 rounded-full ${twilioOverview?.master_healthy ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+                                            <span className={`text-xs font-bold uppercase ${twilioOverview?.master_healthy ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                {twilioOverview?.master_healthy ? 'Twilio Online' : 'Twilio Offline'}
+                                            </span>
                                         </div>
-                                    ) : (
-                                        <div className="flex items-center justify-between p-3 rounded-lg bg-red-500/5 border border-red-500/20 opacity-60">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-2 h-2 rounded-full bg-red-500" />
-                                                <span className="text-xs font-bold text-red-400 uppercase">Desconectado</span>
-                                            </div>
-                                            <span className="text-[10px] text-red-500/60 font-mono">AGUARDANDO CONFIG</span>
+                                        <span className="text-[10px] text-gray-500/60 font-mono">TWILIO_BYON</span>
+                                    </div>
+
+                                    {/* Encryption Status */}
+                                    <div className={`flex items-center justify-between p-3 rounded-lg ${twilioOverview?.encryption_ok
+                                        ? 'bg-emerald-500/5 border border-emerald-500/20'
+                                        : 'bg-amber-500/5 border border-amber-500/20 opacity-60'}`}>
+                                        <div className="flex items-center gap-3">
+                                            <ShieldCheck size={14} className={twilioOverview?.encryption_ok ? 'text-emerald-400' : 'text-amber-400'} />
+                                            <span className={`text-xs font-bold uppercase ${twilioOverview?.encryption_ok ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                                {twilioOverview?.encryption_ok ? 'Encryption OK' : 'Encryption N/A'}
+                                            </span>
                                         </div>
-                                    )}
+                                        <span className="text-[10px] text-gray-500/60 font-mono">AES-256</span>
+                                    </div>
                                 </CardContent>
                             </Card>
                         </div>

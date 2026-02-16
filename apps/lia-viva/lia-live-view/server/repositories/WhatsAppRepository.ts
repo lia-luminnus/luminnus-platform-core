@@ -44,6 +44,35 @@ export const WhatsAppRepository = {
         return data || null;
     },
 
+    /**
+     * Get the first active connection for a tenant, regardless of provider.
+     * Prefers 'active' or 'connected' status. Falls back to any connection.
+     */
+    async getActiveConnection(tenantId: string) {
+        // Try active/connected first
+        const { data: active, error: activeErr } = await supabase
+            .from('whatsapp_connections')
+            .select('*')
+            .eq('tenant_id', tenantId)
+            .in('status', ['active', 'connected'])
+            .limit(1)
+            .maybeSingle();
+
+        if (activeErr && activeErr.code !== 'PGRST116') throw activeErr;
+        if (active) return active;
+
+        // Fallback: any connection for this tenant
+        const { data: any_conn, error: anyErr } = await supabase
+            .from('whatsapp_connections')
+            .select('*')
+            .eq('tenant_id', tenantId)
+            .limit(1)
+            .maybeSingle();
+
+        if (anyErr && anyErr.code !== 'PGRST116') throw anyErr;
+        return any_conn || null;
+    },
+
     async upsertConnection(connection: any) {
         const { data, error } = await supabase
             .from('whatsapp_connections')

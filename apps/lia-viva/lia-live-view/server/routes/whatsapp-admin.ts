@@ -233,11 +233,12 @@ router.get('/tenants', adminGate, async (req: Request, res: Response) => {
             id: conn.tenant_id,
             name: conn.tenant_id, // Could be joined with profiles/tenants table
             phone: maskPhoneNumber(conn.phone_number || ''),
+            provider: conn.provider || 'meta',
             status: conn.status === 'active' || conn.status === 'connected' ? 'online' : 'offline',
             quality: conn.status === 'error' ? 'red' : 'green',
             webhook: conn.status === 'error' ? 'error' : 'connected',
             lastWebhook: conn.updated_at,
-            configured: !!(conn.config_json?.phone_number_id && conn.config_json?.access_token)
+            configured: !!(conn.config_json?.phone_number_id && conn.config_json?.access_token) || conn.provider === 'twilio'
         }));
 
         // Filter by search if provided

@@ -447,7 +447,7 @@ Responda de forma direta, clara e profissional, pronta para ser colada no editor
     async getIntegrationStatus(req: Request, res: Response) {
         try {
             const tenantId = (req.query.tenantId || req.headers['x-tenant-id']) as string;
-            const connection = await WhatsAppRepository.getConnection(tenantId, 'meta');
+            const connection = await WhatsAppRepository.getActiveConnection(tenantId);
 
             if (!connection) {
                 return this.handleSuccess(res, {
@@ -468,6 +468,7 @@ Responda de forma direta, clara e profissional, pronta para ser colada no editor
                 tenant_id: tenantId,
                 connected: connection.status === 'active' || connection.status === 'connected',
                 status: connection.status || 'disconnected',
+                provider: connection.provider || 'unknown',
                 phone_masked: phoneMasked,
                 waba_id: connection.config_json?.waba_id ? '****' + connection.config_json.waba_id.slice(-4) : null,
                 last_webhook_at: connection.updated_at,
@@ -523,7 +524,7 @@ Responda de forma direta, clara e profissional, pronta para ser colada no editor
     async testWebhookIntegration(req: Request, res: Response) {
         try {
             const { tenant_id } = req.body;
-            const connection = await WhatsAppRepository.getConnection(tenant_id, 'meta');
+            const connection = await WhatsAppRepository.getActiveConnection(tenant_id);
 
             if (!connection?.config_json?.phone_number_id) {
                 return this.handleBadRequest(res, 'Integração não configurada');
