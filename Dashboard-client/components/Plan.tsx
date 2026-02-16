@@ -23,7 +23,7 @@ const Plan: React.FC = () => {
    const navigate = useNavigate();
 
    // Credits system
-   const tenantId = user?.id || null;
+   const tenantId = profile?.tenant_id || user?.id || null;
    const { balance, percentual, isLow, isCritical, isExceeded, loading: loadingCredits } = useCredits({ tenantId });
 
    // Usar plan_name do subscription (Supabase) como fonte primária, com fallback para authPlan
