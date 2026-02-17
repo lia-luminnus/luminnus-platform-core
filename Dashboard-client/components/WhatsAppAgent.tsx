@@ -152,7 +152,7 @@ const WhatsAppAgentContent: React.FC = () => {
         { id: 'summaries', label: t('waSummaries'), icon: 'description' }
     ];
 
-    const isOnline = ['online', 'active', 'connected'].includes(status?.status);
+    const isOnline = status?.connected === true || ['online', 'active', 'connected'].includes(status?.status);
 
     return (
         <div className="flex flex-col h-full bg-[#f1f5f9] dark:bg-[#06080f] overflow-hidden">
@@ -176,7 +176,7 @@ const WhatsAppAgentContent: React.FC = () => {
                     )}
                     <p className="text-[10px] font-bold text-gray-400 font-mono">
                         {status && (!status.tenant_id || status.tenant_id === tenantId)
-                            ? (status.phone || 'Número não definido')
+                            ? (status.phone_masked || status.phone || 'Número não definido')
                             : 'Número não definido'
                         }
                     </p>
@@ -209,24 +209,22 @@ const WhatsAppAgentContent: React.FC = () => {
             </div >
 
             {/* Banner de Erro/CTA */}
-            {
-                !loadingStatus && !isOnline && (
-                    <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-2.5 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined text-amber-500 text-lg">warning</span>
-                            <p className="text-[11px] font-bold text-amber-700 dark:text-amber-500">
-                                Integração Pendente: Seu agente não pode responder mensagens até que a conexão seja configurada.
-                            </p>
-                        </div>
-                        <button
-                            onClick={() => handleAction('hub')}
-                            className="text-[10px] font-black text-amber-700 dark:text-amber-500 underline underline-offset-4 hover:opacity-70"
-                        >
-                            IR PARA HUB DE INTEGRAÇÕES
-                        </button>
+            {!loadingStatus && !isOnline && (
+                <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-2.5 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-amber-500 text-lg">warning</span>
+                        <p className="text-[11px] font-bold text-amber-700 dark:text-amber-500">
+                            Integração Pendente: Seu agente não pode responder mensagens até que a conexão seja configurada.
+                        </p>
                     </div>
-                )
-            }
+                    <button
+                        onClick={() => handleAction('hub')}
+                        className="text-[10px] font-black text-amber-700 dark:text-amber-500 underline underline-offset-4 hover:opacity-70"
+                    >
+                        IR PARA HUB DE INTEGRAÇÕES
+                    </button>
+                </div>
+            )}
 
             {/* Sub-menu Interno */}
             <div className="px-6 pt-1 border-b border-gray-200 dark:border-white/5 bg-white dark:bg-[#07090e] shadow-sm transition-colors">
