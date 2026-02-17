@@ -10,6 +10,7 @@ import WhatsAppKanban from './whatsapp/WhatsAppKanban.tsx';
 import WhatsAppAudioInbox from './whatsapp/WhatsAppAudioInbox.tsx';
 import WhatsAppBriefingConfig from './whatsapp/WhatsAppBriefingConfig.tsx';
 import { getApiUrl } from '../config/api';
+import { supabase } from '../lib/supabase';
 
 import { LIAProvider } from './lia/LIAContext';
 
@@ -26,6 +27,46 @@ const WhatsAppAgentContent: React.FC = () => {
     const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
     const tenantId = isAdmin ? ADMIN_TENANT_ID : (profile?.tenant_id || user?.id || null);
 
+    /**
+     * v15.1: Frontend fallback — if backend says disconnected,
+     * check twilio_subaccounts directly via Supabase for active numbers.
+     */
+    const checkTwilioFallback = async (): Promise<any | null> => {
+        if (!supabase || !tenantId) return null;
+        try {
+            const { data, error } = await supabase
+                .from('twilio_subaccounts')
+                .select('twilio_phone_number, onboarding_status, twilio_account_sid')
+                .eq('tenant_id', tenantId)
+                .eq('onboarding_status', 'active')
+                .limit(1)
+                .maybeSingle();
+
+            if (error || !data?.twilio_phone_number) return null;
+
+            const phone = data.twilio_phone_number;
+            const phoneMasked = phone.length > 6
+                ? phone.slice(0, 4) + '*'.repeat(phone.length - 6) + phone.slice(-2)
+                : phone;
+
+            console.log(`[WhatsAppAgent] ✅ Fallback: Twilio ativo encontrado → ${phoneMasked}`);
+            return {
+                tenant_id: tenantId,
+                connected: true,
+                status: 'active',
+                provider: 'twilio',
+                phone_masked: phoneMasked,
+                phone: phone,
+                last_webhook_at: null,
+                last_error: null,
+                _source: 'twilio_fallback'
+            };
+        } catch (err) {
+            console.warn('[WhatsAppAgent] Twilio fallback error:', err);
+            return null;
+        }
+    };
+
     const fetchStatus = async () => {
         // 🔒 SECURITY: Block fetch if no tenant (non-admin users only)
         if (!tenantId) {
@@ -41,6 +82,9 @@ const WhatsAppAgentContent: React.FC = () => {
 
             if (!response.ok) {
                 console.error('Failed to fetch status:', response.status);
+                // v15.1: Try Twilio fallback even when backend fails
+                const fallback = await checkTwilioFallback();
+                if (fallback) { setStatus(fallback); return; }
                 setStatus(null);
                 return;
             }
@@ -54,12 +98,28 @@ const WhatsAppAgentContent: React.FC = () => {
                     setStatus(null);
                     return;
                 }
+
+                // v15.1: If backend says disconnected, try Twilio fallback
+                if (!data.data.connected && data.data.status === 'disconnected') {
+                    const fallback = await checkTwilioFallback();
+                    if (fallback) {
+                        setStatus(fallback);
+                        return;
+                    }
+                }
+
                 setStatus(data.data);
             } else {
+                // v15.1: Backend returned no data, try Twilio fallback
+                const fallback = await checkTwilioFallback();
+                if (fallback) { setStatus(fallback); return; }
                 setStatus(null);
             }
         } catch (err) {
             console.error('Failed to fetch status:', err);
+            // v15.1: Network error — try Twilio fallback
+            const fallback = await checkTwilioFallback();
+            if (fallback) { setStatus(fallback); return; }
             setStatus(null);
         } finally {
             setLoadingStatus(false);
