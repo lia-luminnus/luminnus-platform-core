@@ -603,18 +603,47 @@ class BackendService {
 
     /**
      * Salva configurações do Agente WhatsApp
+     * v15.1: Fallback direto via Supabase se o backend falhar
      */
     async saveWhatsAppSettings(settings: any): Promise<boolean> {
+        const { tenantId, headers } = this.getAuthContext();
+
+        // 1. Tentar via backend primeiro
         try {
-            const { tenantId, headers } = this.getAuthContext();
             const response = await fetch(`${BACKEND_URL}/api/whatsapp/settings`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({ ...settings, tenant_id: tenantId })
             });
-            return response.ok;
+            if (response.ok) return true;
+            console.warn('⚠️ Backend save failed (' + response.status + '), trying Supabase direct...');
         } catch (error) {
-            console.error('❌ Erro ao salvar settings do WhatsApp:', error);
+            console.warn('⚠️ Backend unreachable for save, trying Supabase direct...', error);
+        }
+
+        // 2. Fallback: salvar direto via Supabase
+        try {
+            const { supabase: sbClient } = await import('../../../lib/supabase');
+            if (!sbClient || !tenantId) return false;
+
+            const { error } = await sbClient
+                .from('whatsapp_agent_settings')
+                .upsert({
+                    tenant_id: tenantId,
+                    profile_json: settings.profile_json || {},
+                    playbooks_json: settings.playbooks_json || [],
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'tenant_id' });
+
+            if (error) {
+                console.error('❌ Supabase direct save failed:', error);
+                return false;
+            }
+
+            console.log('✅ Settings saved via Supabase direct fallback');
+            return true;
+        } catch (fbError) {
+            console.error('❌ Erro ao salvar settings do WhatsApp (ambos falharam):', fbError);
             return false;
         }
     }
