@@ -162,19 +162,19 @@ const WhatsAppAgentContent: React.FC = () => {
                     {loadingStatus ? (
                         <div className="w-20 h-6 bg-gray-200 dark:bg-white/5 animate-pulse rounded-full"></div>
                     ) : (
-                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${status?.status === 'online'
+                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${status?.connected === true
                             ? "bg-green-500/10 text-green-500 border-green-500/20"
                             : "bg-red-500/10 text-red-500 border-red-500/20"
                             }`}>
-                            <div className={`w-2 h-2 rounded-full ${status?.status === 'online' ? 'bg-green-500' : 'bg-red-500'} ${status?.status === 'online' ? 'animate-pulse' : ''}`}></div>
+                            <div className={`w-2 h-2 rounded-full ${status?.connected === true ? 'bg-green-500' : 'bg-red-500'} ${status?.connected === true ? 'animate-pulse' : ''}`}></div>
                             <span className="text-[10px] font-black uppercase tracking-widest">
-                                {status?.status === 'online' ? t('waConnected') : 'Desconectado'}
+                                {status?.connected === true ? t('waConnected') : 'Desconectado'}
                             </span>
                         </div>
                     )}
                     <p className="text-[10px] font-bold text-gray-400 font-mono">
                         {status && (!status.tenant_id || status.tenant_id === tenantId)
-                            ? (status.phone || 'Número não definido')
+                            ? (status.phone_masked || status.phone || 'Número não definido')
                             : 'Número não definido'
                         }
                     </p>
@@ -187,7 +187,7 @@ const WhatsAppAgentContent: React.FC = () => {
                         <span className="material-symbols-outlined text-xs">settings_ethernet</span>
                         Gerenciar Conexão
                     </button>
-                    {status?.status === 'online' ? (
+                    {status?.connected === true ? (
                         <button
                             onClick={() => handleAction('webhook')}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-gray-300 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5 transition-all text-brand-primary font-black"
@@ -207,7 +207,7 @@ const WhatsAppAgentContent: React.FC = () => {
             </div>
 
             {/* Banner de Erro/CTA */}
-            {!loadingStatus && status?.status !== 'online' && (
+            {!loadingStatus && status?.connected !== true && (
                 <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-2.5 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <span className="material-symbols-outlined text-amber-500 text-lg">warning</span>
