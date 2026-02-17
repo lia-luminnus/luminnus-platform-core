@@ -2,6 +2,7 @@ import { GeminiService } from './geminiService.js';
 import { processarRequisicaoMultimodal } from './multimodalOrchestrator.js';
 import { runGemini } from '../assistants/gemini.js';
 import { CostTracker } from './costTracker.js';
+import { OpenRouterService } from './openRouterService.js';
 import { OpenAIService } from './openAIService.js';
 import { FileService } from './fileService.js';
 import { OutputFormatter } from './outputFormatter.js';
@@ -212,6 +213,13 @@ Detectei que você quer **${effectiveRequest.action.replace('_', ' ')}**. Esta e
                 } catch (e) {
                     console.warn('⚠️ [AIRouter] Erro ao carregar contexto mem:', e);
                 }
+            }
+
+            // v3.5: Roteamento para MiniMax 2.5 (tarefas complexas sem arquivos)
+            const isComplexTask = this.isComplexTask(req.prompt);
+            if (isComplexTask && !hasFiles && OpenRouterService.isConfigured()) {
+                console.log('🧠 [AIRouter] Roteando para MiniMax 2.5 (tarefa complexa)');
+                return await this.complexTaskPipeline(req);
             }
 
             if (hasFiles) {
@@ -539,5 +547,71 @@ Detectei que você quer **${effectiveRequest.action.replace('_', ' ')}**. Esta e
             model: 'gpt-4o-mini',
             usage: response.usage
         };
+    }
+
+    /**
+     * Detecta se uma tarefa é complexa o suficiente para MiniMax 2.5
+     * Patterns: análise de dados, JSON, planilhas, documentos, raciocínio longo
+     */
+    private static isComplexTask(prompt: string): boolean {
+        const complexPatterns = [
+            /(?:analis[ae]|extrair?|processar?)\s+(?:dados|documento|planilha|tabela)/i,
+            /(?:gerar?|criar?)\s+(?:json|csv|xlsx|relatório|planilha)/i,
+            /(?:organizar?|estruturar?)\s+(?:dados|informações)/i,
+            /(?:comparar?|cruzar?)\s+(?:dados|documentos|planilhas)/i,
+            /(?:resumir?|sintetizar?)\s+(?:documento|contrato|relatório)\s+(?:longo|extenso|grande)/i,
+        ];
+        return complexPatterns.some(p => p.test(prompt));
+    }
+
+    /**
+     * Pipeline MiniMax 2.5 (tarefas complexas via OpenRouter)
+     * Ideal para: análise de documentos, extração JSON, raciocínio longo
+     */
+    private static async complexTaskPipeline(req: AIRequest): Promise<AIResponse> {
+        console.log('[AIRouter] Pipeline Complexo: MiniMax 2.5 via OpenRouter');
+
+        try {
+            const response = await OpenRouterService.chat(
+                req.prompt,
+                req.history || [],
+                'minimax/minimax-m2.5',
+                req.tools
+            );
+
+            // Se tiver function_calls, retornar para o orquestrador
+            if (response.function_calls && response.function_calls.length > 0) {
+                return {
+                    text: response.text,
+                    function_call: response.function_call,
+                    provider: 'openrouter',
+                    model: 'minimax/minimax-m2.5'
+                };
+            }
+
+            await CostTracker.logUsage({
+                userId: req.userId,
+                tenantId: req.tenantId,
+                provider: 'openrouter',
+                model: 'minimax/minimax-m2.5',
+                inputTokens: response.usage?.inputTokens || 0,
+                outputTokens: response.usage?.outputTokens || 0,
+                toolCallsCount: 0,
+                fileCount: 0,
+                totalBytes: 0,
+                durationMs: response.durationMs || 0,
+                status: 'success'
+            });
+
+            return {
+                text: response.text,
+                provider: 'openrouter',
+                model: 'minimax/minimax-m2.5',
+                usage: response.usage
+            };
+        } catch (error: any) {
+            console.warn(`⚠️ [AIRouter] MiniMax falhou, fallback para GPT-4o-mini: ${error.message}`);
+            return await this.chatPipeline(req);
+        }
     }
 }
