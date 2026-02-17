@@ -6,19 +6,29 @@ import { CreditAlertService } from './creditAlertService.js';
 // Maps each action type to its credit cost
 // ============================================================
 export const CREDIT_COSTS: Record<string, number> = {
-    message: 1,           // 1 crédito por mensagem
+    message: 1,           // 1 crédito por mensagem (base, multiplicado pelo modelo)
     voice_min: 5,         // 5 créditos por minuto de voz
     marketing: 3,         // 3 créditos por disparo marketing
     stt: 2,               // 2 créditos por transcrição
-    doc_analysis: 5,      // 5 créditos por análise de doc
+    doc_analysis: 4,      // 4 créditos por análise de doc (alinhado ao MiniMax 4.0x)
     scheduling: 2,        // 2 créditos por agendamento
     image_gen: 10,        // 10 créditos por imagem gerada
     web_search: 1,        // 1 crédito por busca web
 };
 
+// ============================================================
+// MODEL MULTIPLIERS — Custo multiplicado pelo modelo de IA usado
+// ============================================================
+export const MODEL_MULTIPLIERS: Record<string, number> = {
+    'gpt-4o-mini': 1.0,           // Chat básico — custo mínimo
+    'gemini-2.5-flash': 2.5,      // Multimodal, visão
+    'minimax/minimax-m2.5': 4.0,  // Docs, Sheets, JSON (via OpenRouter)
+    'default': 1.0,               // Fallback
+};
+
 // Plan credit allocations
 export const PLAN_CREDITS: Record<string, number> = {
-    start: 1000,
+    start: 1500,
     plus: 12000,
     pro: 40000,
 };
@@ -50,7 +60,31 @@ export interface CreditBalance {
 export class CreditService {
 
     /**
-     * Debita créditos por uma ação
+     * Lógica de Justiça — Verifica se a interação deve ser cobrada
+     * Mensagens triviais (< 15 chars, sem ferramentas) e erros do sistema = GRÁTIS
+     */
+    static shouldCharge(
+        message: string,
+        toolsUsed: number = 0,
+        isError: boolean = false
+    ): boolean {
+        // Erros do sistema não são culpa do usuário
+        if (isError) {
+            console.log('⚖️ [Justice] Erro do sistema — crédito NÃO debitado.');
+            return false;
+        }
+
+        // Mensagens triviais sem uso de ferramentas (ex: "Bom dia", "Ok", "Obrigado")
+        if (message.length < 15 && toolsUsed === 0) {
+            console.log(`⚖️ [Justice] Mensagem trivial ("${message.substring(0, 20)}") sem ferramentas — crédito NÃO debitado.`);
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Debita créditos por uma ação, com suporte a multiplicador de modelo
      */
     static async debit(
         tenantId: string,
@@ -70,7 +104,10 @@ export class CreditService {
             };
         }
 
-        const credits = CREDIT_COSTS[action] || 1;
+        const baseCost = CREDIT_COSTS[action] || 1;
+        const model = metadata?.model || 'default';
+        const multiplier = MODEL_MULTIPLIERS[model] || MODEL_MULTIPLIERS['default'];
+        const credits = Math.round(baseCost * multiplier);
 
         try {
             const { data, error } = await supabase.rpc('debit_credits', {
@@ -79,12 +116,11 @@ export class CreditService {
                 p_creditos: credits,
                 p_acao: action,
                 p_descricao: description || action,
-                p_metadata: metadata || {},
+                p_metadata: { ...metadata, model, multiplier, base_cost: baseCost },
             });
 
             if (error) {
                 console.error(`❌ [CreditService] Erro ao debitar: ${error.message}`);
-                // Não bloquear o usuário por erro de créditos
                 return {
                     success: true,
                     saldo_restante: -1,
@@ -96,7 +132,7 @@ export class CreditService {
             }
 
             const result = data as CreditResult;
-            console.log(`💳 [CreditService] Debitado: ${credits} créditos (${action}) | Saldo: ${result.saldo_restante}`);
+            console.log(`💳 [CreditService] Debitado: ${credits} créditos (${action} x${multiplier} ${model}) | Saldo: ${result.saldo_restante}`);
 
             // Non-blocking alert check
             if (result.percentual_uso >= 0) {

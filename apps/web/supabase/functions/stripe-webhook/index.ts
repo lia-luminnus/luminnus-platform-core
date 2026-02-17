@@ -49,6 +49,16 @@ const RECHARGE_PRICE_MAP: Record<string, { credits: number; packageName: string 
 };
 
 // ============================================
+// Number Add-on Price Map — Monthly recurring numbers
+// TODO: Substituir IDs placeholder pelos reais do Stripe após criação
+// ============================================
+const NUMBER_ADDON_PRICES: Record<string, { country: string; displayName: string; monthlyEur: number }> = {
+    "price_1T1rsKRy1wqZ6TIAUUfoeOmv": { country: "PT", displayName: "Número Portugal", monthlyEur: 20 },
+    "price_1T1rsKRy1wqZ6TIA5jsFKSwr": { country: "BR", displayName: "Número Brasil", monthlyEur: 6 },
+    "price_1T1rsLRy1wqZ6TIAw0gNZIBB": { country: "ES", displayName: "Número Espanha", monthlyEur: 3 },
+};
+
+// ============================================
 // Helper Functions
 // ============================================
 function safeTimestampToISO(timestamp: number | null | undefined): string | null {
@@ -384,6 +394,42 @@ Deno.serve(async (req) => {
             const priceId = subscription.items.data[0]?.price.id;
             const planInfo = PRICE_TO_PLAN_MAP[priceId];
 
+            // v3.5: Verificar se é um add-on de número (não é upgrade de plano)
+            const numberAddon = NUMBER_ADDON_PRICES[priceId];
+            if (numberAddon) {
+                console.log(`[Webhook] Number Add-on detected: ${numberAddon.displayName} (${numberAddon.country})`);
+
+                // Buscar tenant_id pelo customer
+                let addonTenantId: string | null = null;
+                const customerEmail = invoice.customer_email;
+                if (customerEmail) {
+                    const { data: profile } = await supabase
+                        .from("profiles")
+                        .select("tenant_id")
+                        .eq("email", customerEmail)
+                        .maybeSingle();
+                    addonTenantId = profile?.tenant_id || null;
+                }
+
+                if (addonTenantId) {
+                    await supabase.from("number_subscriptions").upsert({
+                        tenant_id: addonTenantId,
+                        stripe_subscription_id: subscriptionId,
+                        country_code: numberAddon.country,
+                        status: "active",
+                        updated_at: new Date().toISOString(),
+                    }, { onConflict: "stripe_subscription_id" });
+                    console.log(`[Webhook] Number subscription activated for tenant ${addonTenantId}`);
+                } else {
+                    console.warn(`[Webhook] Could not find tenant for number add-on: ${customerEmail}`);
+                }
+
+                return new Response(JSON.stringify({ received: true, type: "number_addon" }), {
+                    headers: { "Content-Type": "application/json" },
+                    status: 200,
+                });
+            }
+
             let userId: string | null = null;
             let userEmail: string | null = invoice.customer_email || null;
 
@@ -519,6 +565,15 @@ Deno.serve(async (req) => {
                 .update({
                     status: "canceled",
                     canceled_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("stripe_subscription_id", subscription.id);
+
+            // v3.5: Também cancelar add-on de número se existir
+            await supabase
+                .from("number_subscriptions")
+                .update({
+                    status: "cancelled",
                     updated_at: new Date().toISOString(),
                 })
                 .eq("stripe_subscription_id", subscription.id);

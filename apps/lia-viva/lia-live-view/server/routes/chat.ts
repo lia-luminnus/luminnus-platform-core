@@ -94,14 +94,21 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
       let finalImagePayload = null;
       let forceFinalReplyFromTools: string | null = null;
 
-      // 4.1 Debitar crédito por mensagem (non-blocking)
-      try {
-        await CreditService.debit(finalTenantId, finalUserId, 'message', 'Mensagem de chat', {
-          conversation_id: conversationId,
-          model: aiResponse.model || 'gpt-4o-mini'
-        });
-      } catch (creditErr) {
-        console.warn('⚠️ [Chat] Erro ao debitar crédito (non-blocking):', creditErr);
+      // 4.1 Debitar crédito por mensagem (Lógica de Justiça + Multiplicador de Modelo)
+      const toolCallsCount = function_calls.length;
+      const shouldChargeCredit = CreditService.shouldCharge(message || '', toolCallsCount, false);
+
+      if (shouldChargeCredit) {
+        try {
+          await CreditService.debit(finalTenantId, finalUserId, 'message', 'Mensagem de chat', {
+            conversation_id: conversationId,
+            model: aiResponse.model || 'gpt-4o-mini'
+          });
+        } catch (creditErr) {
+          console.warn('⚠️ [Chat] Erro ao debitar crédito (non-blocking):', creditErr);
+        }
+      } else {
+        console.log(`⚖️ [Chat] Justiça: mensagem não cobrada ("${(message || '').substring(0, 30)}")`);
       }
 
       // 5. Ciclo Agêntico v4.0 - Loop de Ferramentas
