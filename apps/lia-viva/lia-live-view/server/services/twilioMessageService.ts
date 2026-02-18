@@ -124,7 +124,8 @@ export class TwilioMessageService {
         tenantId: string,
         to: string,
         body: string,
-        mediaUrls?: string[]
+        mediaUrls?: string[],
+        fromOverride?: string
     ): Promise<TwilioMessageResult> {
         const TAG = '[TwilioMessage.send]';
 
@@ -133,7 +134,9 @@ export class TwilioMessageService {
             const ADMIN_TENANT = '00000000-0000-0000-0000-000000000001';
             let fromNumber = '';
 
-            if (tenantId === ADMIN_TENANT) {
+            if (fromOverride) {
+                fromNumber = fromOverride;
+            } else if (tenantId === ADMIN_TENANT) {
                 // Para o Admin/Master no Sandbox, geralmente é o número configurado no sandbox.
                 // Como não temos isso fácil no DB para a master, tentaremos inferir ou usar um padrão.
                 // Idealmente, o webhook deveria passar o 'To' original.
