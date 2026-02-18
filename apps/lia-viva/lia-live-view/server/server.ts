@@ -149,11 +149,18 @@ function corsHandler(req: any, res: any, next: any) {
 // EXPRESS + HTTP SERVER
 // ===========================================================
 
+const app = express();
+const httpServer = createServer(app);
+
 // v15.7: GLOBAL NUCLEAR LOG - No TOPO absoluto do Express
 app.use((req, res, next) => {
   console.log(`📡 [GLOBAL] ${req.method} ${req.path} | UA: ${req.headers['user-agent']?.slice(0, 20)}`);
   next();
 });
+
+// v15.7: Body parsers (Crucial para Twilio POST)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Security & CORS
 app.use(helmet({
