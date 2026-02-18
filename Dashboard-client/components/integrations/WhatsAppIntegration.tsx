@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import Header from '../Header';
 import { LanguageContext } from '../../contexts/LanguageContext';
 import { useDashboardAuth } from '../../contexts/DashboardAuthContext';
 import { getApiUrl } from '../../config/api';
 import toast from 'react-hot-toast';
-import CustomSelect from '../ui/CustomSelect';
 
 
 const WhatsAppIntegration: React.FC = () => {
@@ -16,14 +15,12 @@ const WhatsAppIntegration: React.FC = () => {
 
     const [loading, setLoading] = useState(true);
 
-    // Twilio onboarding state
+    // Connection state
     const [twilioStatus, setTwilioStatus] = useState<any>(null);
     const [twilioLoading, setTwilioLoading] = useState(false);
-    const [twilioProvisioning, setTwilioProvisioning] = useState(false);
-    const [twilioFlow, setTwilioFlow] = useState<'new_number' | 'byon'>('new_number');
-    const [twilioCountry, setTwilioCountry] = useState('BR');
-    const [twilioFriendlyName, setTwilioFriendlyName] = useState('');
-    const [twilioPhoneNumber, setTwilioPhoneNumber] = useState('');
+    const [connecting, setConnecting] = useState(false);
+    const [phoneNumber, setPhoneNumber] = useState('');
+    const [friendlyName, setFriendlyName] = useState('');
 
     // v14.0: Admin uses admin tenant, clients use profile.tenant_id
     const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
@@ -51,22 +48,21 @@ const WhatsAppIntegration: React.FC = () => {
     // Clear status when tenant changes to prevent cross-tenant data leakage
     useEffect(() => {
         setLoading(true);
-        fetchTwilioStatus();
+        fetchStatus();
     }, [tenantId]);
 
-    // Fetch Twilio subaccount status
-    const fetchTwilioStatus = async () => {
+    // Fetch connection status
+    const fetchStatus = async () => {
         if (!tenantId) return;
         try {
             setTwilioLoading(true);
             const res = await fetch(`${getApiUrl()}/api/twilio/subaccount/status?tenant_id=${tenantId}`);
 
-            // Check content type before parsing
             const contentType = res.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
                 const text = await res.text();
                 if (text.includes('<!DOCTYPE html>') || res.status === 404) {
-                    throw new Error('Servidor retornou erro 404 ou HTML. Verifique se as rotas Twilio estão deployadas no backend.');
+                    throw new Error('Servidor retornou erro 404 ou HTML. Verifique se as rotas estão deployadas no backend.');
                 }
                 throw new Error('Resposta do servidor não é JSON válido.');
             }
@@ -75,45 +71,35 @@ const WhatsAppIntegration: React.FC = () => {
                 const json = await res.json();
                 if (json.ok) setTwilioStatus(json.data);
             } else if (res.status === 404) {
-                console.warn('[WhatsApp] Twilio status endpoint not found (404)');
+                console.warn('[WhatsApp] Status endpoint not found (404)');
             }
         } catch (err: any) {
-            console.warn('[WhatsApp] Twilio status fetch failed:', err);
-            // Don't show toast for background status check unless it's a critical error
+            console.warn('[WhatsApp] Status fetch failed:', err);
         } finally {
             setTwilioLoading(false);
             setLoading(false);
         }
     };
 
-    // Handle Twilio onboarding
-    const handleTwilioOnboard = async () => {
+    // Handle WhatsApp connection with user's own number
+    const handleConnect = async () => {
         if (!tenantId) return;
 
-        // Validation for BYON
-        if (twilioFlow === 'byon' && !twilioPhoneNumber) {
+        if (!phoneNumber) {
             toast.error('❌ Por favor, informe o número do seu WhatsApp.');
             return;
         }
 
-        setTwilioProvisioning(true);
+        setConnecting(true);
         try {
-            const endpoint = twilioFlow === 'new_number'
-                ? `${getApiUrl()}/api/twilio/onboard/new-number`
-                : `${getApiUrl()}/api/twilio/onboard/byon/start`;
+            // Step 1: Create subaccount
+            const body: any = {
+                tenant_id: tenantId,
+                phone_number: phoneNumber,
+            };
+            if (friendlyName) body.friendly_name = friendlyName;
 
-            const body: any = { tenant_id: tenantId };
-            if (twilioFlow === 'new_number') {
-                body.country_code = twilioCountry;
-            } else {
-                body.phone_number = twilioPhoneNumber;
-            }
-
-            if (twilioFriendlyName) {
-                body.friendly_name = twilioFriendlyName;
-            }
-
-            const res = await fetch(endpoint, {
+            const res = await fetch(`${getApiUrl()}/api/twilio/onboard/byon/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
@@ -123,51 +109,47 @@ const WhatsAppIntegration: React.FC = () => {
             if (!contentType || !contentType.includes('application/json')) {
                 const text = await res.text();
                 if (text.includes('<!DOCTYPE html>') || res.status === 404) {
-                    throw new Error('O backend retornou uma página de erro (404). As rotas Twilio podem não estar configuradas no servidor.');
+                    throw new Error('O backend retornou uma página de erro (404). As rotas podem não estar configuradas no servidor.');
                 }
                 throw new Error('Erro de comunicação com o servidor. Resposta inválida.');
             }
 
             const json = await res.json();
             if (json.ok) {
-                if (twilioFlow === 'new_number') {
-                    toast.success(`✅ Número Twilio provisionado: ${json.data.phone_number}`);
-                    fetchTwilioStatus();
-                } else {
-                    // BYON: after creating subaccount, call callback to register the phone number
-                    toast.success('✅ Subconta criada! Registrando seu número...');
-                    try {
-                        const callbackRes = await fetch(`${getApiUrl()}/api/twilio/onboard/byon/callback`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                tenant_id: tenantId,
-                                phone_number: twilioPhoneNumber,
-                            }),
-                        });
-                        const callbackJson = await callbackRes.json();
-                        if (callbackRes.ok && callbackJson.ok) {
-                            toast.success(`✅ WhatsApp conectado com ${twilioPhoneNumber}!`);
-                        } else {
-                            toast.error(`❌ Erro ao registrar número: ${callbackJson.error || 'Erro desconhecido'}`);
-                        }
-                    } catch (cbErr: any) {
-                        toast.error(`❌ Erro na finalização BYON: ${cbErr.message}`);
+                toast.success('✅ Subconta criada! Registrando seu número...');
+
+                // Step 2: Register phone number via callback
+                try {
+                    const callbackRes = await fetch(`${getApiUrl()}/api/twilio/onboard/byon/callback`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            tenant_id: tenantId,
+                            phone_number: phoneNumber,
+                        }),
+                    });
+                    const callbackJson = await callbackRes.json();
+                    if (callbackRes.ok && callbackJson.ok) {
+                        toast.success(`✅ WhatsApp conectado com ${phoneNumber}!`);
+                    } else {
+                        toast.error(`❌ Erro ao registrar número: ${callbackJson.error || 'Erro desconhecido'}`);
                     }
-                    fetchTwilioStatus();
+                } catch (cbErr: any) {
+                    toast.error(`❌ Erro na finalização: ${cbErr.message}`);
                 }
+                fetchStatus();
             } else {
-                toast.error(`❌ ${json.error || 'Erro no onboarding Twilio'}`);
+                toast.error(`❌ ${json.error || 'Erro ao conectar WhatsApp'}`);
             }
         } catch (err: any) {
             toast.error(`Erro: ${err.message}`);
         } finally {
-            setTwilioProvisioning(false);
+            setConnecting(false);
         }
     };
 
-    // Handle Twilio suspend/reactivate
-    const handleTwilioAction = async (action: 'suspend' | 'reactivate') => {
+    // Handle suspend/reactivate
+    const handleAction = async (action: 'suspend' | 'reactivate') => {
         if (!tenantId) return;
         try {
             const res = await fetch(`${getApiUrl()}/api/twilio/subaccount/${action}`, {
@@ -177,8 +159,8 @@ const WhatsAppIntegration: React.FC = () => {
             });
             const json = await res.json();
             if (json.ok) {
-                toast.success(action === 'suspend' ? '⏸️ Subconta suspensa' : '▶️ Subconta reativada');
-                fetchTwilioStatus();
+                toast.success(action === 'suspend' ? '⏸️ Conexão suspensa' : '▶️ Conexão reativada');
+                fetchStatus();
             } else {
                 toast.error(json.error || 'Erro na ação');
             }
@@ -197,7 +179,7 @@ const WhatsAppIntegration: React.FC = () => {
                     <button
                         onClick={() => {
                             setLoading(false);
-                            setTimeout(() => fetchTwilioStatus(), 100);
+                            setTimeout(() => fetchStatus(), 100);
                         }}
                         className="mt-4 px-4 py-2 text-xs font-bold text-brand-primary border border-brand-primary/20 rounded-xl hover:bg-brand-primary/10 transition-all"
                     >
@@ -238,8 +220,8 @@ const WhatsAppIntegration: React.FC = () => {
                         className="w-full flex items-center justify-between p-3.5 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/10 text-white border border-purple-500/30 shadow-lg shadow-purple-500/10 transition-all"
                     >
                         <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined text-base text-purple-400">cell_tower</span>
-                            <span className="text-[11px] font-black uppercase tracking-widest">WhatsApp Dedicado</span>
+                            <span className="material-symbols-outlined text-base text-purple-400">phone_iphone</span>
+                            <span className="text-[11px] font-black uppercase tracking-widest">Conexão WhatsApp</span>
                         </div>
                         {isConnected && (
                             <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-green-500 text-white">Ativo</span>
@@ -264,7 +246,7 @@ const WhatsAppIntegration: React.FC = () => {
                     <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/10">
                         <p className="text-[9px] text-indigo-300/60 leading-relaxed">
                             <span className="material-symbols-outlined text-xs align-middle mr-1">info</span>
-                            Canal oficial de WhatsApp com número dedicado, isolamento total e alta performance via Twilio.
+                            Conecte seu WhatsApp Business para a LIA atender seus clientes automaticamente com IA.
                         </p>
                     </div>
                 </div>
@@ -277,12 +259,12 @@ const WhatsAppIntegration: React.FC = () => {
                     <div className="space-y-0.5">
                         <h2 className="text-xl font-black text-white tracking-tight">Integração WhatsApp</h2>
                         <p className="text-[10px] font-black uppercase tracking-widest bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
-                            WhatsApp — Número Dedicado
+                            Conecte seu número WhatsApp Business
                         </p>
                     </div>
                     <div className="flex items-center gap-3">
                         <button
-                            onClick={() => fetchTwilioStatus()}
+                            onClick={() => fetchStatus()}
                             disabled={twilioLoading}
                             className="px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white/70 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
                         >
@@ -329,10 +311,10 @@ const WhatsAppIntegration: React.FC = () => {
                                         </div>
                                         <div>
                                             <h2 className="text-xl font-black text-white">
-                                                {twilioStatus.onboarding_status === 'active' ? 'Twilio Ativo'
+                                                {twilioStatus.onboarding_status === 'active' ? 'WhatsApp Conectado'
                                                     : twilioStatus.onboarding_status === 'failed' ? 'Falha na Conexão'
                                                         : twilioStatus.onboarding_status === 'suspended' ? 'Suspenso'
-                                                            : 'Provisionando...'}
+                                                            : 'Conectando...'}
                                             </h2>
                                             {twilioStatus.phone_number && (
                                                 <p className="text-sm text-gray-400 font-mono mt-1">{twilioStatus.phone_number}</p>
@@ -342,7 +324,7 @@ const WhatsAppIntegration: React.FC = () => {
                                     <div className="flex gap-2">
                                         {twilioStatus.onboarding_status === 'active' && (
                                             <button
-                                                onClick={() => handleTwilioAction('suspend')}
+                                                onClick={() => handleAction('suspend')}
                                                 className="px-4 py-2.5 text-xs font-bold rounded-xl border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-all uppercase tracking-widest"
                                             >
                                                 Suspender
@@ -350,7 +332,7 @@ const WhatsAppIntegration: React.FC = () => {
                                         )}
                                         {twilioStatus.onboarding_status === 'suspended' && (
                                             <button
-                                                onClick={() => handleTwilioAction('reactivate')}
+                                                onClick={() => handleAction('reactivate')}
                                                 className="px-4 py-2.5 text-xs font-bold rounded-xl bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-all uppercase tracking-widest"
                                             >
                                                 Reativar
@@ -366,7 +348,7 @@ const WhatsAppIntegration: React.FC = () => {
                             </motion.div>
                         )}
 
-                        {/* Onboarding Form - Only if no subaccount */}
+                        {/* Connection Form - Only if no subaccount */}
                         {!twilioStatus?.has_subaccount && (
                             <motion.div
                                 initial={{ opacity: 0, y: 10 }}
@@ -377,12 +359,12 @@ const WhatsAppIntegration: React.FC = () => {
                                 <div className="p-6 border-b border-white/10">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
-                                            <span className="material-symbols-outlined text-xl text-purple-400">rocket_launch</span>
+                                            <span className="material-symbols-outlined text-xl text-purple-400">phone_iphone</span>
                                         </div>
                                         <div>
-                                            <h3 className="text-base font-black text-white">Configurar WhatsApp</h3>
+                                            <h3 className="text-base font-black text-white">Conectar seu WhatsApp</h3>
                                             <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest">
-                                                Via Twilio — Número Dedicado com Isolamento Total
+                                                Use seu próprio número WhatsApp Business
                                             </p>
                                         </div>
                                     </div>
@@ -392,84 +374,25 @@ const WhatsAppIntegration: React.FC = () => {
                                     {/* Info banner */}
                                     <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20">
                                         <p className="text-sm text-purple-300">
-                                            <strong>🔮 WhatsApp Dedicado:</strong> Número oficial de WhatsApp com isolamento total de dados e custos,
-                                            operando sobre a infraestrutura Twilio para controle avançado.
+                                            <strong>📱 WhatsApp Business:</strong> Conecte seu número de WhatsApp Business para a LIA atender
+                                            seus clientes automaticamente com inteligência artificial.
                                         </p>
                                     </div>
 
-                                    {/* Flow Selection */}
+                                    {/* Phone Number Input */}
                                     <div>
-                                        <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">
-                                            Tipo de Conexão
+                                        <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
+                                            Número do WhatsApp Business
                                         </label>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <button
-                                                onClick={() => setTwilioFlow('new_number')}
-                                                className={`p-4 rounded-xl border text-left transition-all ${twilioFlow === 'new_number'
-                                                    ? 'border-purple-500 bg-purple-500/10 ring-2 ring-purple-500/30'
-                                                    : 'border-white/10 hover:border-white/20'
-                                                    }`}
-                                            >
-                                                <span className="material-symbols-outlined text-purple-400 mb-2">add_call</span>
-                                                <p className="text-sm font-bold text-white">Número Novo</p>
-                                                <p className="text-[10px] text-gray-500 mt-1">A LIA provisiona um número dedicado automaticamente</p>
-                                            </button>
-                                            <button
-                                                onClick={() => setTwilioFlow('byon')}
-                                                className={`p-4 rounded-xl border text-left transition-all ${twilioFlow === 'byon'
-                                                    ? 'border-purple-500 bg-purple-500/10 ring-2 ring-purple-500/30'
-                                                    : 'border-white/10 hover:border-white/20'
-                                                    }`}
-                                            >
-                                                <span className="material-symbols-outlined text-purple-400 mb-2">phone_forwarded</span>
-                                                <p className="text-sm font-bold text-white">Usar meu número</p>
-                                                <p className="text-[10px] text-gray-500 mt-1">Traga seu próprio número WhatsApp Business</p>
-                                            </button>
-                                        </div>
+                                        <input
+                                            type="text"
+                                            value={phoneNumber}
+                                            onChange={(e) => setPhoneNumber(e.target.value)}
+                                            placeholder="Ex: +5511999999999"
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-purple-500/50"
+                                        />
+                                        <p className="text-[9px] text-white/30 mt-1 font-medium">Use o formato internacional com +, DDD e número.</p>
                                     </div>
-
-                                    {/* Country (only for new number) */}
-                                    {twilioFlow === 'new_number' && (
-                                        <div className="z-50 relative"> {/* High z-index for dropdown stacking context */}
-                                            <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
-                                                País do Número
-                                            </label>
-                                            <CustomSelect
-                                                value={twilioCountry}
-                                                onChange={(val) => setTwilioCountry(val)}
-                                                variant="glass"
-                                                options={[
-                                                    { label: '🇧🇷 Brasil (+55)', value: 'BR' },
-                                                    { label: '🇺🇸 Estados Unidos (+1)', value: 'US' },
-                                                    { label: '🇵🇹 Portugal (+351)', value: 'PT' },
-                                                    { label: '🇬🇧 Reino Unido (+44)', value: 'GB' },
-                                                    { label: '🇩🇪 Alemanha (+49)', value: 'DE' },
-                                                    { label: '🇫🇷 França (+33)', value: 'FR' },
-                                                    { label: '🇪🇸 Espanha (+34)', value: 'ES' },
-                                                    { label: '🇮🇹 Itália (+39)', value: 'IT' },
-                                                    { label: '🇲🇽 México (+52)', value: 'MX' },
-                                                    { label: '🇦🇷 Argentina (+54)', value: 'AR' }
-                                                ]}
-                                            />
-                                        </div>
-                                    )}
-
-                                    {/* Phone Number (only for BYON) */}
-                                    {twilioFlow === 'byon' && (
-                                        <div>
-                                            <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
-                                                Número do WhatsApp Business
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={twilioPhoneNumber}
-                                                onChange={(e) => setTwilioPhoneNumber(e.target.value)}
-                                                placeholder="Ex: +5511999999999"
-                                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-purple-500/50"
-                                            />
-                                            <p className="text-[9px] text-white/30 mt-1 font-medium">Use o formato internacional com +, DDD e número.</p>
-                                        </div>
-                                    )}
 
                                     {/* Friendly Name */}
                                     <div>
@@ -478,28 +401,28 @@ const WhatsAppIntegration: React.FC = () => {
                                         </label>
                                         <input
                                             type="text"
-                                            value={twilioFriendlyName}
-                                            onChange={(e) => setTwilioFriendlyName(e.target.value)}
+                                            value={friendlyName}
+                                            onChange={(e) => setFriendlyName(e.target.value)}
                                             placeholder="Ex: Atendimento Principal"
                                             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-purple-500/50"
                                         />
                                     </div>
 
-                                    {/* Start Onboarding */}
+                                    {/* Connect Button */}
                                     <button
-                                        onClick={handleTwilioOnboard}
-                                        disabled={twilioProvisioning}
+                                        onClick={handleConnect}
+                                        disabled={connecting}
                                         className="w-full px-6 py-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-sm shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        {twilioProvisioning ? (
+                                        {connecting ? (
                                             <>
                                                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                                Provisionando...
+                                                Conectando...
                                             </>
                                         ) : (
                                             <>
-                                                <span className="material-symbols-outlined text-xl">rocket_launch</span>
-                                                {twilioFlow === 'new_number' ? 'Provisionar Número' : 'Iniciar Conexão BYON'}
+                                                <span className="material-symbols-outlined text-xl">link</span>
+                                                Conectar WhatsApp
                                             </>
                                         )}
                                     </button>
@@ -513,22 +436,22 @@ const WhatsAppIntegration: React.FC = () => {
                                 <div className="w-12 h-12 mx-auto rounded-xl bg-purple-500/10 flex items-center justify-center mb-3 group-hover:bg-purple-500/20 transition-all">
                                     <span className="material-symbols-outlined text-purple-400 text-2xl">shield</span>
                                 </div>
-                                <p className="text-xs font-bold text-white mb-1">Dados Isolados</p>
-                                <p className="text-[10px] text-gray-500">Cada tenant tem sua própria subconta</p>
+                                <p className="text-xs font-bold text-white mb-1">100% Seguro</p>
+                                <p className="text-[10px] text-gray-500">Dados criptografados e isolados</p>
                             </div>
                             <div className="p-5 rounded-2xl bg-[#15151F] border border-white/5 text-center group hover:border-purple-500/30 transition-all">
                                 <div className="w-12 h-12 mx-auto rounded-xl bg-purple-500/10 flex items-center justify-center mb-3 group-hover:bg-purple-500/20 transition-all">
-                                    <span className="material-symbols-outlined text-purple-400 text-2xl">payments</span>
+                                    <span className="material-symbols-outlined text-purple-400 text-2xl">phone_iphone</span>
                                 </div>
-                                <p className="text-xs font-bold text-white mb-1">Custo Separado</p>
-                                <p className="text-[10px] text-gray-500">Billing independente por conta</p>
+                                <p className="text-xs font-bold text-white mb-1">Seu Número</p>
+                                <p className="text-[10px] text-gray-500">Use o número que seus clientes já conhecem</p>
                             </div>
                             <div className="p-5 rounded-2xl bg-[#15151F] border border-white/5 text-center group hover:border-purple-500/30 transition-all">
                                 <div className="w-12 h-12 mx-auto rounded-xl bg-purple-500/10 flex items-center justify-center mb-3 group-hover:bg-purple-500/20 transition-all">
-                                    <span className="material-symbols-outlined text-purple-400 text-2xl">speed</span>
+                                    <span className="material-symbols-outlined text-purple-400 text-2xl">smart_toy</span>
                                 </div>
-                                <p className="text-xs font-bold text-white mb-1">Alta Performance</p>
-                                <p className="text-[10px] text-gray-500">Infraestrutura dedicada Twilio</p>
+                                <p className="text-xs font-bold text-white mb-1">IA Integrada</p>
+                                <p className="text-[10px] text-gray-500">LIA atende seus clientes 24/7</p>
                             </div>
                         </div>
 
@@ -539,10 +462,10 @@ const WhatsAppIntegration: React.FC = () => {
                                 Como funciona?
                             </h3>
                             <ol className="text-xs text-gray-400 space-y-2 list-decimal list-inside">
-                                <li>Escolha entre provisionar um <strong className="text-white/80">Número Novo</strong> ou usar o <strong className="text-white/80">Seu Próprio Número</strong></li>
-                                <li>A LIA cria uma subconta Twilio isolada para sua empresa</li>
-                                <li>O número é configurado automaticamente com webhooks e segurança</li>
-                                <li>Comece a receber e enviar mensagens pelo WhatsApp via LIA</li>
+                                <li>Informe o número do seu <strong className="text-white/80">WhatsApp Business</strong> no formato internacional</li>
+                                <li>A LIA configura automaticamente os webhooks e segurança</li>
+                                <li>Personalize o perfil e playbooks da LIA na aba de <strong className="text-white/80">Configuração</strong></li>
+                                <li>Comece a receber e responder mensagens automaticamente!</li>
                             </ol>
                         </div>
                     </div>
