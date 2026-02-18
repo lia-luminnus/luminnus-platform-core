@@ -27,9 +27,17 @@ export class WhatsAppController extends BaseController {
     }
 
     async saveSettings(req: Request, res: Response) {
+        const TAG = '[WhatsApp.saveSettings]';
         try {
-            const { tenant_id, profile_json, playbooks_json, knowledge_items_json, segment_key } = req.body;
-            if (!tenant_id) return this.handleBadRequest(res, 'tenant_id é obrigatório');
+            const tenant_id = (req.body.tenant_id || req.headers['x-tenant-id']) as string;
+            const { profile_json, playbooks_json, knowledge_items_json, segment_key } = req.body;
+
+            if (!tenant_id) {
+                console.error(`${TAG} tenant_id ausente`);
+                return this.handleBadRequest(res, 'tenant_id é obrigatório');
+            }
+
+            console.log(`${TAG} Salvando settings para tenant=${tenant_id}`);
 
             const settings = await WhatsAppRepository.upsertSettings({
                 tenant_id,
@@ -40,7 +48,8 @@ export class WhatsAppController extends BaseController {
             });
 
             return this.handleSuccess(res, { settings });
-        } catch (error) {
+        } catch (error: any) {
+            console.error(`${TAG} Erro crítico:`, error.message, error.stack);
             return this.handleError(res, error, 'WhatsAppController.saveSettings');
         }
     }

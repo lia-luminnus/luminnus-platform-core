@@ -199,12 +199,23 @@ router.post('/', async (req: Request, res: Response) => {
             return;
         }
 
+        // 8. Processar com IA (apenas se copiloto estiver ativo e houver texto)
+        if (!copilotoEnabled) {
+            console.log(`${TAG} Copiloto desativado para conversa ${conversationId} — aguardando atendimento humano`);
+            return;
+        }
+
+        if (!body.trim()) {
+            console.log(`${TAG} Mensagem sem texto (apenas mídia) — ignorando processamento de IA`);
+            return;
+        }
+
         // Buscar configurações do agente (playbook, regras, nome)
         let agentSettings: any = null;
         try {
             const { data } = await supabase
                 .from('whatsapp_agent_settings')
-                .select('agent_name, rules_instructions, agent_mode, language')
+                .select('profile_json, playbooks_json')
                 .eq('tenant_id', tenantId)
                 .maybeSingle();
             agentSettings = data;
@@ -234,20 +245,32 @@ router.post('/', async (req: Request, res: Response) => {
             }
         }
 
-        // Montar system prompt com as regras do agente
-        const agentName = agentSettings?.agent_name || 'Assistente';
-        const rules = agentSettings?.rules_instructions || '';
-        const agentMode = agentSettings?.agent_mode || 'SDR';
-        const language = agentSettings?.language || 'pt-BR';
+        // Montar system prompt com as regras do agente (Extraídas do JSON)
+        const profile = agentSettings?.profile_json || {};
+        const playbooksList = agentSettings?.playbooks_json || [];
 
-        const systemPrompt = `Você é ${agentName}, um assistente de WhatsApp inteligente.
+        // Consolidar regras dos playbooks ativos ou do perfil
+        const agentName = profile.agent_name || 'LIA';
+        const agentMode = profile.objective || 'vendas';
+        const language = profile.language || 'pt-BR';
+
+        // Tentar encontrar um playbook que combine com o objetivo
+        const activePlaybook = playbooksList.find((p: any) =>
+            p.name.toLowerCase().includes(agentMode.toLowerCase())
+        ) || playbooksList[0];
+
+        const rules = activePlaybook?.content || profile.rules_instructions || '';
+
+        const systemPrompt = `Você é ${agentName}, um assistente de WhatsApp inteligente da Luminnus.
 Modo de operação: ${agentMode}
 Idioma: ${language}
-${rules ? `\nRegras e instruções:\n${rules}` : ''}
+${rules ? `\nRegras e instruções atuais:\n${rules}` : ''}
 
-Responda de forma natural, concisa e amigável. Não use markdown (sem asteriscos, sem #).
-Mantenha respostas curtas e diretas, adequadas para WhatsApp.
-Nome do cliente: ${profileName || 'Cliente'}`;
+INSTRUÇÕES DE FORMATO:
+- Responda de forma natural, concisa e amigável.
+- NÃO use markdown (sem asteriscos, sem #, sem negrito).
+- Mantenha respostas curtas (máximo 2-3 frases), adequadas para WhatsApp.
+- Nome do cliente: ${profileName || 'Cliente'}`;
 
         // Chamar OpenAI com histórico da conversa
         let aiResponse = '';

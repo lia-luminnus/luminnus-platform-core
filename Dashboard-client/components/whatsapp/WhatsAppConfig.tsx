@@ -9,10 +9,10 @@ interface WhatsAppConfigProps {
 
 const WhatsAppConfig: React.FC<WhatsAppConfigProps> = ({ onSave }) => {
     const [config, setConfig] = useState({
-        objective: 'Vendas',
+        objective: 'vendas',
         tone: 'Consultivo',
         language: 'pt-BR',
-        handoffRules: {
+        handoff_rules: {
             sensitiveWords: true,
             angryCustomer: true,
             legalRequest: true
@@ -145,10 +145,10 @@ REGRAS:
             const settings = await backendService.getWhatsAppSettings();
             if (settings) {
                 setConfig({
-                    objective: settings.profile_json?.objective || 'Vendas',
+                    objective: settings.profile_json?.objective || 'vendas',
                     tone: settings.profile_json?.tone || 'Consultivo',
                     language: settings.profile_json?.language || 'pt-BR',
-                    handoffRules: settings.profile_json?.handoff_rules || {
+                    handoff_rules: settings.profile_json?.handoff_rules || {
                         sensitiveWords: true,
                         angryCustomer: true,
                         legalRequest: true
@@ -339,11 +339,11 @@ REGRAS:
                                         <input
                                             type="checkbox"
                                             className="sr-only peer"
-                                            checked={(config.handoffRules as any)[rule.id]}
+                                            checked={(config.handoff_rules as any)[rule.id]}
                                             onChange={(e) => setConfig({
                                                 ...config,
-                                                handoffRules: {
-                                                    ...config.handoffRules,
+                                                handoff_rules: {
+                                                    ...(config.handoff_rules as any),
                                                     [rule.id]: e.target.checked
                                                 }
                                             })}
