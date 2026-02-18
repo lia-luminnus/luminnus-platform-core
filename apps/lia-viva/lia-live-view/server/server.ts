@@ -148,7 +148,6 @@ app.use(helmet({
 app.use(corsHandler);
 
 // ENTRY LOG - BEFORE EVERYTHING (v7.0 - HYPER DEBUG)
-// Captura absolutamente TUDO que encostar no servidor
 app.use((req, res, next) => {
   const isTwilio = req.path.includes('twilio') || req.headers['user-agent']?.toLowerCase().includes('twilio');
 
@@ -156,12 +155,13 @@ app.use((req, res, next) => {
     console.log(`🛰️ [HYPER LOG] TWILIO TRIGGER! ${req.method} ${req.path}`);
     console.log(`   - Headers: ${JSON.stringify(req.headers)}`);
     console.log(`   - Query: ${JSON.stringify(req.query)}`);
-  } else {
-    // Log básico para não poluir demais, mas confirmar que o servidor tá vivo
-    // console.log(`📥 [API] ${req.method} ${req.path}`);
   }
   next();
 });
+
+// v15.4: Prioridade máxima para Webhooks (Antes de body-parsers pesados ou CORS restrito)
+setupTwilioWebhookRoutes(app);
+console.log('🏁 [Twilio] Webhook priorizado no stack de rotas');
 
 // Middleware
 app.use(express.json({ limit: '50mb' }));
@@ -414,7 +414,6 @@ async function startServer() {
   app.use('/api/admin', adminRoutes);
 
   // Twilio Multi-Tenant Routes
-  setupTwilioWebhookRoutes(app); // Webhook primeiro (prioridade)
   setupTwilioOnboardingRoutes(app);
   console.log('   ✅ Twilio routes (/api/twilio/*)');
 

@@ -68,7 +68,7 @@ export function setupTwilioWebhookRoutes(app: any): void {
     // Rota Principal de Mensagem (Inbound)
     app.post(['/api/twilio/webhook', '/api/twilio/webhook/'], async (req: Request, res: Response) => {
         const TAG = '[Twilio Webhook]';
-        console.log(`${TAG} 📥 Recebendo POST em /api/twilio/webhook`);
+        console.log(`${TAG} 📥 POST detectado imediatamente! (Trace v15.4)`);
 
         try {
             const payload = req.body as TwilioWebhookPayload;
