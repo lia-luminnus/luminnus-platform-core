@@ -20,6 +20,12 @@ import type { TwilioWebhookPayload, TwilioStatusCallback } from '../types/twilio
 export function setupTwilioWebhookRoutes(app: any): void {
     const TAG = '[Twilio Webhook Setup]';
 
+    // Rota de Diagnóstico (GET)
+    app.get(['/api/twilio/webhook', '/api/twilio/webhook/'], (req: Request, res: Response) => {
+        console.log(`${TAG} 🔍 Verificação de reachability via GET`);
+        res.send('✅ Twilio Webhook Endpoint is Live and Reachable!');
+    });
+
     // Rota Principal de Mensagem (Inbound)
     app.post(['/api/twilio/webhook', '/api/twilio/webhook/'], async (req: Request, res: Response) => {
         const TAG = '[Twilio Webhook]';

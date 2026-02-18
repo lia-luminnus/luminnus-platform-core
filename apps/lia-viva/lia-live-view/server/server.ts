@@ -146,6 +146,14 @@ app.use(helmet({
 // CORS Dinâmico via Config
 app.use(corsHandler);
 
+// ENTRY LOG - BEFORE EVERYTHING (v6.1 - Super Debug)
+app.use((req, res, next) => {
+  if (req.path.includes('twilio')) {
+    console.log(`📡 [GOD LOG] ${req.method} ${req.path} | IP: ${req.ip} | Headers: ${JSON.stringify(req.headers)}`);
+  }
+  next();
+});
+
 // Middleware
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
