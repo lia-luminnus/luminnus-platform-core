@@ -11,23 +11,33 @@ export const WhatsAppRepository = {
             .from('whatsapp_agent_settings')
             .select('*')
             .eq('tenant_id', tenantId)
-            .single();
+            .maybeSingle();
 
-        if (error && error.code !== 'PGRST116') throw error;
-        return data || null;
+        if (error) {
+            console.error(`[WhatsAppRepo.getSettings] Erro para tenant ${tenantId}:`, error.message);
+            throw error;
+        }
+        return data;
     },
 
     async upsertSettings(settings: any) {
+        const { tenant_id, ...rest } = settings;
+        if (!tenant_id) throw new Error('tenant_id é obrigatório para upsertSettings');
+
         const { data, error } = await supabase
             .from('whatsapp_agent_settings')
             .upsert({
-                ...settings,
+                tenant_id,
+                ...rest,
                 updated_at: new Date().toISOString()
             }, { onConflict: 'tenant_id' })
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            console.error(`[WhatsAppRepo.upsertSettings] Erro para tenant ${tenant_id}:`, error.message);
+            throw error;
+        }
         return data;
     },
 

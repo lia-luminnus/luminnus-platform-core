@@ -1,0 +1,43 @@
+remote: error: GH013: Repository rule violations found for refs/heads/main.        
+remote: 
+remote: - GITHUB PUSH PROTECTION        
+remote:   ÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇö        
+remote:     Resolve the following violations before pushing again        
+remote: 
+remote:     - Push cannot contain secrets        
+remote: 
+remote:             
+remote:      (?) Learn how to resolve a blocked push        
+remote:      https://docs.github.com/code-security/secret-scanning/working-with-secret-scanning-and-push-protection/working-with-push-protection-from-the-command-line#resolving-a-blocked-push        
+remote:             
+remote:             
+remote:       ÔÇöÔÇö Twilio Account String Identifier ÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇö        
+remote:        locations:        
+remote:          - commit: 7bde8baecd8dd4145b0a764fbcda963180245ccd        
+remote:            path: .agent/plans/twilio-whatsapp-integration-plan.md:33        
+remote:          - commit: 7bde8baecd8dd4145b0a764fbcda963180245ccd        
+remote:            path: .agent/plans/twilio-whatsapp-integration-plan.md:302        
+remote:          - commit: 7bde8baecd8dd4145b0a764fbcda963180245ccd        
+remote:            path: .agent/plans/twilio-whatsapp-integration-plan.md:431        
+remote:             
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.        
+remote:        https://github.com/lia-luminnus/luminnus-platform-core/security/secret-scanning/unblock-secret/39oO5ri6hDTwLtFOGbVF0OqXL9p        
+remote:             
+remote:             
+remote:       ÔÇöÔÇö Twilio API Key ÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇöÔÇö        
+remote:        locations:        
+remote:          - commit: 7bde8baecd8dd4145b0a764fbcda963180245ccd        
+remote:            path: .agent/plans/twilio-whatsapp-integration-plan.md:35        
+remote:          - commit: 7bde8baecd8dd4145b0a764fbcda963180245ccd        
+remote:            path: .agent/plans/twilio-whatsapp-integration-plan.md:304        
+remote:          - commit: 7bde8baecd8dd4145b0a764fbcda963180245ccd        
+remote:            path: .agent/plans/twilio-whatsapp-integration-plan.md:435        
+remote:             
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.        
+remote:        https://github.com/lia-luminnus/luminnus-platform-core/security/secret-scanning/unblock-secret/39oO5q1S2I3nyUk4U0ck5SHsGJg        
+remote:             
+remote: 
+remote: 
+To https://github.com/lia-luminnus/luminnus-platform-core.git
+ ! [remote rejected] main -> main (push declined due to repository rule violations)
+error: failed to push some refs to 'https://github.com/lia-luminnus/luminnus-platform-core.git'
