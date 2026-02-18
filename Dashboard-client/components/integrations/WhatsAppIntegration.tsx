@@ -6,6 +6,7 @@ import { LanguageContext } from '../../contexts/LanguageContext';
 import { useDashboardAuth } from '../../contexts/DashboardAuthContext';
 import { getApiUrl } from '../../config/api';
 import toast from 'react-hot-toast';
+import { supabase } from '../../lib/supabase';
 
 
 const WhatsAppIntegration: React.FC = () => {
@@ -19,6 +20,7 @@ const WhatsAppIntegration: React.FC = () => {
     const [twilioStatus, setTwilioStatus] = useState<any>(null);
     const [twilioLoading, setTwilioLoading] = useState(false);
     const [connecting, setConnecting] = useState(false);
+    const [disconnecting, setDisconnecting] = useState(false);
     const [phoneNumber, setPhoneNumber] = useState('');
     const [friendlyName, setFriendlyName] = useState('');
 
@@ -169,6 +171,52 @@ const WhatsAppIntegration: React.FC = () => {
         }
     };
 
+    // Handle disconnect — remove number and allow reconnection
+    const handleDisconnect = async () => {
+        if (!tenantId) return;
+        const confirmed = window.confirm(
+            '⚠️ Desconectar remove o número atual. Você poderá reconectar com outro número depois.\n\nDeseja continuar?'
+        );
+        if (!confirmed) return;
+
+        setDisconnecting(true);
+        try {
+            // Try API first
+            const res = await fetch(`${getApiUrl()}/api/twilio/subaccount/disconnect`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tenant_id: tenantId }),
+            });
+            const json = await res.json();
+            if (json.ok) {
+                toast.success('🔌 Número desconectado! Você pode conectar outro.');
+                setTwilioStatus(null);
+                return;
+            }
+            throw new Error(json.error || 'API failed');
+        } catch (err: any) {
+            console.warn('[WhatsApp] API disconnect failed, trying Supabase direct...', err.message);
+
+            // Supabase direct fallback
+            try {
+                if (!supabase) throw new Error('Supabase not available');
+                const { error } = await supabase
+                    .from('twilio_subaccounts')
+                    .update({ onboarding_status: 'closed', updated_at: new Date().toISOString() })
+                    .eq('tenant_id', tenantId);
+
+                if (error) throw error;
+
+                toast.success('🔌 Número desconectado (via Supabase). Você pode conectar outro.');
+                setTwilioStatus(null);
+            } catch (fbErr: any) {
+                toast.error(`❌ Erro ao desconectar: ${fbErr.message}`);
+            }
+        } finally {
+            setDisconnecting(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex flex-col h-full bg-[#f1f5f9] dark:bg-[#06080f]">
@@ -279,7 +327,7 @@ const WhatsAppIntegration: React.FC = () => {
                     <div className="max-w-3xl mx-auto space-y-6">
 
                         {/* Status Card */}
-                        {twilioStatus?.has_subaccount && (
+                        {twilioStatus?.has_subaccount && twilioStatus?.onboarding_status !== 'closed' && (
                             <motion.div
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -338,6 +386,14 @@ const WhatsAppIntegration: React.FC = () => {
                                                 Reativar
                                             </button>
                                         )}
+                                        {/* Desconectar — always available */}
+                                        <button
+                                            onClick={handleDisconnect}
+                                            disabled={disconnecting}
+                                            className="px-4 py-2.5 text-xs font-bold rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all uppercase tracking-widest disabled:opacity-50"
+                                        >
+                                            {disconnecting ? 'Desconectando...' : 'Desconectar'}
+                                        </button>
                                     </div>
                                 </div>
                                 {twilioStatus.error && (
@@ -349,7 +405,7 @@ const WhatsAppIntegration: React.FC = () => {
                         )}
 
                         {/* Connection Form - Only if no subaccount */}
-                        {!twilioStatus?.has_subaccount && (
+                        {(!twilioStatus?.has_subaccount || twilioStatus?.onboarding_status === 'closed') && (
                             <motion.div
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}

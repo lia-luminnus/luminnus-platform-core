@@ -300,6 +300,30 @@ router.post('/subaccount/reactivate', async (req: Request, res: Response) => {
     }
 });
 
+/**
+ * POST /api/twilio/subaccount/disconnect
+ * Desconectar subconta de um tenant (fecha na Twilio + marca como closed no DB).
+ * Permite reconectar com outro número no futuro.
+ *
+ * Body: { tenant_id }
+ */
+router.post('/subaccount/disconnect', async (req: Request, res: Response) => {
+    try {
+        const { tenant_id } = req.body;
+
+        if (!tenant_id) {
+            return res.status(400).json({ ok: false, error: 'tenant_id é obrigatório' });
+        }
+
+        await TwilioOnboardingService.disconnectSubaccount(tenant_id);
+
+        res.json({ ok: true, data: { status: 'closed' } });
+    } catch (error: any) {
+        console.error('❌ [Twilio Disconnect] Erro:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // ==========================================================
 // ONBOARDING LOGS
 // ==========================================================

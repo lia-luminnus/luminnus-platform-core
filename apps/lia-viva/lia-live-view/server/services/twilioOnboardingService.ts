@@ -263,6 +263,38 @@ export class TwilioOnboardingService {
         console.log(`▶️ ${TAG} Subconta ${sub.twilio_account_sid} reativada`);
     }
 
+    /**
+     * Desconectar uma subconta — fecha na Twilio e marca como 'closed' no DB.
+     * Permite que o tenant reconecte com um número diferente no futuro.
+     */
+    static async disconnectSubaccount(tenantId: string): Promise<void> {
+        const TAG = '[TwilioOnboarding.disconnect]';
+
+        const sub = await TwilioRepository.getByTenantId(tenantId);
+        if (!sub) throw new Error(`${TAG} Subconta não encontrada para tenant ${tenantId}`);
+
+        try {
+            const client = getMasterClient();
+
+            // Fechar subconta na Twilio (status = 'closed')
+            await client.api.accounts(sub.twilio_account_sid).update({
+                status: 'closed',
+            });
+        } catch (err: any) {
+            // Se falhar no Twilio, ainda assim marcar como closed no DB
+            console.warn(`⚠️ ${TAG} Twilio API close falhou (continuando): ${err.message}`);
+        }
+
+        await TwilioRepository.updateStatusViaRPC(
+            tenantId,
+            'closed' as any,
+            'disconnect_subaccount',
+            { reason: 'user_disconnect', phone_number: sub.twilio_phone_number }
+        );
+
+        console.log(`🔌 ${TAG} Subconta ${sub.twilio_account_sid} desconectada para tenant ${tenantId}`);
+    }
+
     // ========================================================
     // PHONE NUMBER MANAGEMENT
     // ========================================================
