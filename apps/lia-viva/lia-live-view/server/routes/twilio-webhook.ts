@@ -289,6 +289,8 @@ INSTRUÇÕES DE FORMATO:
 - Nome do cliente: ${profileName || 'Cliente'}`;
 
             // Chamar OpenAI com histórico da conversa e system prompt
+            // 4. Integrar com IA (LIA)
+            console.log(`${TAG} 🧠 Gerando resposta IA para: ${body.slice(0, 30)}...`);
             let aiResponse = '';
             try {
                 const historyWithSystem = [
@@ -301,18 +303,26 @@ INSTRUÇÕES DE FORMATO:
                     historyWithSystem
                 );
                 aiResponse = result.text?.trim() || '';
+                console.log(`${TAG} ✨ IA respondeu (${aiResponse.length} chars)`);
             } catch (aiErr: any) {
-                console.error(`${TAG} Erro ao chamar OpenAI:`, aiErr.message);
-                return;
+                console.error(`${TAG} ❌ Erro na IA:`, aiErr.message);
+                aiResponse = "Desculpe, tive um problema técnico agora. Pode repetir?";
             }
 
             if (!aiResponse) {
-                console.warn(`${TAG} IA retornou resposta vazia para tenant ${tenantId}`);
+                console.warn(`${TAG} ⚠️ IA retornou resposta vazia`);
                 return;
             }
 
-            // Enviar resposta via Twilio
+            // 5. Enviar resposta via Twilio
+            console.log(`${TAG} 📤 Enviando resposta para ${from}...`);
             const sendResult = await TwilioMessageService.sendMessage(tenantId, from, aiResponse);
+
+            if (!sendResult.success) {
+                console.error(`${TAG} ❌ Falha no envio Twilio:`, sendResult.error);
+            } else {
+                console.log(`${TAG} ✅ Resposta enviada com sucesso! (SID: ${sendResult.messageSid})`);
+            }
 
             if (sendResult.success) {
                 console.log(`✅ ${TAG} IA respondeu para ${from.slice(-4)}*** | tenant=${tenantId}`);

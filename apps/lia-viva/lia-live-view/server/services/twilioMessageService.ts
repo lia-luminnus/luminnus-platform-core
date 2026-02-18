@@ -48,15 +48,29 @@ export class TwilioMessageService {
             return cached.client;
         }
 
-        // Buscar subconta no banco
-        const sub = await TwilioRepository.getByTenantId(tenantId);
-        if (!sub) {
-            throw new Error(`${TAG} Subconta Twilio não encontrada para tenant ${tenantId}`);
+        // v15.2: Suporte para Master Account (Admin Tenant)
+        const ADMIN_TENANT = '00000000-0000-0000-0000-000000000001';
+        if (tenantId === ADMIN_TENANT) {
+            const masterSid = (process.env.TWILIO_ACCOUNT_SID || '').trim();
+            const masterToken = (process.env.TWILIO_AUTH_TOKEN || '').trim();
+
+            if (!masterSid || !masterToken) {
+                throw new Error(`${TAG} Credenciais Master ausentes no process.env`);
+            }
+
+            console.log(`${TAG} 👑 Usando Cliente MASTER para Admin Tenant`);
+            const client = Twilio(masterSid, masterToken);
+
+            clientCache.set(tenantId, {
+                client,
+                expiresAt: Date.now() + CACHE_TTL_MS,
+            });
+
+            return client;
         }
 
-        if (sub.onboarding_status !== 'active') {
-            throw new Error(`${TAG} Subconta não está ativa (status: ${sub.onboarding_status})`);
-        }
+        // Buscar subconta no banco
+        const sub = await TwilioRepository.getByTenantId(tenantId);
 
         // Desencriptar auth token
         const authToken = decryptToken(sub.twilio_auth_token_encrypted);
@@ -115,18 +129,31 @@ export class TwilioMessageService {
         const TAG = '[TwilioMessage.send]';
 
         try {
-            const client = await TwilioMessageService.getSubaccountClient(tenantId);
-            const sub = await TwilioRepository.getByTenantId(tenantId);
+            // v15.2: Obter número 'From'
+            const ADMIN_TENANT = '00000000-0000-0000-0000-000000000001';
+            let fromNumber = '';
 
-            if (!sub?.twilio_phone_number) {
-                return {
-                    success: false,
-                    error: 'Número WhatsApp não configurado para este tenant',
-                };
+            if (tenantId === ADMIN_TENANT) {
+                // Para o Admin/Master no Sandbox, geralmente é o número configurado no sandbox.
+                // Como não temos isso fácil no DB para a master, tentaremos inferir ou usar um padrão.
+                // Idealmente, o webhook deveria passar o 'To' original.
+                // Por agora, buscaremos uma variável de ambiente ou usaremos o que o sub-repósitorio disser (se houver).
+                const sub = await TwilioRepository.getByTenantId(tenantId);
+                fromNumber = sub?.twilio_phone_number || process.env.TWILIO_MASTER_PHONE || '';
+
+                if (!fromNumber) {
+                    return { success: false, error: 'Número Master (TWILIO_MASTER_PHONE) não configurado' };
+                }
+            } else {
+                const sub = await TwilioRepository.getByTenantId(tenantId);
+                if (!sub?.twilio_phone_number) {
+                    return { success: false, error: 'Número WhatsApp não configurado para este tenant' };
+                }
+                fromNumber = sub.twilio_phone_number;
             }
 
-            // Formatar números para o formato WhatsApp da Twilio
-            const fromWhatsApp = `whatsapp:${sub.twilio_phone_number}`;
+            // v15.2: Formatar números para o formato WhatsApp da Twilio
+            const fromWhatsApp = `whatsapp:${fromNumber}`;
             const toWhatsApp = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
 
             const messageParams: any = {
@@ -140,18 +167,27 @@ export class TwilioMessageService {
                 messageParams.mediaUrl = mediaUrls;
             }
 
-            console.log(`${TAG} Enviando mensagem: ${sub.twilio_phone_number} → ${to.slice(-4)}***`);
+            const client = await TwilioMessageService.getSubaccountClient(tenantId);
+            console.log(`${TAG} Enviando mensagem: ${fromNumber} → ${to.slice(-4)}***`);
 
             const message = await client.messages.create(messageParams);
 
             console.log(`✅ ${TAG} Mensagem enviada: ${message.sid} (status: ${message.status})`);
 
-            // Atualizar contador de uso (não-bloqueante)
-            TwilioRepository.upsertUsage({
-                tenant_id: tenantId,
-                subaccount_id: sub.id,
-                messages_sent: 1,
-            }).catch((err) => console.warn(`${TAG} Erro ao atualizar uso:`, err.message));
+            // 6. Atualizar contador de uso
+            try {
+                // Se for Master Account, podemos não ter subaccount id real no DB
+                const sub = (tenantId === ADMIN_TENANT) ? null : await TwilioRepository.getByTenantId(tenantId);
+                const subId = sub?.id || 'master';
+
+                TwilioRepository.upsertUsage({
+                    tenant_id: tenantId,
+                    subaccount_id: subId,
+                    messages_sent: 1,
+                }).catch((err) => console.warn(`${TAG} Erro ao atualizar uso:`, err.message));
+            } catch (usageErr) {
+                console.warn(`${TAG} Usage update skipped`);
+            }
 
             return {
                 success: true,
