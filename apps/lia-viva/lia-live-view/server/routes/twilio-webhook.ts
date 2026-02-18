@@ -1,8 +1,9 @@
 /**
- * Twilio Webhook Routes — Roteador Inteligente
+ * Twilio Webhook Routes — Roteador Inteligente com Pipeline de IA
  *
  * Endpoint centralizado que recebe TODAS as mensagens WhatsApp via Twilio.
- * Identifica o tenant pelo AccountSid da subconta e roteia para o processamento.
+ * Identifica o tenant pelo AccountSid da subconta, processa com IA (LIA)
+ * e responde automaticamente quando o copiloto estiver ativo.
  *
  * SEPARADO do webhook Meta (/api/whatsapp/webhook)
  * Este endpoint: /api/twilio/webhook
@@ -13,6 +14,7 @@ import { TwilioMessageService } from '../services/twilioMessageService.js';
 import { TwilioRepository } from '../repositories/TwilioRepository.js';
 import { decryptToken } from '../services/twilioEncryption.js';
 import { supabase } from '../config/supabase.js';
+import { OpenAIService } from '../services/openAIService.js';
 import type { TwilioWebhookPayload, TwilioStatusCallback } from '../types/twilio.types.js';
 
 const router: Router = Router();
@@ -25,6 +27,7 @@ const router: Router = Router();
  * POST /api/twilio/webhook
  * Recebe mensagens de WhatsApp de TODAS as subcontas.
  * O AccountSid no payload identifica qual subconta/tenant enviou.
+ * Processa com IA e responde automaticamente se copiloto estiver ativo.
  */
 router.post('/', async (req: Request, res: Response) => {
     const TAG = '[Twilio Webhook]';
@@ -66,7 +69,6 @@ router.post('/', async (req: Request, res: Response) => {
 
             if (!isValid) {
                 console.warn(`${TAG} ⚠️ Assinatura inválida para tenant ${tenantId}`);
-                // Em produção, poderia rejeitar. Por enquanto, apenas logamos.
             }
         }
 
@@ -88,15 +90,80 @@ router.post('/', async (req: Request, res: Response) => {
             if (type) mediaTypes.push(type);
         }
 
-        // 4. Registrar mensagem no banco de dados
+        // 4. Buscar ou criar contato
+        let contactId: string | null = null;
+        try {
+            const { data: existingContact } = await supabase
+                .from('whatsapp_contacts')
+                .select('id')
+                .eq('tenant_id', tenantId)
+                .eq('phone', from)
+                .maybeSingle();
+
+            if (existingContact) {
+                contactId = existingContact.id;
+            } else {
+                const { data: newContact } = await supabase
+                    .from('whatsapp_contacts')
+                    .insert({ tenant_id: tenantId, phone: from, name: profileName || from })
+                    .select('id')
+                    .single();
+                contactId = newContact?.id || null;
+            }
+        } catch (err: any) {
+            console.warn(`${TAG} Erro ao buscar/criar contato:`, err.message);
+        }
+
+        // 5. Buscar ou criar conversa
+        let conversationId: string | null = null;
+        let copilotoEnabled = true; // Por padrão, IA ativa
+        try {
+            const { data: existingConv } = await supabase
+                .from('whatsapp_conversations')
+                .select('id, copiloto_enabled')
+                .eq('tenant_id', tenantId)
+                .eq('external_id', from)
+                .eq('status', 'open')
+                .maybeSingle();
+
+            if (existingConv) {
+                conversationId = existingConv.id;
+                copilotoEnabled = existingConv.copiloto_enabled ?? true;
+                // Atualizar last_message_at
+                await supabase
+                    .from('whatsapp_conversations')
+                    .update({ last_message_at: new Date().toISOString() })
+                    .eq('id', conversationId);
+            } else {
+                const { data: newConv } = await supabase
+                    .from('whatsapp_conversations')
+                    .insert({
+                        tenant_id: tenantId,
+                        external_id: from,
+                        contact_id: contactId,
+                        status: 'open',
+                        copiloto_enabled: true,
+                        last_message_at: new Date().toISOString(),
+                        metadata: { provider: 'twilio', profile_name: profileName }
+                    })
+                    .select('id')
+                    .single();
+                conversationId = newConv?.id || null;
+                copilotoEnabled = true;
+            }
+        } catch (err: any) {
+            console.warn(`${TAG} Erro ao buscar/criar conversa:`, err.message);
+        }
+
+        // 6. Registrar mensagem inbound no banco
         try {
             await supabase.from('whatsapp_messages').insert({
                 tenant_id: tenantId,
-                conversation_id: null, // Será preenchido pelo processador de conversas
+                conversation_id: conversationId,
                 direction: 'inbound',
                 from_number: from,
                 to_number: to,
-                body: body,
+                body_text: body,
                 media_url: mediaUrls.length > 0 ? mediaUrls[0] : null,
                 media_type: mediaTypes.length > 0 ? mediaTypes[0] : null,
                 external_id: messageSid,
@@ -114,28 +181,118 @@ router.post('/', async (req: Request, res: Response) => {
             console.error(`${TAG} Erro ao salvar mensagem no DB:`, dbErr.message);
         }
 
-        // 5. Atualizar contador de uso (não-bloqueante)
+        // 7. Atualizar contador de uso (não-bloqueante)
         TwilioRepository.upsertUsage({
             tenant_id: tenantId,
             subaccount_id: sub.id,
             messages_received: 1,
         }).catch((err) => console.warn(`${TAG} Erro ao atualizar uso:`, err.message));
 
-        // 6. Processar mensagem com IA (PLACEHOLDER)
-        // TODO: Integrar com o motor de IA da LIA
-        // Aqui seria chamado o mesmo pipeline que processa mensagens WhatsApp:
-        // - Buscar configurações do agente
-        // - Buscar contexto de conversa
-        // - Processar com IA
-        // - Responder via TwilioMessageService
-        console.log(`📨 ${TAG} Mensagem processada para tenant ${tenantId}: "${body.substring(0, 50)}..."`);
+        // 8. Processar com IA (apenas se copiloto estiver ativo e houver texto)
+        if (!copilotoEnabled) {
+            console.log(`${TAG} Copiloto desativado para conversa ${conversationId} — aguardando atendimento humano`);
+            return;
+        }
 
-        // EXEMPLO de resposta automática (descomente para testar):
-        // await TwilioMessageService.sendMessage(
-        //     tenantId,
-        //     from,
-        //     `Olá ${profileName}! Sua mensagem foi recebida. Um agente responderá em breve.`
-        // );
+        if (!body.trim()) {
+            console.log(`${TAG} Mensagem sem texto (apenas mídia) — ignorando processamento de IA`);
+            return;
+        }
+
+        // Buscar configurações do agente (playbook, regras, nome)
+        let agentSettings: any = null;
+        try {
+            const { data } = await supabase
+                .from('whatsapp_agent_settings')
+                .select('agent_name, rules_instructions, agent_mode, language')
+                .eq('tenant_id', tenantId)
+                .maybeSingle();
+            agentSettings = data;
+        } catch (err: any) {
+            console.warn(`${TAG} Sem configurações de agente para tenant ${tenantId}:`, err.message);
+        }
+
+        // Buscar histórico recente da conversa (últimas 10 mensagens para contexto)
+        let history: { role: string; content: string }[] = [];
+        if (conversationId) {
+            try {
+                const { data: msgs } = await supabase
+                    .from('whatsapp_messages')
+                    .select('direction, body_text')
+                    .eq('conversation_id', conversationId)
+                    .order('created_at', { ascending: false })
+                    .limit(10);
+
+                if (msgs) {
+                    history = msgs.reverse().map((m: any) => ({
+                        role: m.direction === 'inbound' ? 'user' : 'assistant',
+                        content: m.body_text || ''
+                    })).filter((m) => m.content);
+                }
+            } catch (err: any) {
+                console.warn(`${TAG} Erro ao buscar histórico:`, err.message);
+            }
+        }
+
+        // Montar system prompt com as regras do agente
+        const agentName = agentSettings?.agent_name || 'Assistente';
+        const rules = agentSettings?.rules_instructions || '';
+        const agentMode = agentSettings?.agent_mode || 'SDR';
+        const language = agentSettings?.language || 'pt-BR';
+
+        const systemPrompt = `Você é ${agentName}, um assistente de WhatsApp inteligente.
+Modo de operação: ${agentMode}
+Idioma: ${language}
+${rules ? `\nRegras e instruções:\n${rules}` : ''}
+
+Responda de forma natural, concisa e amigável. Não use markdown (sem asteriscos, sem #).
+Mantenha respostas curtas e diretas, adequadas para WhatsApp.
+Nome do cliente: ${profileName || 'Cliente'}`;
+
+        // Chamar OpenAI com histórico da conversa
+        let aiResponse = '';
+        try {
+            const result = await OpenAIService.chat(
+                body,
+                [{ role: 'system', content: systemPrompt }, ...history.slice(0, -1)]
+            );
+            aiResponse = result.text?.trim() || '';
+        } catch (aiErr: any) {
+            console.error(`${TAG} Erro ao chamar OpenAI:`, aiErr.message);
+            return;
+        }
+
+        if (!aiResponse) {
+            console.warn(`${TAG} IA retornou resposta vazia para tenant ${tenantId}`);
+            return;
+        }
+
+        // Enviar resposta via Twilio
+        const sendResult = await TwilioMessageService.sendMessage(tenantId, from, aiResponse);
+
+        if (sendResult.success) {
+            console.log(`✅ ${TAG} IA respondeu para ${from.slice(-4)}*** | tenant=${tenantId}`);
+
+            // Salvar mensagem outbound no banco
+            try {
+                await supabase.from('whatsapp_messages').insert({
+                    tenant_id: tenantId,
+                    conversation_id: conversationId,
+                    direction: 'outbound',
+                    from_number: to,
+                    to_number: from,
+                    body_text: aiResponse,
+                    external_id: sendResult.messageSid,
+                    provider: 'twilio',
+                    status: 'sent',
+                    metadata: { generated_by: 'lia_ai', agent_mode: agentMode }
+                });
+            } catch (saveErr: any) {
+                console.warn(`${TAG} Erro ao salvar resposta outbound:`, saveErr.message);
+            }
+        } else {
+            console.error(`❌ ${TAG} Falha ao enviar resposta: ${sendResult.error}`);
+        }
 
     } catch (error: any) {
         console.error(`❌ ${TAG} Erro:`, error);
@@ -168,10 +325,6 @@ router.post('/status', async (req: Request, res: Response) => {
                     .from('whatsapp_messages')
                     .update({
                         status: callback.MessageStatus,
-                        metadata: supabase.rpc ? undefined : {
-                            error_code: callback.ErrorCode,
-                            error_message: callback.ErrorMessage,
-                        },
                         updated_at: new Date().toISOString(),
                     })
                     .eq('external_id', callback.MessageSid);
