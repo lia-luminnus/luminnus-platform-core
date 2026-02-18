@@ -22,8 +22,14 @@ export function setupTwilioWebhookRoutes(app: any): void {
 
     // Rota de Diagnóstico (GET)
     app.get(['/api/twilio/webhook', '/api/twilio/webhook/'], (req: Request, res: Response) => {
-        console.log(`${TAG} 🔍 Verificação de reachability via GET`);
+        console.log(`${TAG} 🔍 Verificação de reachability via GET realizada com sucesso!`);
         res.send('✅ Twilio Webhook Endpoint is Live and Reachable!');
+    });
+
+    // Rota de Diagnóstico (POST TEST) - Simular Twilio
+    app.post('/api/twilio/webhook/test', (req: Request, res: Response) => {
+        console.log(`${TAG} 🧪 Teste de POST recebido com sucesso!`);
+        res.json({ ok: true, message: 'Se você viu isso, o POST está funcionando!', body: req.body });
     });
 
     // Rota Principal de Mensagem (Inbound)

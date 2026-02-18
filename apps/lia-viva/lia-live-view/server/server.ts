@@ -146,10 +146,18 @@ app.use(helmet({
 // CORS Dinâmico via Config
 app.use(corsHandler);
 
-// ENTRY LOG - BEFORE EVERYTHING (v6.1 - Super Debug)
+// ENTRY LOG - BEFORE EVERYTHING (v7.0 - HYPER DEBUG)
+// Captura absolutamente TUDO que encostar no servidor
 app.use((req, res, next) => {
-  if (req.path.includes('twilio')) {
-    console.log(`📡 [GOD LOG] ${req.method} ${req.path} | IP: ${req.ip} | Headers: ${JSON.stringify(req.headers)}`);
+  const isTwilio = req.path.includes('twilio') || req.headers['user-agent']?.toLowerCase().includes('twilio');
+
+  if (isTwilio) {
+    console.log(`🛰️ [HYPER LOG] TWILIO TRIGGER! ${req.method} ${req.path}`);
+    console.log(`   - Headers: ${JSON.stringify(req.headers)}`);
+    console.log(`   - Query: ${JSON.stringify(req.query)}`);
+  } else {
+    // Log básico para não poluir demais, mas confirmar que o servidor tá vivo
+    // console.log(`📥 [API] ${req.method} ${req.path}`);
   }
   next();
 });
