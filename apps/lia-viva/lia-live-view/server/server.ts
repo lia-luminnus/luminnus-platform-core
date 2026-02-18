@@ -103,12 +103,12 @@ const allowedOrigins = [
   'http://localhost:8080',
   'http://localhost:5173',
   'http://localhost:3000',
-  // Production domains (fallback in case ALLOWED_ORIGINS env is not set)
   'https://luminnus.ai',
   'https://www.luminnus.ai',
   'https://luminnus-dashboard.onrender.com',
+  'https://luminnus-platform-core-dashboard.onrender.com', // Adicionado por segurança
   ...config.cors.allowedOrigins
-];
+].filter(Boolean);
 
 function corsHandler(req: any, res: any, next: any) {
   const origin = req.headers.origin;
@@ -172,6 +172,17 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/api', (req, res, next) => {
   console.log(`📥 [API] ${req.method} ${req.path} | Origin: ${req.headers.origin || 'N/A'}`);
   next();
+});
+
+// Diagnostic Route for User
+app.get('/api/diag/status', (req, res) => {
+  res.json({
+    status: 'online',
+    timestamp: new Date().toISOString(),
+    env: config.env,
+    allowedOrigins,
+    headers: req.headers
+  });
 });
 
 // v1.3.1: Profile Route - Returns user plan info

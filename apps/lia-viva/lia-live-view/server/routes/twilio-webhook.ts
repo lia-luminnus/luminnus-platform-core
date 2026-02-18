@@ -32,6 +32,27 @@ export function setupTwilioWebhookRoutes(app: any): void {
         res.json({ ok: true, message: 'Se você viu isso, o POST está funcionando!', body: req.body });
     });
 
+    // Rota de Verificação de AccountSid (Para o Usuário validar se o banco está ok)
+    app.get('/api/twilio/check/:sid', async (req: Request, res: Response) => {
+        const { sid } = req.params;
+        try {
+            const sub = await TwilioRepository.getByAccountSid(sid);
+            if (sub) {
+                res.json({
+                    ok: true,
+                    found: true,
+                    tenant_id: sub.tenant_id,
+                    onboarding_status: sub.onboarding_status,
+                    phone: sub.twilio_phone_number ? `${sub.twilio_phone_number.slice(0, 5)}...` : 'not_set'
+                });
+            } else {
+                res.status(404).json({ ok: true, found: false, error: 'AccountSid não encontrada no banco da Luminnus' });
+            }
+        } catch (err: any) {
+            res.status(500).json({ ok: false, error: err.message });
+        }
+    });
+
     // Rota Principal de Mensagem (Inbound)
     app.post(['/api/twilio/webhook', '/api/twilio/webhook/'], async (req: Request, res: Response) => {
         const TAG = '[Twilio Webhook]';
