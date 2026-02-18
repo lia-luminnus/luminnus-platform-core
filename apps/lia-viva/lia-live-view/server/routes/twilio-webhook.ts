@@ -35,7 +35,19 @@ export function setupTwilioWebhookRoutes(app: any): void {
     // Rota de Verificação de AccountSid (Para o Usuário validar se o banco está ok)
     app.get('/api/twilio/check/:sid', async (req: Request, res: Response) => {
         const { sid } = req.params;
+        const MASTER_SID = (process.env.TWILIO_ACCOUNT_SID || '').trim();
+
         try {
+            if (sid === MASTER_SID) {
+                return res.json({
+                    ok: true,
+                    found: true,
+                    type: 'MASTER_ACCOUNT',
+                    tenant_id: '00000000-0000-0000-0000-000000000001',
+                    onboarding_status: 'master'
+                });
+            }
+
             const sub = await TwilioRepository.getByAccountSid(sid);
             if (sub) {
                 res.json({
@@ -69,13 +81,20 @@ export function setupTwilioWebhookRoutes(app: any): void {
 
             // 1. Identificar o Tenant pelo Sid da Conta Twilio
             const accountSid = payload.AccountSid;
-            if (!accountSid) {
-                console.error(`${TAG} Payload sem AccountSid — ignorando`);
-                return;
-            }
+            const MASTER_SID = (process.env.TWILIO_ACCOUNT_SID || '').trim();
+            const ADMIN_TENANT = '00000000-0000-0000-0000-000000000001';
 
-            const subaccount = await TwilioRepository.getByAccountSid(accountSid);
-            const tenantId = subaccount?.tenant_id;
+            let tenantId: string | undefined;
+            let subaccountId = '';
+
+            if (accountSid === MASTER_SID) {
+                console.log(`${TAG} 👑 MASTER ACCOUNT detectada. Mapeando para Admin Tenant.`);
+                tenantId = ADMIN_TENANT;
+            } else {
+                const subaccount = await TwilioRepository.getByAccountSid(accountSid);
+                tenantId = subaccount?.tenant_id;
+                subaccountId = subaccount?.id || '';
+            }
 
             const from = payload.From?.replace('whatsapp:', '') || '';
             const to = payload.To?.replace('whatsapp:', '') || '';
@@ -194,7 +213,7 @@ export function setupTwilioWebhookRoutes(app: any): void {
             // 6. Atualizar contador de uso
             TwilioRepository.upsertUsage({
                 tenant_id: tenantId,
-                subaccount_id: subaccount?.id || '',
+                subaccount_id: subaccountId,
                 messages_received: 1,
             }).catch((err) => console.warn(`${TAG} Erro ao atualizar uso:`, err.message));
 

@@ -106,9 +106,10 @@ const allowedOrigins = [
   'https://luminnus.ai',
   'https://www.luminnus.ai',
   'https://luminnus-dashboard.onrender.com',
-  'https://luminnus-platform-core-dashboard.onrender.com', // Adicionado por segurança
+  'https://luminnus-platform-core-dashboard.onrender.com',
+  'https://dashboard.luminnus.ai', // Possível custom domain
   ...config.cors.allowedOrigins
-].filter(Boolean);
+].map(o => o?.trim()).filter(Boolean);
 
 function corsHandler(req: any, res: any, next: any) {
   const origin = req.headers.origin;
@@ -352,7 +353,6 @@ async function startServer() {
   });
 
   console.log('🚀 [Server] Iniciando setup de rotas...');
-
 
   // API Routes
   setupSessionRoutes(app);
