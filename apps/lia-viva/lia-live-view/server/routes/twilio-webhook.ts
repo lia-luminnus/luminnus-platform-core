@@ -79,10 +79,13 @@ export function setupTwilioWebhookRoutes(app: any): void {
     // Rota Principal de Mensagem (Inbound)
     app.post(['/api/twilio/webhook', '/api/twilio/webhook/'], async (req: Request, res: Response) => {
         const TAG = '[Twilio Webhook]';
-        console.log(`${TAG} 📥 POST detectado imediatamente! (Trace v15.4)`);
+        const receivedAtFull = req.body.To || '';
+        console.log(`${TAG} 📥 POST v15.7! From: ${req.body.From} | To: ${receivedAtFull}`);
 
         try {
             const payload = req.body as TwilioWebhookPayload;
+            // v15.7: Mantemos o prefixo whatsapp: para o fromOverride
+            const receivedAt = receivedAtFull;
 
             // Responder imediatamente (Twilio espera 200 rápido)
             res.status(200).send('<Response></Response>');

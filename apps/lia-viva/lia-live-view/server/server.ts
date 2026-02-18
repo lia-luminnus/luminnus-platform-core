@@ -171,11 +171,17 @@ app.use(corsHandler);
 
 // Endpoint para ver os logs da memória (Bypass Render lag)
 app.get('/api/diag/memory-logs', (req, res) => {
+  const reversedLogs = [...memoryLogs].reverse();
   res.send(`<html><body style="background:#111;color:#0f0;padding:20px;font-family:monospace;">
-    <h2>📟 LIA Internal Memory Logs (Real-time)</h2>
-    <hr/>
-    <pre>${memoryLogs.join('\n')}</pre>
-    <script>setTimeout(() => location.reload(), 5000);</script>
+    <div style="position:fixed;top:0;left:0;right:0;background:#222;padding:10px;border-bottom:1px solid #444;z-index:1000;">
+      <h2 style="margin:0;display:inline-block;">📟 LIA Internal Logs</h2>
+      <button onclick="location.reload()" style="background:#0f0;color:#000;border:none;padding:5px 15px;cursor:pointer;margin-left:20px;font-weight:bold;">ATUALIZAR</button>
+      <a href="/api/twilio/manual-trigger" style="color:#0f0;margin-left:20px;text-decoration:none;">[Testar Servidor]</a>
+    </div>
+    <div style="margin-top:70px;">
+      <pre>${reversedLogs.join('\n')}</pre>
+    </div>
+    <script>setTimeout(() => location.reload(), 4000);</script>
   </body></html>`);
 });
 

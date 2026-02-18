@@ -156,7 +156,8 @@ export class TwilioMessageService {
             }
 
             // v15.2: Formatar números para o formato WhatsApp da Twilio
-            const fromWhatsApp = `whatsapp:${fromNumber}`;
+            // Se fromOverride tiver 'whatsapp:', preservamos. Senão adicionamos.
+            const fromWhatsApp = fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`;
             const toWhatsApp = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
 
             const messageParams: any = {
