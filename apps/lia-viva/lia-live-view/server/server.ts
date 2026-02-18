@@ -152,7 +152,18 @@ function corsHandler(req: any, res: any, next: any) {
 const app = express();
 const httpServer = createServer(app);
 
-// Endpoint para ver os logs da memória
+// v15.6: Body parsers (Crucial para Twilio POST)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Security & CORS
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: false,
+}));
+app.use(corsHandler);
+
+// Endpoint para ver os logs da memória (Bypass Render lag)
 app.get('/api/diag/memory-logs', (req, res) => {
   res.send(`<html><body style="background:#111;color:#0f0;padding:20px;font-family:monospace;">
     <h2>📟 LIA Internal Memory Logs (Real-time)</h2>
@@ -171,7 +182,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// v15.4: Prioridade máxima para Webhooks (Antes de body-parsers pesados ou CORS restrito)
+// v15.6: Prioridade máxima para Webhooks
 setupTwilioWebhookRoutes(app);
 console.log('🏁 [Twilio] Webhook priorizado no stack de rotas');
 
