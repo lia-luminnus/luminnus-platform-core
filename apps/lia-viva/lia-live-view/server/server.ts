@@ -1,4 +1,18 @@
 import { config } from './config/unifiedConfig.js';
+
+// v15.6: In-Memory Log Buffer para Bypass de Render Logs
+const memoryLogs: string[] = [];
+if (typeof console !== 'undefined') {
+  const originalLog = console.log;
+  console.log = (...args: any[]) => {
+    try {
+      const line = `[${new Date().toISOString()}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')}`;
+      memoryLogs.push(line);
+      if (memoryLogs.length > 200) memoryLogs.shift();
+    } catch (e) { /* ignore log errors */ }
+    originalLog.apply(console, args);
+  };
+}
 import helmet from 'helmet';
 const RELOAD_STAMP = "2026-01-29T16:00:00";
 // ===========================================================
@@ -138,35 +152,21 @@ function corsHandler(req: any, res: any, next: any) {
 const app = express();
 const httpServer = createServer(app);
 
-// v15.5: Body parsers no TOPO absoluto para evitar perda de dados
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// v15.5: NUCLEAR LOG - Registrar TUDO que encostar no middleware
-app.use((req, res, next) => {
-  if (req.path.includes('twilio')) {
-    console.log(`📡 [NUCLEAR] ${req.method} ${req.path} | IP: ${req.ip}`);
-  }
-  next();
+// Endpoint para ver os logs da memória
+app.get('/api/diag/memory-logs', (req, res) => {
+  res.send(`<html><body style="background:#111;color:#0f0;padding:20px;font-family:monospace;">
+    <h2>📟 LIA Internal Memory Logs (Real-time)</h2>
+    <hr/>
+    <pre>${memoryLogs.join('\n')}</pre>
+    <script>setTimeout(() => location.reload(), 5000);</script>
+  </body></html>`);
 });
 
-// Security Headers
-app.use(helmet({
-  contentSecurityPolicy: false, // Permitir carregamento de recursos externos por enquanto
-  crossOriginResourcePolicy: false,
-}));
-
-// CORS Dinâmico via Config
-app.use(corsHandler);
-
-// ENTRY LOG - BEFORE EVERYTHING (v7.0 - HYPER DEBUG)
+// v15.6: HYPER DEBUG LOG - Unificado
 app.use((req, res, next) => {
-  const isTwilio = req.path.includes('twilio') || req.headers['user-agent']?.toLowerCase().includes('twilio');
-
+  const isTwilio = req.path.includes('twilio') || (req.headers['user-agent']?.toLowerCase().includes('twilio'));
   if (isTwilio) {
-    console.log(`🛰️ [HYPER LOG] TWILIO TRIGGER! ${req.method} ${req.path}`);
-    console.log(`   - Headers: ${JSON.stringify(req.headers)}`);
-    console.log(`   - Query: ${JSON.stringify(req.query)}`);
+    console.log(`📡 [HYPER] ${req.method} ${req.path} | IP: ${req.ip}`);
   }
   next();
 });
