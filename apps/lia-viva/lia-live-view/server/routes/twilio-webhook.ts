@@ -329,9 +329,8 @@ INSTRUÇÕES DE FORMATO:
             }
 
             // 5. Enviar resposta via Twilio
-            // v15.3: Usamos payload.To como override para garantir que o 'From' seja o número que recebeu a mensagem
-            const receivedAt = payload.To?.replace('whatsapp:', '') || '';
-            console.log(`${TAG} 📤 Enviando resposta para ${from} (via ${receivedAt})...`);
+            // v15.7: Usamos a variável receivedAt já definida no topo
+            console.log(`${TAG} 📤 Enviando resposta para ${from} (via ${receivedAtFull})...`);
 
             const sendResult = await TwilioMessageService.sendMessage(
                 tenantId,
