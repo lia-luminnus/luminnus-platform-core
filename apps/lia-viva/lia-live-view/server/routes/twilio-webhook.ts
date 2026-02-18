@@ -28,8 +28,14 @@ export function setupTwilioWebhookRoutes(app: any): void {
 
     // Rota de Diagnóstico (POST TEST) - Simular Twilio
     app.post('/api/twilio/webhook/test', (req: Request, res: Response) => {
-        console.log(`${TAG} 🧪 Teste de POST recebido com sucesso!`);
-        res.json({ ok: true, message: 'Se você viu isso, o POST está funcionando!', body: req.body });
+        console.log(`${TAG} 🧪 Teste de POST recebido com sucesso! Body:`, req.body);
+        res.json({ ok: true, message: 'Body detectado!', body: req.body });
+    });
+
+    // v15.5: Trigger Manual para o Usuário testar se o servidor "ouve"
+    app.get('/api/twilio/manual-trigger', (req: Request, res: Response) => {
+        console.log('🔴 [MANUAL] Botão de pânico apertado! O servidor está VIVO e lendo esta rota.');
+        res.send('<h1>✅ O servidor ouviu você!</h1><p>Se você viu isso, o servidor está online. Olhe os logs do Render agora!</p>');
     });
 
     // Rota de Verificação de AccountSid (Para o Usuário validar se o banco está ok)

@@ -138,6 +138,18 @@ function corsHandler(req: any, res: any, next: any) {
 const app = express();
 const httpServer = createServer(app);
 
+// v15.5: Body parsers no TOPO absoluto para evitar perda de dados
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// v15.5: NUCLEAR LOG - Registrar TUDO que encostar no middleware
+app.use((req, res, next) => {
+  if (req.path.includes('twilio')) {
+    console.log(`📡 [NUCLEAR] ${req.method} ${req.path} | IP: ${req.ip}`);
+  }
+  next();
+});
+
 // Security Headers
 app.use(helmet({
   contentSecurityPolicy: false, // Permitir carregamento de recursos externos por enquanto
@@ -163,9 +175,7 @@ app.use((req, res, next) => {
 setupTwilioWebhookRoutes(app);
 console.log('🏁 [Twilio] Webhook priorizado no stack de rotas');
 
-// Middleware
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Middleware removido daqui e movido para o topo
 
 // ===========================================================
 // API REQUEST LOGGER (Debug Helper for 404s)
