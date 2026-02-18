@@ -387,8 +387,8 @@ async function startServer() {
   app.use('/api/admin', adminRoutes);
 
   // Twilio Multi-Tenant Routes
+  setupTwilioWebhookRoutes(app); // Webhook primeiro (prioridade)
   setupTwilioOnboardingRoutes(app);
-  setupTwilioWebhookRoutes(app);
   console.log('   ✅ Twilio routes (/api/twilio/*)');
 
   console.log('✅ Core LIA Functions loaded');
