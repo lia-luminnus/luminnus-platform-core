@@ -1,18 +1,3 @@
-import { config } from './config/unifiedConfig.js';
-
-// v15.6: In-Memory Log Buffer para Bypass de Render Logs
-const memoryLogs: string[] = [];
-if (typeof console !== 'undefined') {
-  const originalLog = console.log;
-  console.log = (...args: any[]) => {
-    try {
-      const line = `[${new Date().toISOString()}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')}`;
-      memoryLogs.push(line);
-      if (memoryLogs.length > 500) memoryLogs.shift();
-    } catch (e) { /* ignore log errors */ }
-    originalLog.apply(console, args);
-  };
-}
 import helmet from 'helmet';
 const RELOAD_STAMP = "2026-01-29T16:00:00";
 // ===========================================================
@@ -146,19 +131,10 @@ function corsHandler(req: any, res: any, next: any) {
 }
 
 // ===========================================================
-// EXPRESS + HTTP SERVER
-// ===========================================================
-
 const app = express();
 const httpServer = createServer(app);
 
-// v15.7: GLOBAL NUCLEAR LOG - No TOPO absoluto do Express
-app.use((req, res, next) => {
-  console.log(`📡 [GLOBAL] ${req.method} ${req.path} | UA: ${req.headers['user-agent']?.slice(0, 20)}`);
-  next();
-});
-
-// v15.7: Body parsers (Crucial para Twilio POST)
+// v15.7: Body parsers
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -168,31 +144,6 @@ app.use(helmet({
   crossOriginResourcePolicy: false,
 }));
 app.use(corsHandler);
-
-// Endpoint para ver os logs da memória (Bypass Render lag)
-app.get('/api/diag/memory-logs', (req, res) => {
-  const reversedLogs = [...memoryLogs].reverse();
-  res.send(`<html><body style="background:#111;color:#0f0;padding:20px;font-family:monospace;">
-    <div style="position:fixed;top:0;left:0;right:0;background:#222;padding:10px;border-bottom:1px solid #444;z-index:1000;">
-      <h2 style="margin:0;display:inline-block;">📟 LIA Internal Logs</h2>
-      <button onclick="location.reload()" style="background:#0f0;color:#000;border:none;padding:5px 15px;cursor:pointer;margin-left:20px;font-weight:bold;">ATUALIZAR</button>
-      <a href="/api/twilio/manual-trigger" style="color:#0f0;margin-left:20px;text-decoration:none;">[Testar Servidor]</a>
-    </div>
-    <div style="margin-top:70px;">
-      <pre>${reversedLogs.join('\n')}</pre>
-    </div>
-    <script>setTimeout(() => location.reload(), 4000);</script>
-  </body></html>`);
-});
-
-// v15.6: HYPER DEBUG LOG - Unificado
-app.use((req, res, next) => {
-  const isTwilio = req.path.includes('twilio') || (req.headers['user-agent']?.toLowerCase().includes('twilio'));
-  if (isTwilio) {
-    console.log(`📡 [HYPER] ${req.method} ${req.path} | IP: ${req.ip}`);
-  }
-  next();
-});
 
 // v15.6: Prioridade máxima para Webhooks
 setupTwilioWebhookRoutes(app);
