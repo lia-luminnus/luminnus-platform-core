@@ -234,13 +234,17 @@ INSTRUÇÕES DE FORMATO:
 - Mantenha respostas curtas (máximo 2-3 frases), adequadas para WhatsApp.
 - Nome do cliente: ${profileName || 'Cliente'}`;
 
-        // Chamar OpenAI com histórico da conversa
+        // Chamar OpenAI com histórico da conversa e system prompt
         let aiResponse = '';
         try {
+            const historyWithSystem = [
+                { role: 'system', content: systemPrompt },
+                ...history
+            ];
+
             const result = await OpenAIService.chat(
                 body,
-                history,
-                prompt
+                historyWithSystem
             );
             aiResponse = result.text?.trim() || '';
         } catch (aiErr: any) {
