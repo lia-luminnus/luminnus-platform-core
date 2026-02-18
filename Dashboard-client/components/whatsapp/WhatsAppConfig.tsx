@@ -185,7 +185,7 @@ REGRAS:
             const result = await backendService.uploadPlaybookDocument(file, editingPlaybook);
             if (result.ok) {
                 // Adicionar o texto extraído ao conteúdo atual do playbook
-                setPlaybookContent(prev => prev + '\n\n' + result.extractedText);
+                setPlaybookContent(prev => prev + '\n\n' + result.data?.extractedText);
                 alert('Documento processado com sucesso! O conteúdo foi adicionado às regras.');
             } else {
                 alert('Erro ao processar documento: ' + result.error);

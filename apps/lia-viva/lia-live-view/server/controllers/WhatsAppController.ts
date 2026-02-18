@@ -527,7 +527,10 @@ Responda de forma direta, clara e profissional, pronta para ser colada no editor
             const connection = await WhatsAppRepository.getActiveConnection(tenant_id);
 
             if (!connection?.config_json?.phone_number_id) {
-                return this.handleBadRequest(res, 'Integração não configurada');
+                return this.handleSuccess(res, {
+                    webhook_ok: false,
+                    message: 'Integração Meta não configurada. Configure o WhatsApp Business API para testar o webhook.'
+                });
             }
 
             // Simular teste (em produção poderia validar via Meta API)

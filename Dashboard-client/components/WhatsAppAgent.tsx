@@ -184,12 +184,13 @@ const WhatsAppAgentContent: React.FC = () => {
                         return;
                     }
 
-                    const data = await response.json().catch(() => ({ success: false, error: 'Erro ao processar resposta' }));
-                    if (data.success) {
+                    const data = await response.json().catch(() => ({ ok: false }));
+                    if (data.data?.webhook_ok) {
                         showNotify('✅ Webhook funcionando!', 'success');
                         fetchStatus();
                     } else {
-                        showNotify('⚠️ Erro no webhook: ' + (data.error || 'desconhecido'), 'error');
+                        const msg = data.data?.message || data.error || 'desconhecido';
+                        showNotify('⚠️ ' + msg, 'error');
                     }
                 } catch (err) {
                     showNotify('Falha ao testar webhook.', 'error');
@@ -249,15 +250,7 @@ const WhatsAppAgentContent: React.FC = () => {
                         <span className="material-symbols-outlined text-xs">settings_ethernet</span>
                         Gerenciar Conexão
                     </button>
-                    {isOnline ? (
-                        <button
-                            onClick={() => handleAction('webhook')}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-gray-300 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5 transition-all text-brand-primary font-black"
-                        >
-                            <span className="material-symbols-outlined text-xs">api</span>
-                            Testar Webhook
-                        </button>
-                    ) : (
+                    {!isOnline && (
                         <button
                             onClick={() => handleAction('hub')}
                             className="px-4 py-1.5 rounded-lg bg-brand-primary text-white text-[9px] font-black uppercase tracking-widest shadow-lg shadow-brand-primary/20 hover:scale-105 active:scale-95 transition-all"
