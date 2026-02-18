@@ -26,7 +26,7 @@ interface AudioAsset {
 
 const WhatsAppAudioInbox: React.FC = () => {
     const [search, setSearch] = useState('');
-    const [filter, setFilter] = useState<'all' | 'pending' | 'done'>('all');
+    const [filter, setFilter] = useState<'all' | 'pending' | 'done'>(() => (localStorage.getItem('whatsapp_audio_filter') as any) || 'all');
     const [selectedAudio, setSelectedAudio] = useState<AudioAsset | null>(null);
     const [playingId, setPlayingId] = useState<string | null>(null);
     const audioRef = useRef<HTMLAudioElement>(null);
@@ -208,7 +208,10 @@ const WhatsAppAudioInbox: React.FC = () => {
                         {(['all', 'pending', 'done'] as const).map((f) => (
                             <button
                                 key={f}
-                                onClick={() => setFilter(f)}
+                                onClick={() => {
+                                    setFilter(f);
+                                    localStorage.setItem('whatsapp_audio_filter', f);
+                                }}
                                 className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${filter === f
                                     ? 'bg-white dark:bg-brand-primary text-brand-primary dark:text-white shadow-sm'
                                     : 'text-gray-500 hover:text-gray-700 dark:hover:text-white'

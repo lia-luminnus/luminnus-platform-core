@@ -142,24 +142,61 @@ REGRAS:
     useEffect(() => {
         const loadSettings = async () => {
             setIsLoading(true);
-            const settings = await backendService.getWhatsAppSettings();
-            if (settings) {
-                setConfig({
-                    objective: settings.profile_json?.objective || 'vendas',
-                    tone: settings.profile_json?.tone || 'Consultivo',
-                    language: settings.profile_json?.language || 'pt-BR',
-                    handoff_rules: settings.profile_json?.handoff_rules || {
-                        sensitiveWords: true,
-                        angryCustomer: true,
-                        legalRequest: true
-                    }
-                });
-                setPlaybooks(settings.playbooks_json || []);
-            }
-            setIsLoading(false);
-        };
-        loadSettings();
+            const { tenantId } = backendService.getAuthContext();
 
+            try {
+                const settings = await backendService.getWhatsAppSettings();
+                if (settings && settings.profile_json) {
+                    console.log('✅ Settings loaded via Backend');
+                    applySettings(settings);
+                } else {
+                    console.warn('⚠️ Backend returned empty settings, trying Supabase direct...');
+                    await trySupabaseLoad(tenantId);
+                }
+            } catch (error) {
+                console.error('❌ Error loading settings via Backend:', error);
+                await trySupabaseLoad(tenantId);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        const trySupabaseLoad = async (tId: string | null) => {
+            if (!tId) return;
+            try {
+                const { supabase: sbClient } = await import('../../lib/supabase');
+                if (!sbClient) return;
+
+                const { data, error } = await sbClient
+                    .from('whatsapp_agent_settings')
+                    .select('*')
+                    .eq('tenant_id', tId)
+                    .maybeSingle();
+
+                if (data) {
+                    console.log('✅ Settings loaded via Supabase direct fallback');
+                    applySettings(data);
+                }
+            } catch (err) {
+                console.error('❌ Supabase direct load failed:', err);
+            }
+        };
+
+        const applySettings = (data: any) => {
+            setConfig({
+                objective: data.profile_json?.objective || 'vendas',
+                tone: data.profile_json?.tone || 'Consultivo',
+                language: data.profile_json?.language || 'pt-BR',
+                handoff_rules: data.profile_json?.handoff_rules || {
+                    sensitiveWords: true,
+                    angryCustomer: true,
+                    legalRequest: true
+                }
+            });
+            setPlaybooks(data.playbooks_json || []);
+        };
+
+        loadSettings();
     }, []);
 
     const handleSaveSettings = async () => {

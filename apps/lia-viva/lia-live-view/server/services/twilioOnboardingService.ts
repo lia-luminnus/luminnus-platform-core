@@ -170,7 +170,8 @@ export class TwilioOnboardingService {
                 twilio_account_sid: subaccount.sid,
                 twilio_auth_token_encrypted: encryptedToken,
                 friendly_name: name,
-            });
+                webhook_url: WEBHOOK_BASE_URL,
+            } as any);
 
             // Registrar log
             await TwilioRepository.logAction({
@@ -621,6 +622,7 @@ export class TwilioOnboardingService {
             await TwilioRepository.update(tenantId, {
                 onboarding_flow: 'byon',
                 billing_mode: options?.billingMode || 'start_plan',
+                webhook_url: WEBHOOK_BASE_URL,
             } as any);
 
             await TwilioRepository.updateStatusViaRPC(
@@ -660,6 +662,7 @@ export class TwilioOnboardingService {
         await TwilioRepository.update(tenantId, {
             twilio_phone_number: phoneNumber,
             twilio_phone_sid: phoneSid || null,
+            webhook_url: WEBHOOK_BASE_URL,
         } as any);
 
         // Configurar webhook

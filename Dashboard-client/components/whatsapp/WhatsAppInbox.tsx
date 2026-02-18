@@ -9,7 +9,7 @@ interface WhatsAppInboxProps {
 const WhatsAppInbox: React.FC<WhatsAppInboxProps> = ({ activeLeadId }) => {
     const [selectedConv, setSelectedConv] = useState<any>(null);
     const [copilotMode, setCopilotMode] = useState(false);
-    const [filter, setFilter] = useState('Todos');
+    const [filter, setFilter] = useState(() => localStorage.getItem('whatsapp_inbox_filter') || 'Todos');
     const [search, setSearch] = useState('');
     const [newMessage, setNewMessage] = useState('');
     const [conversations, setConversations] = useState<any[]>([]);
@@ -125,7 +125,10 @@ const WhatsAppInbox: React.FC<WhatsAppInboxProps> = ({ activeLeadId }) => {
                         {['Todos', 'Humano', 'IA'].map((f) => (
                             <button
                                 key={f}
-                                onClick={() => setFilter(f)}
+                                onClick={() => {
+                                    setFilter(f);
+                                    localStorage.setItem('whatsapp_inbox_filter', f);
+                                }}
                                 className={`px-3 py-1.5 rounded-full border transition-all text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${filter === f
                                     ? 'bg-brand-primary border-brand-primary text-white'
                                     : 'bg-white dark:bg-white/5 border-gray-300 dark:border-white/10 text-gray-500 hover:border-brand-primary/50'
