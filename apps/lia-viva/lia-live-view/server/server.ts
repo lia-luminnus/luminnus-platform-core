@@ -8,7 +8,7 @@ if (typeof console !== 'undefined') {
     try {
       const line = `[${new Date().toISOString()}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')}`;
       memoryLogs.push(line);
-      if (memoryLogs.length > 200) memoryLogs.shift();
+      if (memoryLogs.length > 500) memoryLogs.shift();
     } catch (e) { /* ignore log errors */ }
     originalLog.apply(console, args);
   };
@@ -149,12 +149,11 @@ function corsHandler(req: any, res: any, next: any) {
 // EXPRESS + HTTP SERVER
 // ===========================================================
 
-const app = express();
-const httpServer = createServer(app);
-
-// v15.6: Body parsers (Crucial para Twilio POST)
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// v15.7: GLOBAL NUCLEAR LOG - No TOPO absoluto do Express
+app.use((req, res, next) => {
+  console.log(`📡 [GLOBAL] ${req.method} ${req.path} | UA: ${req.headers['user-agent']?.slice(0, 20)}`);
+  next();
+});
 
 // Security & CORS
 app.use(helmet({

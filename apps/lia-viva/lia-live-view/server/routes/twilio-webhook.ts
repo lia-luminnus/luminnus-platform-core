@@ -34,8 +34,13 @@ export function setupTwilioWebhookRoutes(app: any): void {
 
     // v15.5: Trigger Manual para o Usuário testar se o servidor "ouve"
     app.get('/api/twilio/manual-trigger', (req: Request, res: Response) => {
-        console.log('🔴 [MANUAL] Botão de pânico apertado! O servidor está VIVO e lendo esta rota.');
-        res.send('<h1>✅ O servidor ouviu você!</h1><p>Se você viu isso, o servidor está online. Olhe os logs do Render agora!</p>');
+        const now = new Date().toISOString();
+        console.log(`🔴 [MANUAL] Trigger acionado em ${now} | IP: ${req.ip}`);
+        res.send(`<h1>✅ O servidor ouviu você!</h1>
+            <p>Horário do Servidor: <b>${now}</b></p>
+            <p>Se este horário estiver correto e você <b>NÃO</b> vê o log correspondente em /api/diag/memory-logs, então temos um bug no logger.</p>
+            <hr/>
+            <a href="/api/diag/memory-logs">Ver Logs Disponíveis</a>`);
     });
 
     // Rota de Verificação de AccountSid (Para o Usuário validar se o banco está ok)
