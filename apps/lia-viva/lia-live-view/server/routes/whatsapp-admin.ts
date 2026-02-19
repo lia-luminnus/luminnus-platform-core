@@ -233,23 +233,25 @@ router.get('/tenants', adminGate, async (req: Request, res: Response) => {
 
         if (twilioError) throw twilioError;
 
-        // 3. Unify Data (Single Source of Truth)
-        // We prioritize entries in 'whatsapp_connections'. 
-        // We only add entries from 'twilio_subaccounts' if they don't exist in connections.
+        // 3. Unify Data (Single Source of Truth group by Phone)
+        // We use a Map keyed by PHONE NUMBER to ensure uniqueness in the UI.
+        const tenantsByPhone = new Map();
 
-        const tenantsMap = new Map();
-
-        // Pass 1: Add all from connections
+        // Pass 1: Add all from connections (real configured connections)
         for (const conn of (connections || [])) {
+            const phone = conn.phone_number;
             const tId = conn.tenant_id;
-            const sub = twilioSubs?.find(s => s.tenant_id === tId);
+            const sub = twilioSubs?.find(s => s.tenant_id === tId || s.twilio_phone_number === phone);
             const isAdmin = tId === '00000000-0000-0000-0000-000000000001';
 
-            tenantsMap.set(tId, {
+            // If we already have this phone, we only overwrite if the current one is Admin or more recent
+            if (tenantsByPhone.has(phone) && !isAdmin) continue;
+
+            tenantsByPhone.set(phone, {
                 id: tId,
-                name: isAdmin ? 'LIA MASTER' : (sub?.friendly_name || conn.phone_number || tId),
-                phone: maskPhoneNumber(conn.phone_number || sub?.twilio_phone_number || ''),
-                real_phone: conn.phone_number || sub?.twilio_phone_number,
+                name: isAdmin ? 'LIA MASTER' : (sub?.friendly_name || phone || tId),
+                phone: maskPhoneNumber(phone || sub?.twilio_phone_number || ''),
+                real_phone: phone || sub?.twilio_phone_number,
                 provider: conn.provider || 'twilio',
                 status: conn.status === 'active' || conn.status === 'connected' ? 'online' : 'offline',
                 quality: conn.status === 'error' ? 'red' : 'green',
@@ -263,13 +265,14 @@ router.get('/tenants', adminGate, async (req: Request, res: Response) => {
 
         // Pass 2: Add orphans from twilio (not in connections yet)
         for (const sub of (twilioSubs || [])) {
-            if (!tenantsMap.has(sub.tenant_id)) {
+            const phone = sub.twilio_phone_number;
+            if (!tenantsByPhone.has(phone)) {
                 const isAdmin = sub.tenant_id === '00000000-0000-0000-0000-000000000001';
-                tenantsMap.set(sub.tenant_id, {
+                tenantsByPhone.set(phone, {
                     id: sub.tenant_id,
                     name: isAdmin ? 'LIA MASTER (Pendente)' : (sub.friendly_name || sub.tenant_id),
-                    phone: maskPhoneNumber(sub.twilio_phone_number || ''),
-                    real_phone: sub.twilio_phone_number,
+                    phone: maskPhoneNumber(phone || ''),
+                    real_phone: phone,
                     provider: 'twilio',
                     status: 'pending',
                     quality: 'yellow',
@@ -282,7 +285,7 @@ router.get('/tenants', adminGate, async (req: Request, res: Response) => {
             }
         }
 
-        const tenants = Array.from(tenantsMap.values());
+        const tenants = Array.from(tenantsByPhone.values());
 
         // Filter by search if provided
         const filteredTenants = search
