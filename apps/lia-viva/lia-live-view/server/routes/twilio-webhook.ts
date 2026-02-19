@@ -44,35 +44,39 @@ export function setupTwilioWebhookRoutes(app: any): void {
 
             console.log(`${TAG} Dados extraídos: From=${from}, To=${to}, Body='${body.slice(0, 20)}...', AccountSid=${accountSid}`);
 
-            // 2. Identificar o Tenant pela Subconta (Busca precisa por Fone + SID)
+            // 2. Identificar o Tenant e o Número de Destino Real
+            // Prioridade: Tentar casar SID + Fone. Se não der, confiar no SID e usar o Fone do banco.
             let subaccount = await TwilioRepository.getByAccountSidAndPhone(accountSid, to);
 
-            // Fallback para busca apenas por SID (se o número for novo ou não mapeado exatamente)
             if (!subaccount) {
+                // Fallback: Busca apenas pelo SID (cenário onde o 'To' vem zoado do Twilio ou Sandbox)
                 subaccount = await TwilioRepository.getByAccountSid(accountSid);
             }
 
-            const tenantId = subaccount?.tenant_id;
-            const subaccountId = subaccount?.id || '';
-
-            // 3. Isolamento do Número MASTER (Admin Oficial)
-            const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
-            const isMasterNumber = tenantId === ADMIN_TENANT_ID && to === subaccount?.twilio_phone_number;
-
-            console.log(`${TAG} Diagnosis: To=${to} | SID=${accountSid} | Tenant=${tenantId || 'None'} | isMaster=${isMasterNumber}`);
-
-            if (isMasterNumber) {
-                console.log(`${TAG} 👑 MENSAGEM NO NÚMERO MASTER (Uso Interno/Suporte). Respondendo sem IA (por enquanto) ou mantendo separado.`);
-                // Se o usuário quiser que nem salve, daríamos return aqui. 
-                // Mas vamos permitir salvar com uma flag para "não ficar na lista comum".
-            }
-
-            if (!tenantId) {
-                console.warn(`${TAG} 🛑 Webhook ignorado: AccountSid ${accountSid} (para ${to}) não mapeado no banco.`);
+            if (!subaccount) {
+                console.warn(`${TAG} 🛑 Webhook ignorado: AccountSid ${accountSid} não mapeado no banco.`);
                 return;
             }
 
-            console.log(`${TAG} 🎯 Tenant identificado: ${tenantId}`);
+            const tenantId = subaccount.tenant_id;
+            const subaccountId = subaccount.id;
+
+            // CORREÇÃO CRÍTICA v15.11: 
+            // Se o 'To' do payload for diferente do número da subconta (ex: testes, sandbox, ou roteamento interno),
+            // forçamos o uso do número que está NO BANCO para garantir a consistência do tenant.
+            const effectiveTo = subaccount.twilio_phone_number || to;
+
+            // 3. Isolamento do Número MASTER (Admin Oficial)
+            const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+            const isMasterNumber = tenantId === ADMIN_TENANT_ID;
+
+            console.log(`${TAG} Diagnosis: PayloadTo=${to} | EffectiveTo=${effectiveTo} | SID=${accountSid} | Tenant=${tenantId} | isMaster=${isMasterNumber}`);
+
+            if (isMasterNumber && to === effectiveTo) {
+                // Só logar como master se o número bater exatamente com o admin.
+                // Caso contrário, entra no fluxo normal (ex: cliente na conta admin).
+                console.log(`${TAG} ℹ️ Mensagem em canal Oficial Admin (Master).`);
+            }
 
             // 4. Extrair mídia (se houver)
             const mediaUrls: string[] = [];
@@ -165,7 +169,7 @@ export function setupTwilioWebhookRoutes(app: any): void {
                     conversation_id: conversationId,
                     direction: 'inbound',
                     from_number: from,
-                    to_number: to,
+                    to_number: effectiveTo,
                     body_text: body,
                     media_url: mediaUrls.length > 0 ? mediaUrls[0] : null,
                     external_id: messageSid,
@@ -196,9 +200,12 @@ export function setupTwilioWebhookRoutes(app: any): void {
                 messages_received: 1,
             }).catch((err) => console.warn(`${TAG} Erro ao atualizar uso:`, err.message));
 
-            // 9. Processar com IA (Se IA estiver ativa e NÃO for o número master do admin)
-            if (!copilotoEnabled || !body.trim() || isMasterNumber) {
-                console.log(`${TAG} IA ignorada: Copiloto=${copilotoEnabled}, Texto=${!!body.trim()}, Master=${isMasterNumber}`);
+            // 9. Processar com IA (Se IA estiver ativa e NÃO for o número master estrito)
+            // Se for o tenant Admin, só silencia se for O NÚMERO MASTER MESMO.
+            const shouldSilenceIA = isMasterNumber && effectiveTo === subaccount.twilio_phone_number;
+
+            if (!copilotoEnabled || !body.trim() || shouldSilenceIA) {
+                console.log(`${TAG} IA ignorada: Copiloto=${copilotoEnabled}, Texto=${!!body.trim()}, SilencedMaster=${shouldSilenceIA}`);
                 return;
             }
 
