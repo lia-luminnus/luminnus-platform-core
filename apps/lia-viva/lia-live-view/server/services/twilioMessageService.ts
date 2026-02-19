@@ -136,6 +136,7 @@ export class TwilioMessageService {
 
             if (fromOverride) {
                 fromNumber = fromOverride;
+                console.log(`${TAG} ℹ️ Usando remetente forçado pelo webhook: ${fromNumber}`);
             } else if (tenantId === ADMIN_TENANT) {
                 // Para o Admin/Master no Sandbox, geralmente é o número configurado no sandbox.
                 // Como não temos isso fácil no DB para a master, tentaremos inferir ou usar um padrão.
@@ -145,6 +146,7 @@ export class TwilioMessageService {
                 fromNumber = sub?.twilio_phone_number || process.env.TWILIO_MASTER_PHONE || '';
 
                 if (!fromNumber) {
+                    console.error(`${TAG} ❌ Erro: Número Master (TWILIO_MASTER_PHONE) não configurado e nenhum remetente forçado.`);
                     return { success: false, error: 'Número Master (TWILIO_MASTER_PHONE) não configurado' };
                 }
             } else {

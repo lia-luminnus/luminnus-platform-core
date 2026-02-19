@@ -217,29 +217,72 @@ router.get('/tenants', adminGate, async (req: Request, res: Response) => {
     const search = typeof searchRaw === 'string' ? searchRaw : undefined;
 
     try {
-        // Fetch real tenant data from whatsapp_connections
-        let query = supabase
+        // 1. Fetch real tenant data from whatsapp_connections
+        const { data: connections, error: connError } = await supabase
             .from('whatsapp_connections')
             .select('*')
             .neq('tenant_id', '00000000-0000-0000-0000-000000000000') // Exclude platform config
             .order('updated_at', { ascending: false });
 
-        const { data, error } = await query;
+        if (connError) throw connError;
 
-        if (error) throw error;
+        // 2. Fetch all active twilio subaccounts to find orphans
+        const { data: twilioSubs, error: twilioError } = await supabase
+            .from('twilio_subaccounts')
+            .select('tenant_id, twilio_phone_number, friendly_name, onboarding_status')
+            .eq('onboarding_status', 'active');
+
+        if (twilioError) throw twilioError;
+
+        // 3. Merge data
+        const connectionMap = new Map((connections || []).map((c: any) => [c.tenant_id, c]));
+        const twilioMap = new Map((twilioSubs || []).map((s: any) => [s.tenant_id, s]));
+
+        // Get all unique tenant IDs from both sets
+        const allTenantIds = new Set([
+            ...Array.from(connectionMap.keys()),
+            ...Array.from(twilioMap.keys())
+        ]);
 
         // Format for frontend
-        const tenants = (data || []).map(conn => ({
-            id: conn.tenant_id,
-            name: conn.tenant_id, // Could be joined with profiles/tenants table
-            phone: maskPhoneNumber(conn.phone_number || ''),
-            provider: conn.provider || 'meta',
-            status: conn.status === 'active' || conn.status === 'connected' ? 'online' : 'offline',
-            quality: conn.status === 'error' ? 'red' : 'green',
-            webhook: conn.status === 'error' ? 'error' : 'connected',
-            lastWebhook: conn.updated_at,
-            configured: !!(conn.config_json?.phone_number_id && conn.config_json?.access_token) || conn.provider === 'twilio'
-        }));
+        const tenants = Array.from(allTenantIds).map(tId => {
+            const conn = connectionMap.get(tId) as any;
+            const sub = twilioMap.get(tId) as any;
+            const isAdmin = tId === '00000000-0000-0000-0000-000000000001';
+
+            if (conn) {
+                return {
+                    id: tId,
+                    name: isAdmin ? 'LIA MASTER' : (sub?.friendly_name || tId),
+                    phone: maskPhoneNumber(conn.phone_number || sub?.twilio_phone_number || ''),
+                    real_phone: conn.phone_number || sub?.twilio_phone_number,
+                    provider: conn.provider || 'meta',
+                    status: conn.status === 'active' || conn.status === 'connected' ? 'online' : 'offline',
+                    quality: conn.status === 'error' ? 'red' : 'green',
+                    webhook: conn.status === 'error' ? 'error' : 'connected',
+                    lastWebhook: conn.updated_at,
+                    configured: !!(conn.config_json?.phone_number_id && conn.config_json?.access_token) || conn.provider === 'twilio',
+                    isMaster: isAdmin,
+                    isOrphan: false
+                };
+            } else {
+                // Orphan Twilio subaccount (no whatsapp_connection record yet)
+                return {
+                    id: tId,
+                    name: sub?.friendly_name || tId,
+                    phone: maskPhoneNumber(sub?.twilio_phone_number || ''),
+                    real_phone: sub?.twilio_phone_number,
+                    provider: 'twilio',
+                    status: 'pending',
+                    quality: 'yellow',
+                    webhook: 'not_configured',
+                    lastWebhook: null,
+                    configured: false,
+                    isMaster: isAdmin,
+                    isOrphan: true
+                };
+            }
+        });
 
         // Filter by search if provided
         const filteredTenants = search
@@ -257,6 +300,80 @@ router.get('/tenants', adminGate, async (req: Request, res: Response) => {
     } catch (error) {
         console.error('❌ Error fetching tenants:', error);
         res.status(500).json({ error: String(error), trace_id: ctx?.traceId });
+    }
+});
+
+/**
+ * POST /api/admin/whatsapp/sync-all
+ * Logic: Checks twilio_subaccounts and ensures every "active" subaccount has a 
+ * corresponding record in whatsapp_connections.
+ */
+router.post('/sync-all', adminGate, async (req: Request, res: Response) => {
+    const ctx = getAdminContext(req);
+    console.log('📡 [AdminWhatsApp] POST /sync-all solicitado');
+
+    try {
+        // 1. Get all active twilio subaccounts
+        const { data: subs, error: subError } = await supabase
+            .from('twilio_subaccounts')
+            .select('*')
+            .eq('onboarding_status', 'active');
+
+        if (subError) throw subError;
+
+        let createdCount = 0;
+        let updatedCount = 0;
+
+        for (const sub of (subs || [])) {
+            // 2. Check if connection exists
+            const { data: existing, error: fetchError } = await supabase
+                .from('whatsapp_connections')
+                .select('id')
+                .eq('tenant_id', sub.tenant_id)
+                .maybeSingle();
+
+            if (fetchError) continue;
+
+            if (!existing) {
+                // Create missing connection
+                const { error: insertError } = await supabase
+                    .from('whatsapp_connections')
+                    .insert({
+                        tenant_id: sub.tenant_id,
+                        phone_number: sub.twilio_phone_number,
+                        provider: 'twilio',
+                        status: 'active',
+                        updated_at: new Date().toISOString(),
+                        config_json: {
+                            subaccountSid: sub.twilio_account_sid,
+                            phoneNumber: sub.twilio_phone_number,
+                            byon: true
+                        }
+                    });
+
+                if (!insertError) createdCount++;
+            } else {
+                // Update existing to ensure phone number matches
+                await supabase
+                    .from('whatsapp_connections')
+                    .update({
+                        phone_number: sub.twilio_phone_number,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', existing.id);
+                updatedCount++;
+            }
+        }
+
+        res.json({
+            success: true,
+            created: createdCount,
+            updated: updatedCount,
+            trace_id: ctx?.traceId
+        });
+    } catch (error: any) {
+        console.error('❌ Error in sync-all:', error);
+        res.status(500).json({ error: error.message || String(error), trace_id: ctx?.traceId });
     }
 });
 

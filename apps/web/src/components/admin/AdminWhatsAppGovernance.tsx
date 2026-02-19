@@ -150,6 +150,30 @@ const AdminWhatsAppGovernance = () => {
         }
     };
 
+    const handleSyncAll = async () => {
+        setLoading(true);
+        try {
+            const token = session?.access_token || '';
+            const response = await fetch(apiUrl('/api/admin/whatsapp/sync-all'), {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            const data = await response.json();
+            if (data.success) {
+                toast.success(`Sincronização concluída! Criados: ${data.created}, Atualizados: ${data.updated}`);
+                fetchTenants();
+            } else {
+                throw new Error(data.error || "Erro na sincronização");
+            }
+        } catch (error) {
+            toast.error("Falha ao sincronizar: " + String(error));
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
         fetchTenants();
     }, [search]);
@@ -297,9 +321,15 @@ const AdminWhatsAppGovernance = () => {
                                 onChange={(e) => setSearch(e.target.value)}
                             />
                         </div>
-                        <Button variant="outline" size="sm" className="border-white/10 text-xs" onClick={() => fetchTenants()}>
-                            <RefreshCw className="w-3 h-3 mr-2" /> Atualizar
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button variant="outline" size="sm" className="border-white/10 text-xs" onClick={() => fetchTenants()}>
+                                <RefreshCw className="w-3 h-3 mr-2" /> Atualizar
+                            </Button>
+                            <Button variant="outline" size="sm" className="border-indigo-500/30 bg-indigo-500/10 text-xs text-indigo-400 font-bold hover:bg-indigo-500 hover:text-white" onClick={handleSyncAll} disabled={loading}>
+                                {loading ? <RefreshCw className="w-3 h-3 mr-2 animate-spin" /> : <ShieldCheck className="w-3 h-3 mr-2" />}
+                                Sincronizar Tudo
+                            </Button>
+                        </div>
                     </div>
 
                     <div className="rounded-xl border border-white/10 bg-slate-900/30 overflow-hidden">
@@ -317,9 +347,12 @@ const AdminWhatsAppGovernance = () => {
                             </thead>
                             <tbody className="divide-y divide-white/5">
                                 {tenants.map((tenant) => (
-                                    <tr key={tenant.id} className="hover:bg-white/[0.02] transition-colors group border-b border-white/5 last:border-0">
+                                    <tr key={tenant.id} className={`hover:bg-white/[0.02] transition-colors group border-b border-white/5 last:border-0 ${tenant.isMaster ? 'bg-indigo-500/[0.03]' : ''}`}>
                                         <td className="px-6 py-4">
-                                            <div className="font-bold text-white text-sm">{tenant.name}</div>
+                                            <div className="font-bold text-white text-sm flex items-center gap-2">
+                                                {tenant.name}
+                                                {tenant.isMaster && <Badge className="bg-brand-primary/20 text-brand-primary border-brand-primary/30 text-[8px] h-4">MASTER</Badge>}
+                                            </div>
                                             <div className="text-[10px] text-gray-500 font-mono tracking-tighter">{tenant.id}</div>
                                         </td>
                                         <td className="px-6 py-4 text-gray-400 font-mono text-xs">{tenant.phone}</td>
@@ -358,9 +391,24 @@ const AdminWhatsAppGovernance = () => {
                                             )}
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-all hover:bg-white/10">
-                                                <ChevronRight size={16} />
-                                            </Button>
+                                            <div className="flex justify-end gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 px-2 text-[10px] font-black uppercase tracking-tighter hover:bg-white/10 text-gray-400 hover:text-white"
+                                                    onClick={() => toast.info(`Inspecionando: ${tenant.id}`)}
+                                                >
+                                                    Inspecionar
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 px-2 text-[10px] font-black uppercase tracking-tighter hover:bg-brand-primary/20 text-brand-primary"
+                                                    onClick={() => toast.success(`Sincronizando: ${tenant.phone}`)}
+                                                >
+                                                    Sincronizar
+                                                </Button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -461,9 +509,24 @@ const AdminWhatsAppGovernance = () => {
                                             {sub.activated_at ? new Date(sub.activated_at).toLocaleDateString() : '--'}
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 hover:bg-white/10">
-                                                <ChevronRight size={16} />
-                                            </Button>
+                                            <div className="flex justify-end gap-1 text-[10px] font-black uppercase tracking-tighter">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 px-2 hover:bg-white/10 text-gray-400 hover:text-white"
+                                                    onClick={() => toast.info(`Inspecionando: ${sub.twilio_account_sid}`)}
+                                                >
+                                                    Inspecionar
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 px-2 hover:bg-brand-primary/20 text-brand-primary"
+                                                    onClick={() => toast.success(`Sincronizando subconta: ${sub.twilio_phone_number}`)}
+                                                >
+                                                    Sincronizar
+                                                </Button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
