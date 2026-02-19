@@ -44,22 +44,31 @@ export function setupTwilioWebhookRoutes(app: any): void {
 
             console.log(`${TAG} Dados extraídos: From=${from}, To=${to}, Body='${body.slice(0, 20)}...', AccountSid=${accountSid}`);
 
-            // 2. Identificar o Tenant pela Subconta (ANTES do isolamento)
-            const subaccount = await TwilioRepository.getByAccountSid(accountSid);
+            // 2. Identificar o Tenant pela Subconta (Busca precisa por Fone + SID)
+            let subaccount = await TwilioRepository.getByAccountSidAndPhone(accountSid, to);
+
+            // Fallback para busca apenas por SID (se o número for novo ou não mapeado exatamente)
+            if (!subaccount) {
+                subaccount = await TwilioRepository.getByAccountSid(accountSid);
+            }
+
             const tenantId = subaccount?.tenant_id;
             const subaccountId = subaccount?.id || '';
 
-            // 3. Isolamento da Conta MASTER (Mais inteligente)
-            const MASTER_SID = (process.env.TWILIO_ACCOUNT_SID || '').trim();
-            console.log(`${TAG} Diagnosis: ReceivedSID=${accountSid} | MasterSID=${MASTER_SID} | RegisteredTenant=${tenantId || 'None'}`);
+            // 3. Isolamento do Número MASTER (Admin Oficial)
+            const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+            const isMasterNumber = tenantId === ADMIN_TENANT_ID && to === subaccount?.twilio_phone_number;
 
-            if (accountSid === MASTER_SID && !tenantId) {
-                console.log(`${TAG} 👑 MENSAGEM NO MASTER (SEM TENANT). Ignorando fluxo de cliente.`);
-                return;
+            console.log(`${TAG} Diagnosis: To=${to} | SID=${accountSid} | Tenant=${tenantId || 'None'} | isMaster=${isMasterNumber}`);
+
+            if (isMasterNumber) {
+                console.log(`${TAG} 👑 MENSAGEM NO NÚMERO MASTER (Uso Interno/Suporte). Respondendo sem IA (por enquanto) ou mantendo separado.`);
+                // Se o usuário quiser que nem salve, daríamos return aqui. 
+                // Mas vamos permitir salvar com uma flag para "não ficar na lista comum".
             }
 
             if (!tenantId) {
-                console.warn(`${TAG} 🛑 Webhook ignorado: AccountSid ${accountSid} não está vinculado a nenhum tenant no banco.`);
+                console.warn(`${TAG} 🛑 Webhook ignorado: AccountSid ${accountSid} (para ${to}) não mapeado no banco.`);
                 return;
             }
 
@@ -163,6 +172,7 @@ export function setupTwilioWebhookRoutes(app: any): void {
                     provider: 'twilio',
                     status: 'received',
                     metadata: {
+                        is_master: isMasterNumber,
                         profile_name: profileName,
                         num_media: numMedia,
                         media_urls: mediaUrls,
@@ -186,9 +196,9 @@ export function setupTwilioWebhookRoutes(app: any): void {
                 messages_received: 1,
             }).catch((err) => console.warn(`${TAG} Erro ao atualizar uso:`, err.message));
 
-            // 9. Processar com IA
-            if (!copilotoEnabled || !body.trim()) {
-                console.log(`${TAG} IA ignorada: Copiloto=${copilotoEnabled}, Texto=${!!body.trim()}`);
+            // 9. Processar com IA (Se IA estiver ativa e NÃO for o número master do admin)
+            if (!copilotoEnabled || !body.trim() || isMasterNumber) {
+                console.log(`${TAG} IA ignorada: Copiloto=${copilotoEnabled}, Texto=${!!body.trim()}, Master=${isMasterNumber}`);
                 return;
             }
 

@@ -75,6 +75,21 @@ export class TwilioRepository {
     }
 
     /**
+     * Buscar subconta por Account SID e Telefone (Resolução de conflitos)
+     */
+    static async getByAccountSidAndPhone(sid: string, phone: string): Promise<TwilioSubaccount | null> {
+        const { data, error } = await supabase
+            .from('twilio_subaccounts')
+            .select('*')
+            .eq('twilio_account_sid', sid)
+            .eq('twilio_phone_number', phone)
+            .maybeSingle();
+
+        if (error) throw new Error(`[TwilioRepo] Erro ao buscar subconta por SID e Fone: ${error.message}`);
+        return data as TwilioSubaccount | null;
+    }
+
+    /**
      * Atualizar subconta
      */
     static async update(tenantId: string, updates: Partial<TwilioSubaccount>): Promise<TwilioSubaccount> {
