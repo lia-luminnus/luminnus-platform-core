@@ -648,29 +648,85 @@ export class TwilioOnboardingService {
     /**
      * Callback do BYON — recebe as credenciais do número que o cliente associou.
      */
+    /**
+     * Sincroniza o status do número e descobre o Phone SID automaticamente se estiver ausente.
+     * Isso permite que o usuário não tenha que digitar IDs técnicos.
+     */
+    static async syncNumberStatus(tenantId: string): Promise<void> {
+        const TAG = '[TwilioOnboarding.syncStatus]';
+        const sub = await TwilioRepository.getByTenantId(tenantId);
+        if (!sub || !sub.twilio_phone_number) return;
+
+        try {
+            const authToken = decryptToken(sub.twilio_auth_token_encrypted);
+            const subClient = Twilio(sub.twilio_account_sid, authToken);
+
+            console.log(`${TAG} Sincronizando número ${sub.twilio_phone_number} para tenant ${tenantId}`);
+
+            // Listar números na subconta
+            const numbers = await subClient.incomingPhoneNumbers.list();
+            const match = numbers.find(n =>
+                n.phoneNumber === sub.twilio_phone_number ||
+                n.phoneNumber.replace(/\D/g, '').endsWith(sub.twilio_phone_number.replace(/\D/g, '').slice(-9))
+            );
+
+            if (match) {
+                console.log(`✅ ${TAG} SID encontrado: ${match.sid}`);
+                await TwilioRepository.update(tenantId, {
+                    twilio_phone_sid: match.sid,
+                    // Se estiver em branco, aproveita para configurar o webhook
+                    webhook_url: sub.webhook_url || WEBHOOK_BASE_URL
+                } as any);
+
+                // Configurar webhook se necessário
+                await TwilioOnboardingService.configureWebhook(tenantId);
+            } else {
+                console.warn(`⚠️ ${TAG} Número ${sub.twilio_phone_number} não encontrado na subconta ${sub.twilio_account_sid}`);
+            }
+        } catch (err: any) {
+            console.error(`❌ ${TAG} Erro ao sincronizar:`, err.message);
+        }
+    }
+
     static async handleByonCallback(
         tenantId: string,
         phoneNumber: string,
-        phoneSid?: string
+        phoneSid?: string,
+        metaData?: {
+            metaWabaId?: string;
+            metaPhoneNumberId?: string;
+            metaBusinessId?: string;
+        }
     ): Promise<void> {
         const TAG = '[TwilioOnboarding.byonCallback]';
 
         const sub = await TwilioRepository.getByTenantId(tenantId);
         if (!sub) throw new Error(`${TAG} Subconta não encontrada`);
 
-        // Atualizar com número
+        // Atualizar com número e Meta IDs
         await TwilioRepository.update(tenantId, {
             twilio_phone_number: phoneNumber,
-            twilio_phone_sid: phoneSid || null,
+            twilio_phone_sid: phoneSid || sub.twilio_phone_sid || null,
+            meta_waba_id: metaData?.metaWabaId || sub.meta_waba_id || null,
+            meta_phone_number_id: metaData?.metaPhoneNumberId || sub.meta_phone_number_id || null,
+            meta_business_id: metaData?.metaBusinessId || sub.meta_business_id || null,
             webhook_url: WEBHOOK_BASE_URL,
         } as any);
 
-        // Configurar webhook
-        if (sub.twilio_phone_sid || phoneSid) {
-            try {
-                await TwilioOnboardingService.configureWebhook(tenantId);
-            } catch (err: any) {
-                console.warn(`${TAG} Webhook config falhou, pode ser configurado manualmente:`, err.message);
+        // Se não veio Phone SID, tenta descobrir
+        if (!phoneSid && !sub.twilio_phone_sid) {
+            console.log(`${TAG} SID ausente, tentando descoberta automática...`);
+            await TwilioOnboardingService.syncNumberStatus(tenantId);
+        } else {
+            // Configurar webhook se tivermos o Phone SID
+            const effectiveSid = phoneSid || sub.twilio_phone_sid;
+            if (effectiveSid) {
+                try {
+                    console.log(`${TAG} Configurando webhook para Phone SID: ${effectiveSid}`);
+                    await TwilioOnboardingService.configureWebhook(tenantId);
+                } catch (err: any) {
+                    console.warn(`${TAG} Webhook config falhou:`, err.message);
+                }
             }
         }
 
@@ -681,14 +737,12 @@ export class TwilioOnboardingService {
             'byon_callback_complete',
             {
                 phone_number: phoneNumber,
-                phone_sid: phoneSid,
+                sync_attempted: true
             }
         );
 
-        // Vincular
+        // Vincular ao whatsapp_connections
         await TwilioRepository.linkToConnection(tenantId, sub.id);
-
-        console.log(`✅ ${TAG} BYON completo para tenant ${tenantId}: ${phoneNumber}`);
     }
 
     // ========================================================
@@ -712,9 +766,6 @@ export class TwilioOnboardingService {
         const sub = await TwilioRepository.getByTenantId(tenantId);
         if (!sub) return null;
 
-        const today = new Date().toISOString().split('T')[0];
-
-        // This would normally query Twilio API, but for now use local tracking
         return {
             today: { sent: 0, received: 0, cost: 0 },
             subaccount: {
@@ -732,22 +783,14 @@ export class TwilioOnboardingService {
 
     /**
      * Reverter uma subconta em caso de falha no onboarding.
-     * Fecha (desativa) a subconta na Twilio para evitar custos.
      */
     private static async rollbackSubaccount(sid: string, reason: string): Promise<void> {
         const TAG = '[TwilioOnboarding.rollback]';
-
         try {
             const client = getMasterClient();
-
-            // Fechar subconta (status = 'closed' na Twilio)
-            await client.api.accounts(sid).update({
-                status: 'closed',
-            });
-
+            await client.api.accounts(sid).update({ status: 'closed' });
             console.log(`🔙 ${TAG} Subconta ${sid} revertida: ${reason}`);
         } catch (err: any) {
-            // Rollback falhou — logar mas não propagar
             console.error(`❌ ${TAG} Rollback falhou para ${sid}:`, err.message);
         }
     }

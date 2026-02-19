@@ -5,15 +5,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import WhatsAppConfig from './whatsapp/WhatsAppConfig';
 import WhatsAppInbox from './whatsapp/WhatsAppInbox';
 import WhatsAppSummaries from './whatsapp/WhatsAppSummaries';
+import WhatsAppConnection from './whatsapp/WhatsAppConnection';
 
 const WhatsAppAgent: React.FC = () => {
     const { t } = useContext(LanguageContext);
-    const [activeTab, setActiveTab] = useState<'config' | 'inbox' | 'summaries'>('config');
+    const [activeTab, setActiveTab] = useState<'connection' | 'config' | 'inbox' | 'summaries'>('connection');
 
     const tabs = [
-        { id: 'config', label: 'Configuração', icon: 'settings_suggest' },
-        { id: 'inbox', label: 'Inbox', icon: 'inbox' },
-        { id: 'summaries', label: 'Resumos', icon: 'description' }
+        { id: 'connection', label: 'Conexão', icon: 'link' },
+        { id: 'config', label: 'Configuração', icon: 'settings' },
+        { id: 'inbox', label: 'Mensagens', icon: 'chat' },
+        { id: 'summaries', label: 'Resumos', icon: 'description' },
     ];
 
     return (
@@ -67,16 +69,17 @@ const WhatsAppAgent: React.FC = () => {
                 </div>
             </div>
 
-            <div className="flex-1 overflow-hidden relative">
+            <div className="flex-1 overflow-y-auto relative p-0">
                 <AnimatePresence mode="wait">
                     <motion.div
                         key={activeTab}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
                         transition={{ duration: 0.2 }}
                         className="h-full"
                     >
+                        {activeTab === 'connection' && <WhatsAppConnection />}
                         {activeTab === 'config' && <WhatsAppConfig />}
                         {activeTab === 'inbox' && <WhatsAppInbox />}
                         {activeTab === 'summaries' && <WhatsAppSummaries />}

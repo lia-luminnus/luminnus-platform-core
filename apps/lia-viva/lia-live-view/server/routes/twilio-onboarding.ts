@@ -133,7 +133,14 @@ router.post('/onboard/byon/start', async (req: Request, res: Response) => {
  */
 router.post('/onboard/byon/callback', async (req: Request, res: Response) => {
     try {
-        const { tenant_id, phone_number, phone_sid } = req.body;
+        const {
+            tenant_id,
+            phone_number,
+            phone_sid,
+            meta_waba_id,
+            meta_phone_number_id,
+            meta_business_id
+        } = req.body;
 
         if (!tenant_id || !phone_number) {
             return res.status(400).json({
@@ -144,7 +151,16 @@ router.post('/onboard/byon/callback', async (req: Request, res: Response) => {
 
         console.log(`📞 [Twilio BYON Callback] Tenant: ${tenant_id}, Phone: ${phone_number}`);
 
-        await TwilioOnboardingService.handleByonCallback(tenant_id, phone_number, phone_sid);
+        await TwilioOnboardingService.handleByonCallback(
+            tenant_id,
+            phone_number,
+            phone_sid,
+            {
+                metaWabaId: meta_waba_id,
+                metaPhoneNumberId: meta_phone_number_id,
+                metaBusinessId: meta_business_id
+            }
+        );
 
         res.json({
             ok: true,
@@ -320,6 +336,29 @@ router.post('/subaccount/disconnect', async (req: Request, res: Response) => {
         res.json({ ok: true, data: { status: 'closed' } });
     } catch (error: any) {
         console.error('❌ [Twilio Disconnect] Erro:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/twilio/subaccount/sync
+ * Sincroniza automaticamente os dados técnicos (Phone SID) da subconta.
+ *
+ * Body: { tenant_id }
+ */
+router.post('/subaccount/sync', async (req: Request, res: Response) => {
+    try {
+        const { tenant_id } = req.body;
+
+        if (!tenant_id) {
+            return res.status(400).json({ ok: false, error: 'tenant_id é obrigatório' });
+        }
+
+        await TwilioOnboardingService.syncNumberStatus(tenant_id);
+
+        res.json({ ok: true, message: 'Sincronização concluída' });
+    } catch (error: any) {
+        console.error('❌ [Twilio Sync] Erro:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
