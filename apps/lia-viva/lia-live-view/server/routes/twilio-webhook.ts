@@ -54,37 +54,50 @@ export function setupTwilioWebhookRoutes(app: any): void {
                 subaccount = await TwilioRepository.getByAccountSid(accountSid);
             }
 
-            // TENTATIVA FINAL DE RESGATE (v15.12):
-            // O Sandbox do Twilio às vezes envia um AccountSid genérico (ex: ACc48...) que não é o da subconta.
-            // Se falhou pelo SID, tentamos achar o tenant pelo número de ORIGEM (From) do cliente, 
-            // assumindo que ele já falou antes ou foi cadastrado.
+            // TENTATIVA FINAL DE RESGATE (v15.13 - Ajustado para Sandbox):
+            // O Sandbox do Twilio envia um AccountSid que às vezes não bate com a subconta, e o 'To' é o número do Sandbox (+1415...).
+            // Então, se falhou por SID, tentamos achar a subconta pelo NÚMERO DO CLIENTE (From).
+            // Isso assume que o número que está mandando msg (From) é o próprio número cadastrado como 'twilio_phone_number' na subconta (fluxo BYON/Sandbox).
             if (!subaccount) {
-                console.warn(`${TAG} ⚠️ SID ${accountSid} desconhecido. Tentando identificar tenant pelo Remetente: ${from}`);
-                // Implementação rápida de resgate via Supabase direto para não quebrar contrato do Repo agora
+                console.warn(`${TAG} ⚠️ SID ${accountSid} desconhecido. Tentando identificar tenant pelo FROM (Whatsapp do Cliente): ${from}`);
+
+                // Buscar subconta onde o número do whatsapp seja igual ao From (sem o prefixo whatsapp:)
                 const { data: rescueSub } = await supabase
                     .from('twilio_subaccounts')
                     .select('*')
-                    .eq('twilio_phone_number', to) // Tenta bater com o To (número da empresa)
+                    .eq('twilio_phone_number', from)
                     .maybeSingle();
 
                 if (rescueSub) {
-                    subaccount = rescueSub;
-                    console.log(`${TAG} 🚑 Tenant resgatado pelo To: ${to} -> ${subaccount.id}`);
+                    subaccount = rescueSub as TwilioSubaccount;
+                    console.log(`${TAG} 🚑 Tenant resgatado pelo FROM: ${from} -> ${subaccount.id}`);
                 }
             }
 
             if (!subaccount) {
-                console.warn(`${TAG} 🛑 Webhook ignorado TOTALMENTE: AccountSid ${accountSid} e To ${to} não mapeados.`);
+                // Última chance: Tentar pelo TO também (caso seja número próprio fora do sandbox)
+                const { data: rescueSubTo } = await supabase
+                    .from('twilio_subaccounts')
+                    .select('*')
+                    .eq('twilio_phone_number', to)
+                    .maybeSingle();
+
+                if (rescueSubTo) {
+                    subaccount = rescueSubTo as TwilioSubaccount;
+                    console.log(`${TAG} 🚑 Tenant resgatado pelo TO: ${to} -> ${subaccount.id}`);
+                }
+            }
+
+            if (!subaccount) {
+                console.warn(`${TAG} 🛑 Webhook ignorado TOTALMENTE: AccountSid ${accountSid}, From ${from} e To ${to} não mapeados.`);
                 return;
             }
 
             const tenantId = subaccount.tenant_id;
             const subaccountId = subaccount.id;
 
-            // CORREÇÃO CRÍTICA v15.11: 
-            // Se o 'To' do payload for diferente do número da subconta (ex: testes, sandbox, ou roteamento interno),
-            // forçamos o uso do número que está NO BANCO para garantir a consistência do tenant.
-            const effectiveTo = subaccount.twilio_phone_number || to;
+            // CORREÇÃO CRÍTICA (Mantida): O 'effectiveTo' deve ser o número oficial da subconta encontrada.
+            const effectiveTo = subaccount.twilio_phone_number;
 
             // 3. Isolamento do Número MASTER (Admin Oficial)
             const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
