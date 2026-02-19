@@ -50,11 +50,31 @@ export function setupTwilioWebhookRoutes(app: any): void {
 
             if (!subaccount) {
                 // Fallback: Busca apenas pelo SID (cenário onde o 'To' vem zoado do Twilio ou Sandbox)
+                console.warn(`${TAG} ⚠️ Subconta não encontrada por SID+To. Tentando apenas por SID: ${accountSid}`);
                 subaccount = await TwilioRepository.getByAccountSid(accountSid);
             }
 
+            // TENTATIVA FINAL DE RESGATE (v15.12):
+            // O Sandbox do Twilio às vezes envia um AccountSid genérico (ex: ACc48...) que não é o da subconta.
+            // Se falhou pelo SID, tentamos achar o tenant pelo número de ORIGEM (From) do cliente, 
+            // assumindo que ele já falou antes ou foi cadastrado.
             if (!subaccount) {
-                console.warn(`${TAG} 🛑 Webhook ignorado: AccountSid ${accountSid} não mapeado no banco.`);
+                console.warn(`${TAG} ⚠️ SID ${accountSid} desconhecido. Tentando identificar tenant pelo Remetente: ${from}`);
+                // Implementação rápida de resgate via Supabase direto para não quebrar contrato do Repo agora
+                const { data: rescueSub } = await supabase
+                    .from('twilio_subaccounts')
+                    .select('*')
+                    .eq('twilio_phone_number', to) // Tenta bater com o To (número da empresa)
+                    .maybeSingle();
+
+                if (rescueSub) {
+                    subaccount = rescueSub;
+                    console.log(`${TAG} 🚑 Tenant resgatado pelo To: ${to} -> ${subaccount.id}`);
+                }
+            }
+
+            if (!subaccount) {
+                console.warn(`${TAG} 🛑 Webhook ignorado TOTALMENTE: AccountSid ${accountSid} e To ${to} não mapeados.`);
                 return;
             }
 
