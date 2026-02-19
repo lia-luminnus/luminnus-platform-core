@@ -61,12 +61,15 @@ export function setupTwilioWebhookRoutes(app: any): void {
             const messageSid = payload.MessageSid;
             const numMedia = parseInt(payload.NumMedia || '0');
 
-            console.log(`${TAG} Recebido: From=${from}, To=${to}, AccountSid=${accountSid}, Tenant=${tenantId || 'NÃO ENCONTRADO'}`);
+            console.log(`${TAG} Dados extraídos: From=${from}, To=${to}, Body='${body.slice(0, 20)}...', AccountSid=${accountSid}`);
 
             if (!tenantId) {
                 console.warn(`${TAG} 🛑 Webhook ignorado: AccountSid ${accountSid} não está vinculado a nenhum tenant no banco.`);
+                console.log(`${TAG} ℹ️ Dica: Verifique se a subconta está na tabela twilio_subaccounts.`);
                 return;
             }
+
+            console.log(`${TAG} 🎯 Tenant identificado: ${tenantId}`);
 
             // 2. Extrair mídia (se houver)
             const mediaUrls: string[] = [];
@@ -90,16 +93,21 @@ export function setupTwilioWebhookRoutes(app: any): void {
 
                 if (existingContact) {
                     contactId = existingContact.id;
+                    console.log(`${TAG} 👤 Contato encontrado: ${contactId}`);
                 } else {
-                    const { data: newContact } = await supabase
+                    console.log(`${TAG} 🆕 Criando novo contato para ${from}...`);
+                    const { data: newContact, error: insError } = await supabase
                         .from('whatsapp_contacts')
                         .insert({ tenant_id: tenantId, phone: from, name: profileName || from })
                         .select('id')
                         .single();
+
+                    if (insError) throw insError;
                     contactId = newContact?.id || null;
+                    console.log(`${TAG} 👤 Contato criado: ${contactId}`);
                 }
             } catch (err: any) {
-                console.warn(`${TAG} Erro ao buscar/criar contato:`, err.message);
+                console.error(`${TAG} ❌ Erro Crítico Contato:`, err.message);
             }
 
             // 4. Buscar ou criar conversa
@@ -117,12 +125,14 @@ export function setupTwilioWebhookRoutes(app: any): void {
                 if (existingConv) {
                     conversationId = existingConv.id;
                     copilotoEnabled = existingConv.copiloto_enabled ?? true;
+                    console.log(`${TAG} 💬 Conversa ativa: ${conversationId} | IA=${copilotoEnabled}`);
                     await supabase
                         .from('whatsapp_conversations')
                         .update({ last_message_at: new Date().toISOString() })
                         .eq('id', conversationId);
                 } else {
-                    const { data: newConv } = await supabase
+                    console.log(`${TAG} 🆕 Abrindo nova conversa para ${from}...`);
+                    const { data: newConv, error: convError } = await supabase
                         .from('whatsapp_conversations')
                         .insert({
                             tenant_id: tenantId,
@@ -135,11 +145,14 @@ export function setupTwilioWebhookRoutes(app: any): void {
                         })
                         .select('id')
                         .single();
+
+                    if (convError) throw convError;
                     conversationId = newConv?.id || null;
                     copilotoEnabled = true;
+                    console.log(`${TAG} 💬 Conversa criada: ${conversationId}`);
                 }
             } catch (err: any) {
-                console.warn(`${TAG} Erro ao buscar/criar conversa:`, err.message);
+                console.error(`${TAG} ❌ Erro Crítico Conversa:`, err.message);
             }
 
             // 5. Registrar mensagem inbound no banco
