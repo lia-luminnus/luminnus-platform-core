@@ -24,36 +24,17 @@ export function setupTwilioWebhookRoutes(app: any): void {
     app.post(['/api/twilio/webhook', '/api/twilio/webhook/'], async (req: Request, res: Response) => {
         const TAG = '[Twilio Webhook]';
         const receivedAtFull = req.body.To || '';
-        console.log(`${TAG} 📥 POST v15.7! From: ${req.body.From} | To: ${receivedAtFull}`);
+        console.log(`${TAG} 📥 POST v15.8! From: ${req.body.From} | To: ${receivedAtFull}`);
 
         try {
             const payload = req.body as TwilioWebhookPayload;
-            // v15.7: Mantemos o prefixo whatsapp: para o fromOverride
             const receivedAt = receivedAtFull;
 
             // Responder imediatamente (Twilio espera 200 rápido)
             res.status(200).send('<Response></Response>');
 
-            // Log do payload básico para debug
-            console.log(`${TAG} Payload recebido: From=${payload.From}, AccountSid=${payload.AccountSid}`);
-
-            // 1. Identificar o Tenant pelo Sid da Conta Twilio
+            // 1. Extrair dados básicos
             const accountSid = payload.AccountSid;
-            const MASTER_SID = (process.env.TWILIO_ACCOUNT_SID || '').trim();
-            const ADMIN_TENANT = '00000000-0000-0000-0000-000000000001';
-
-            let tenantId: string | undefined;
-            let subaccountId = '';
-
-            if (accountSid === MASTER_SID) {
-                console.log(`${TAG} 👑 MASTER ACCOUNT detectada. Mapeando para Admin Tenant.`);
-                tenantId = ADMIN_TENANT;
-            } else {
-                const subaccount = await TwilioRepository.getByAccountSid(accountSid);
-                tenantId = subaccount?.tenant_id;
-                subaccountId = subaccount?.id || '';
-            }
-
             const from = payload.From?.replace('whatsapp:', '') || '';
             const to = payload.To?.replace('whatsapp:', '') || '';
             const body = payload.Body || '';
@@ -63,15 +44,26 @@ export function setupTwilioWebhookRoutes(app: any): void {
 
             console.log(`${TAG} Dados extraídos: From=${from}, To=${to}, Body='${body.slice(0, 20)}...', AccountSid=${accountSid}`);
 
+            // 2. Isolamento da Conta MASTER
+            const MASTER_SID = (process.env.TWILIO_ACCOUNT_SID || '').trim();
+            if (accountSid === MASTER_SID) {
+                console.log(`${TAG} 👑 MENSAGEM NA CONTA MASTER. Ignorando fluxo de cliente (Isolamento).`);
+                return;
+            }
+
+            // 3. Identificar o Tenant pela Subconta
+            const subaccount = await TwilioRepository.getByAccountSid(accountSid);
+            const tenantId = subaccount?.tenant_id;
+            const subaccountId = subaccount?.id || '';
+
             if (!tenantId) {
                 console.warn(`${TAG} 🛑 Webhook ignorado: AccountSid ${accountSid} não está vinculado a nenhum tenant no banco.`);
-                console.log(`${TAG} ℹ️ Dica: Verifique se a subconta está na tabela twilio_subaccounts.`);
                 return;
             }
 
             console.log(`${TAG} 🎯 Tenant identificado: ${tenantId}`);
 
-            // 2. Extrair mídia (se houver)
+            // 4. Extrair mídia (se houver)
             const mediaUrls: string[] = [];
             const mediaTypes: string[] = [];
             for (let i = 0; i < numMedia; i++) {
@@ -81,7 +73,7 @@ export function setupTwilioWebhookRoutes(app: any): void {
                 if (type) mediaTypes.push(type);
             }
 
-            // 3. Buscar ou criar contato
+            // 5. Buscar ou criar contato
             let contactId: string | null = null;
             try {
                 const { data: existingContact } = await supabase
@@ -110,9 +102,9 @@ export function setupTwilioWebhookRoutes(app: any): void {
                 console.error(`${TAG} ❌ Erro Crítico Contato:`, err.message);
             }
 
-            // 4. Buscar ou criar conversa
+            // 6. Buscar ou criar conversa
             let conversationId: string | null = null;
-            let copilotoEnabled = true; // Por padrão, IA ativa
+            let copilotoEnabled = true;
             try {
                 const { data: existingConv } = await supabase
                     .from('whatsapp_conversations')
@@ -155,9 +147,9 @@ export function setupTwilioWebhookRoutes(app: any): void {
                 console.error(`${TAG} ❌ Erro Crítico Conversa:`, err.message);
             }
 
-            // 5. Registrar mensagem inbound no banco
+            // 7. Registrar mensagem inbound no banco (Novo Esquema)
             try {
-                await supabase.from('whatsapp_messages').insert({
+                const { error: dbErr } = await supabase.from('whatsapp_messages').insert({
                     tenant_id: tenantId,
                     conversation_id: conversationId,
                     direction: 'inbound',
@@ -165,7 +157,6 @@ export function setupTwilioWebhookRoutes(app: any): void {
                     to_number: to,
                     body_text: body,
                     media_url: mediaUrls.length > 0 ? mediaUrls[0] : null,
-                    media_type: mediaTypes.length > 0 ? mediaTypes[0] : null,
                     external_id: messageSid,
                     provider: 'twilio',
                     status: 'received',
@@ -173,33 +164,33 @@ export function setupTwilioWebhookRoutes(app: any): void {
                         profile_name: profileName,
                         num_media: numMedia,
                         media_urls: mediaUrls,
-                        media_types: mediaTypes,
                         twilio_account_sid: accountSid,
                     },
                 });
+
+                if (dbErr) {
+                    console.error(`${TAG} ❌ Erro de Banco (Insert):`, dbErr.message);
+                } else {
+                    console.log(`${TAG} 💾 Mensagem inbound salva.`);
+                }
             } catch (dbErr: any) {
-                console.error(`${TAG} Erro ao salvar mensagem no DB:`, dbErr.message);
+                console.error(`${TAG} ❌ Erro Fatal DB:`, dbErr.message);
             }
 
-            // 6. Atualizar contador de uso
+            // 8. Atualizar contador de uso
             TwilioRepository.upsertUsage({
                 tenant_id: tenantId,
                 subaccount_id: subaccountId,
                 messages_received: 1,
             }).catch((err) => console.warn(`${TAG} Erro ao atualizar uso:`, err.message));
 
-            // 7. Processar com IA (apenas se copiloto estiver ativo e houver texto)
-            if (!copilotoEnabled) {
-                console.log(`${TAG} Copiloto desativado para conversa ${conversationId} — aguardando atendimento humano`);
+            // 9. Processar com IA
+            if (!copilotoEnabled || !body.trim()) {
+                console.log(`${TAG} IA ignorada: Copiloto=${copilotoEnabled}, Texto=${!!body.trim()}`);
                 return;
             }
 
-            if (!body.trim()) {
-                console.log(`${TAG} Mensagem sem texto (apenas mídia) — ignorando processamento de IA`);
-                return;
-            }
-
-            // Buscar configurações do agente (playbook, regras, nome)
+            // Buscar configurações do agente
             let agentSettings: any = null;
             try {
                 const { data } = await supabase
@@ -209,10 +200,10 @@ export function setupTwilioWebhookRoutes(app: any): void {
                     .maybeSingle();
                 agentSettings = data;
             } catch (err: any) {
-                console.warn(`${TAG} Sem configurações de agente para tenant ${tenantId}:`, err.message);
+                console.warn(`${TAG} Sem configurações de agente:`, err.message);
             }
 
-            // Buscar histórico recente da conversa (últimas 10 mensagens para contexto)
+            // Buscar histórico
             let history: { role: string; content: string }[] = [];
             if (conversationId) {
                 try {
@@ -230,100 +221,52 @@ export function setupTwilioWebhookRoutes(app: any): void {
                         })).filter((m) => m.content);
                     }
                 } catch (err: any) {
-                    console.warn(`${TAG} Erro ao buscar histórico:`, err.message);
+                    console.warn(`${TAG} Erro Histórico:`, err.message);
                 }
             }
 
-            // Montar system prompt com as regras do agente (Extraídas do JSON)
             const profile = agentSettings?.profile_json || {};
             const playbooksList = agentSettings?.playbooks_json || [];
-
             const agentName = profile.agent_name || 'LIA';
             const agentMode = profile.objective || 'vendas';
             const language = profile.language || 'pt-BR';
-
-            const activePlaybook = playbooksList.find((p: any) =>
-                p.name.toLowerCase().includes(agentMode.toLowerCase())
-            ) || playbooksList[0];
-
+            const activePlaybook = playbooksList.find((p: any) => p.name.toLowerCase().includes(agentMode.toLowerCase())) || playbooksList[0];
             const rules = activePlaybook?.content || profile.rules_instructions || '';
 
-            const systemPrompt = `Você é ${agentName}, um assistente de WhatsApp inteligente da Luminnus.
-Modo de operação: ${agentMode}
-Idioma: ${language}
-${rules ? `\nRegras e instruções atuais:\n${rules}` : ''}
+            const systemPrompt = `Você é ${agentName}, um assistente de WhatsApp inteligente da Luminnus.\nModo: ${agentMode}\nIdioma: ${language}\n${rules ? `\nRegras:\n${rules}` : ''}\n\nINST: Natural, sem markdown, 2-3 frases.`;
 
-INSTRUÇÕES DE FORMATO:
-- Responda de forma natural, concisa e amigável.
-- NÃO use markdown (sem asteriscos, sem #, sem negrito).
-- Mantenha respostas curtas (máximo 2-3 frases), adequadas para WhatsApp.
-- Nome do cliente: ${profileName || 'Cliente'}`;
-
-            // Chamar OpenAI com histórico da conversa e system prompt
-            // 4. Integrar com IA (LIA)
-            console.log(`${TAG} 🧠 Gerando resposta IA para: ${body.slice(0, 30)}...`);
+            console.log(`${TAG} 🧠 IA Gerando resposta...`);
             let aiResponse = '';
             try {
-                const historyWithSystem = [
-                    { role: 'system', content: systemPrompt },
-                    ...history
-                ];
-
-                const result = await OpenAIService.chat(
-                    body,
-                    historyWithSystem
-                );
+                const result = await OpenAIService.chat(body, [{ role: 'system', content: systemPrompt }, ...history]);
                 aiResponse = result.text?.trim() || '';
-                console.log(`${TAG} ✨ IA respondeu (${aiResponse.length} chars)`);
             } catch (aiErr: any) {
-                console.error(`${TAG} ❌ Erro na IA:`, aiErr.message);
-                aiResponse = "Desculpe, tive um problema técnico agora. Pode repetir?";
+                console.error(`${TAG} ❌ Erro IA:`, aiErr.message);
+                aiResponse = "Desculpe, tive um problema técnico. Pode repetir?";
             }
 
-            if (!aiResponse) {
-                console.warn(`${TAG} ⚠️ IA retornou resposta vazia`);
-                return;
-            }
+            if (!aiResponse) return;
 
-            // 5. Enviar resposta via Twilio
-            // v15.7: Usamos a variável receivedAt já definida no topo
-            console.log(`${TAG} 📤 Enviando resposta para ${from} (via ${receivedAt})...`);
-
-            const sendResult = await TwilioMessageService.sendMessage(
-                tenantId,
-                from,
-                aiResponse,
-                [],
-                receivedAt // Passando o To original como remetente forçado (fromOverride)
-            );
-
-            if (!sendResult.success) {
-                console.error(`${TAG} ❌ Falha no envio Twilio:`, sendResult.error);
-            } else {
-                console.log(`${TAG} ✅ Resposta enviada com sucesso! (SID: ${sendResult.messageSid})`);
-            }
+            // 10. Enviar via Twilio
+            console.log(`${TAG} 📤 Enviando para ${from} via ${receivedAt}...`);
+            const sendResult = await TwilioMessageService.sendMessage(tenantId, from, aiResponse, [], receivedAt);
 
             if (sendResult.success) {
-                console.log(`✅ ${TAG} IA respondeu para ${from.slice(-4)}*** | tenant=${tenantId}`);
-
-                try {
-                    await supabase.from('whatsapp_messages').insert({
-                        tenant_id: tenantId,
-                        conversation_id: conversationId,
-                        direction: 'outbound',
-                        from_number: to,
-                        to_number: from,
-                        body_text: aiResponse,
-                        external_id: sendResult.messageSid,
-                        provider: 'twilio',
-                        status: 'sent',
-                        metadata: { generated_by: 'lia_ai', agent_mode: agentMode }
-                    });
-                } catch (saveErr: any) {
-                    console.warn(`${TAG} Erro ao salvar resposta outbound:`, saveErr.message);
-                }
+                console.log(`${TAG} ✅ Enviado SID: ${sendResult.messageSid}`);
+                await supabase.from('whatsapp_messages').insert({
+                    tenant_id: tenantId,
+                    conversation_id: conversationId,
+                    direction: 'outbound',
+                    from_number: to,
+                    to_number: from,
+                    body_text: aiResponse,
+                    external_id: sendResult.messageSid,
+                    provider: 'twilio',
+                    status: 'sent',
+                    metadata: { generated_by: 'lia_ai', agent_mode: agentMode }
+                });
             } else {
-                console.error(`❌ ${TAG} Falha ao enviar resposta: ${sendResult.error}`);
+                console.error(`${TAG} ❌ Falha Twilio:`, sendResult.error);
             }
 
         } catch (error: any) {
@@ -344,11 +287,11 @@ INSTRUÇÕES DE FORMATO:
                     .eq('external_id', callback.MessageSid);
             }
         } catch (error: any) {
-            console.error(`❌ ${TAG} Erro:`, error);
+            console.error(`❌ ${TAG} Erro Status:`, error);
         }
     });
 
-    console.log('✅ [Routes] Twilio Webhook registered at /api/twilio/webhook (Direct Mount)');
+    console.log('✅ [Routes] Twilio Webhook v15.8 (Direct Mount) registered.');
 }
 
 export default setupTwilioWebhookRoutes;
