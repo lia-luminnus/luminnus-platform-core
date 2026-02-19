@@ -15,7 +15,7 @@ import { TwilioRepository } from '../repositories/TwilioRepository.js';
 import { decryptToken } from '../services/twilioEncryption.js';
 import { supabase } from '../config/supabase.js';
 import { OpenAIService } from '../services/openAIService.js';
-import type { TwilioWebhookPayload, TwilioStatusCallback } from '../types/twilio.types.js';
+import type { TwilioWebhookPayload, TwilioStatusCallback, TwilioSubaccount } from '../types/twilio.types.js';
 
 export function setupTwilioWebhookRoutes(app: any): void {
     const TAG = '[Twilio Webhook Setup]';
@@ -233,12 +233,14 @@ export function setupTwilioWebhookRoutes(app: any): void {
                 messages_received: 1,
             }).catch((err) => console.warn(`${TAG} Erro ao atualizar uso:`, err.message));
 
-            // 9. Processar com IA (Se IA estiver ativa e NÃO for o número master estrito)
-            // Se for o tenant Admin, só silencia se for O NÚMERO MASTER MESMO.
-            const shouldSilenceIA = isMasterNumber && effectiveTo === subaccount.twilio_phone_number;
+            // 9. Processar com IA
+            // ANTES: Bloqueava o número Master para evitar respostas em canal de admin.
+            // AGORA (Solicitação do Usuário - v15.14): O Master SERÁ o canal de atendimento da Luminnus.
+            // Portanto, liberamos a IA para responder a todos.
+            const shouldSilenceIA = false; // isMasterNumber && effectiveTo === subaccount.twilio_phone_number; 
 
             if (!copilotoEnabled || !body.trim() || shouldSilenceIA) {
-                console.log(`${TAG} IA ignorada: Copiloto=${copilotoEnabled}, Texto=${!!body.trim()}, SilencedMaster=${shouldSilenceIA}`);
+                console.log(`${TAG} IA ignorada: Copiloto=${copilotoEnabled}, Texto=${!!body.trim()}, Silenced=${shouldSilenceIA}`);
                 return;
             }
 
