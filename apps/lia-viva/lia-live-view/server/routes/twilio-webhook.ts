@@ -274,14 +274,14 @@ INSTRUÇÕES DE FORMATO:
 
             // 5. Enviar resposta via Twilio
             // v15.7: Usamos a variável receivedAt já definida no topo
-            console.log(`${TAG} 📤 Enviando resposta para ${from} (via ${receivedAtFull})...`);
+            console.log(`${TAG} 📤 Enviando resposta para ${from} (via ${receivedAt})...`);
 
             const sendResult = await TwilioMessageService.sendMessage(
                 tenantId,
                 from,
                 aiResponse,
                 [],
-                receivedAt
+                receivedAt // Passando o To original como remetente forçado (fromOverride)
             );
 
             if (!sendResult.success) {
