@@ -44,17 +44,19 @@ export function setupTwilioWebhookRoutes(app: any): void {
 
             console.log(`${TAG} Dados extraídos: From=${from}, To=${to}, Body='${body.slice(0, 20)}...', AccountSid=${accountSid}`);
 
-            // 2. Isolamento da Conta MASTER
-            const MASTER_SID = (process.env.TWILIO_ACCOUNT_SID || '').trim();
-            if (accountSid === MASTER_SID) {
-                console.log(`${TAG} 👑 MENSAGEM NA CONTA MASTER. Ignorando fluxo de cliente (Isolamento).`);
-                return;
-            }
-
-            // 3. Identificar o Tenant pela Subconta
+            // 2. Identificar o Tenant pela Subconta (ANTES do isolamento)
             const subaccount = await TwilioRepository.getByAccountSid(accountSid);
             const tenantId = subaccount?.tenant_id;
             const subaccountId = subaccount?.id || '';
+
+            // 3. Isolamento da Conta MASTER (Mais inteligente)
+            const MASTER_SID = (process.env.TWILIO_ACCOUNT_SID || '').trim();
+            console.log(`${TAG} Diagnosis: ReceivedSID=${accountSid} | MasterSID=${MASTER_SID} | RegisteredTenant=${tenantId || 'None'}`);
+
+            if (accountSid === MASTER_SID && !tenantId) {
+                console.log(`${TAG} 👑 MENSAGEM NO MASTER (SEM TENANT). Ignorando fluxo de cliente.`);
+                return;
+            }
 
             if (!tenantId) {
                 console.warn(`${TAG} 🛑 Webhook ignorado: AccountSid ${accountSid} não está vinculado a nenhum tenant no banco.`);
