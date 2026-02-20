@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { useMedicalRecordsStore } from '../store/useMedicalRecordsStore';
 import { PrescriptionModal } from './MedicalRecords/PrescriptionModal';
 import { BudgetModal } from './MedicalRecords/BudgetModal';
+import { EditPatientModal } from './MedicalRecords/EditPatientModal';
 
 const MedicalRecords: React.FC = () => {
   const { t } = useContext(LanguageContext);
@@ -18,7 +19,10 @@ const MedicalRecords: React.FC = () => {
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [isLiaOpen, setIsLiaOpen] = useState(false);
 
-  const LIA_VIVA_URL = import.meta.env.VITE_LIA_VIVA_URL || "http://localhost:5173";
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editModalTab, setEditModalTab] = useState<'Editar' | 'Informações'>('Editar');
+
+  const LIA_VIVA_URL = import.meta.env.VITE_LIA_VIVA_URL || (import.meta.env.DEV ? "http://localhost:5173" : "https://luminnus-lia.onrender.com");
 
   // States for editing notes
   const [isEditingObs, setIsEditingObs] = useState(false);
@@ -51,7 +55,17 @@ const MedicalRecords: React.FC = () => {
   }, [patient.history, searchTerm]);
 
   const handleAction = (action: string) => {
-    toast.success(`${action} iniciado com sucesso!`);
+    if (action === 'Editar Perfil') {
+      setEditModalTab('Editar');
+      setIsEditModalOpen(true);
+    } else if (action === 'Ver Informações') {
+      setEditModalTab('Informações');
+      setIsEditModalOpen(true);
+    } else if (action === 'Paciente Multiclínica') {
+      toast.error('A funcionalidade Multiclínica está em desenvolvimento pelas próximas horas.', { duration: 4000 });
+    } else {
+      toast.success(`${action} iniciado com sucesso!`);
+    }
   };
 
   const handleAddStat = (key: keyof typeof patient.stats, label: string) => {
@@ -67,6 +81,7 @@ const MedicalRecords: React.FC = () => {
       stats: { ...patient.stats, [key]: patient.stats[key] + 1 }
     });
     addHistoryEntry(patient.id, newHistory);
+    setActiveTab('Acompanhamento'); // Switch tab so user sees the addition
     toast.success(`${label} adicionado ao histórico`);
   };
 
@@ -474,7 +489,7 @@ const MedicalRecords: React.FC = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Pesquise no histórico (Data, Tipo, Conteúdo...)"
+              placeholder="🔍 Buscar no histórico deste prontuário (Ex: Consulta, Receita...)"
               className="w-full bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-brand-primary transition-all shadow-sm"
             />
           </div>
@@ -499,6 +514,13 @@ const MedicalRecords: React.FC = () => {
         isOpen={isBudgetModalOpen}
         onClose={() => setIsBudgetModalOpen(false)}
         patientId={patient.id}
+      />
+
+      <EditPatientModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        patientId={patient.id}
+        initialTab={editModalTab}
       />
 
       {/* LIA Side Panel */}

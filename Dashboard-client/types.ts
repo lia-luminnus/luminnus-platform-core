@@ -153,7 +153,6 @@ export type ModuleId =
   | 'financial'
   | 'team'
   | 'stock'
-  | 'projects'
   | 'logistics'
   | 'properties'
   | 'medical_records'

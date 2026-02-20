@@ -15,7 +15,7 @@ export const MODULE_REGISTRY: Record<ModuleId, ModuleDefinition> = {
 
   // New Modular Options
   stock: { id: 'stock', translationKey: 'stock', icon: 'inventory_2', path: '/stock' },
-  projects: { id: 'projects', translationKey: 'projects', icon: 'rocket_launch', path: '/projects' },
+  // projects: { id: 'projects', translationKey: 'projects', icon: 'rocket_launch', path: '/projects' },
   logistics: { id: 'logistics', translationKey: 'logistics', icon: 'local_shipping', path: '/logistics' },
   properties: { id: 'properties', translationKey: 'properties', icon: 'apartment', path: '/properties' },
   medical_records: { id: 'medical_records', translationKey: 'medicalRecords', icon: 'medical_services', path: '/records' },
@@ -55,10 +55,10 @@ export const CATEGORY_PRESETS: Record<string, ModuleId[]> = {
   transport_logistics: ['dashboard', 'integrations', 'lia', 'logistics', 'stock', 'financial', 'team', 'automations', 'whatsapp_agent', 'plan', 'settings', 'support'],
 
   // Tecnologia & Software
-  tech_software: ['dashboard', 'integrations', 'lia', 'projects', 'automations', 'team', 'files', 'crm', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  tech_software: ['dashboard', 'integrations', 'lia', 'automations', 'team', 'files', 'crm', 'whatsapp_agent', 'plan', 'settings', 'support'],
 
   // Conteúdo & Criativos
-  content_creatives: ['dashboard', 'integrations', 'lia', 'projects', 'files', 'crm', 'calendar', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  content_creatives: ['dashboard', 'integrations', 'lia', 'files', 'crm', 'calendar', 'whatsapp_agent', 'plan', 'settings', 'support'],
 
   // Serviços Empresariais
   business_services: ['dashboard', 'integrations', 'lia', 'crm', 'financial', 'reports', 'whatsapp_agent', 'files', 'team', 'automations', 'plan', 'settings', 'support'],
@@ -77,8 +77,8 @@ export const CATEGORY_PRESETS: Record<string, ModuleId[]> = {
   retail: ['dashboard', 'integrations', 'lia', 'stock', 'sales', 'financial', 'automations', 'team', 'whatsapp_agent', 'plan', 'settings', 'support'],
   food: ['dashboard', 'integrations', 'lia', 'stock', 'sales', 'financial', 'team', 'whatsapp_agent', 'plan', 'settings', 'support'],
   logistics: ['dashboard', 'integrations', 'lia', 'logistics', 'stock', 'financial', 'team', 'automations', 'whatsapp_agent', 'plan', 'settings', 'support'],
-  tech: ['dashboard', 'integrations', 'lia', 'projects', 'automations', 'team', 'files', 'crm', 'whatsapp_agent', 'plan', 'settings', 'support'],
-  creative: ['dashboard', 'integrations', 'lia', 'projects', 'files', 'crm', 'calendar', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  tech: ['dashboard', 'integrations', 'lia', 'automations', 'team', 'files', 'crm', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  creative: ['dashboard', 'integrations', 'lia', 'files', 'crm', 'calendar', 'whatsapp_agent', 'plan', 'settings', 'support'],
   education: ['dashboard', 'integrations', 'lia', 'calendar', 'files', 'crm', 'financial', 'whatsapp_agent', 'plan', 'settings', 'support'],
   other: ['dashboard', 'integrations', 'lia', 'crm', 'calendar', 'files', 'financial', 'whatsapp_agent', 'plan', 'settings', 'support'],
 };
@@ -100,7 +100,7 @@ export const getModules = (activeIds: ModuleId[]): ModuleDefinition[] => {
   // Re-sort based on a preferred order (optional, but keeps sidebar tidy)
   const preferredOrder: ModuleId[] = [
     'dashboard', 'integrations', 'crm', 'lia', 'calendar', 'files',
-    'projects', 'stock', 'sales', 'properties', 'medical_records', 'logistics',
+    'stock', 'sales', 'properties', 'medical_records', 'logistics',
     'automations', 'financial', 'reports', 'team',
     'settings', 'plan', 'support', 'whatsapp_agent'
   ];
