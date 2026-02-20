@@ -80,6 +80,7 @@ import { setupCreditsRoutes } from './routes/credits.js';
 import { setupTwilioOnboardingRoutes } from './routes/twilio-onboarding.js';
 import { setupTwilioWebhookRoutes } from './routes/twilio-webhook.js';
 import twilioAdminRoutes from './routes/twilio-admin.js';
+import { setupWhatsAppTwilioRoutes } from './routes/whatsapp-twilio.js';
 import WhatsAppIntelligence from './services/whatsappIntelligence.js';
 import { setSocketIO } from './services/eventBusService.js';
 import { AutomationScheduler } from './services/scheduler.js';
@@ -400,7 +401,8 @@ async function startServer() {
 
   // Twilio Multi-Tenant Routes
   setupTwilioOnboardingRoutes(app);
-  console.log('   ✅ Twilio routes (/api/twilio/*)');
+  setupWhatsAppTwilioRoutes(app);
+  console.log('   ✅ Twilio routes (/api/twilio/* & /api/whatsapp/twilio/*)');
 
   console.log('✅ Core LIA Functions loaded');
 

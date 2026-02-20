@@ -11,7 +11,7 @@
 
 import { Router, Request, Response } from 'express';
 import { TwilioMessageService } from '../services/twilioMessageService.js';
-import { TwilioRepository } from '../repositories/TwilioRepository.js';
+import { TwilioMessageService } from '../services/twilioMessageService.js';
 import { decryptToken } from '../services/twilioEncryption.js';
 import { supabase } from '../config/supabase.js';
 import { OpenAIService } from '../services/openAIService.js';
@@ -44,60 +44,43 @@ export function setupTwilioWebhookRoutes(app: any): void {
 
             console.log(`${TAG} Dados extraídos: From=${from}, To=${to}, Body='${body.slice(0, 20)}...', AccountSid=${accountSid}`);
 
-            // 2. Identificar o Tenant e o Número de Destino Real
-            // Prioridade: Tentar casar SID + Fone. Se não der, confiar no SID e usar o Fone do banco.
-            let subaccount = await TwilioRepository.getByAccountSidAndPhone(accountSid, to);
+            // 2. Identificar o Tenant e o Número de Destino Real (TWILIO SSOT via whatsapp_connections)
+            let connection: any = null;
 
-            if (!subaccount) {
-                // Fallback: Busca apenas pelo SID (cenário onde o 'To' vem zoado do Twilio ou Sandbox)
-                console.warn(`${TAG} ⚠️ Subconta não encontrada por SID+To. Tentando apenas por SID: ${accountSid}`);
-                subaccount = await TwilioRepository.getByAccountSid(accountSid);
-            }
+            // Busca principal pelo account_sid
+            const { data: primaryConn } = await supabase
+                .from('whatsapp_connections')
+                .select('*')
+                .eq('twilio_account_sid', accountSid)
+                .eq('provider', 'twilio')
+                .maybeSingle();
 
-            // TENTATIVA FINAL DE RESGATE (v15.13 - Ajustado para Sandbox):
-            // O Sandbox do Twilio envia um AccountSid que às vezes não bate com a subconta, e o 'To' é o número do Sandbox (+1415...).
-            // Então, se falhou por SID, tentamos achar a subconta pelo NÚMERO DO CLIENTE (From).
-            // Isso assume que o número que está mandando msg (From) é o próprio número cadastrado como 'twilio_phone_number' na subconta (fluxo BYON/Sandbox).
-            if (!subaccount) {
-                console.warn(`${TAG} ⚠️ SID ${accountSid} desconhecido. Tentando identificar tenant pelo FROM (Whatsapp do Cliente): ${from}`);
+            if (primaryConn) connection = primaryConn;
 
-                // Buscar subconta onde o número do whatsapp seja igual ao From (sem o prefixo whatsapp:)
-                const { data: rescueSub } = await supabase
-                    .from('twilio_subaccounts')
+            // Fallback: Busca pelos Fones (sandbox/byon cases)
+            if (!connection) {
+                console.warn(`${TAG} ⚠️ SID ${accountSid} desconhecido na whatsapp_connections. Tentando identificar tenant pelos fones: From ${from} ou To ${to}`);
+                const { data: rescueConn } = await supabase
+                    .from('whatsapp_connections')
                     .select('*')
-                    .eq('twilio_phone_number', from)
+                    .or(`phone_number_e164.eq.${from},phone_number.eq.${from},phone_number_e164.eq.${to},phone_number.eq.${to}`)
+                    .eq('provider', 'twilio')
+                    .limit(1)
                     .maybeSingle();
 
-                if (rescueSub) {
-                    subaccount = rescueSub as TwilioSubaccount;
-                    console.log(`${TAG} 🚑 Tenant resgatado pelo FROM: ${from} -> ${subaccount.id}`);
-                }
+                if (rescueConn) connection = rescueConn;
             }
 
-            if (!subaccount) {
-                // Última chance: Tentar pelo TO também (caso seja número próprio fora do sandbox)
-                const { data: rescueSubTo } = await supabase
-                    .from('twilio_subaccounts')
-                    .select('*')
-                    .eq('twilio_phone_number', to)
-                    .maybeSingle();
-
-                if (rescueSubTo) {
-                    subaccount = rescueSubTo as TwilioSubaccount;
-                    console.log(`${TAG} 🚑 Tenant resgatado pelo TO: ${to} -> ${subaccount.id}`);
-                }
-            }
-
-            if (!subaccount) {
+            if (!connection) {
                 console.warn(`${TAG} 🛑 Webhook ignorado TOTALMENTE: AccountSid ${accountSid}, From ${from} e To ${to} não mapeados.`);
                 return;
             }
 
-            const tenantId = subaccount.tenant_id;
-            const subaccountId = subaccount.id;
-
-            // CORREÇÃO CRÍTICA (Mantida): O 'effectiveTo' deve ser o número oficial da subconta encontrada.
-            const effectiveTo = subaccount.twilio_phone_number;
+            const tenantId = connection.tenant_id;
+            const subaccountId = connection.id; // Using connection ID for metrics if needed
+            const effectiveTo = connection.phone_number_e164 || connection.phone_number;
+            const adminSecret = connection.admin_secret;
+            const adminSessionExpires = connection.admin_session_expires_at;
 
             // 3. Isolamento do Número MASTER (Admin Oficial)
             const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
@@ -226,21 +209,61 @@ export function setupTwilioWebhookRoutes(app: any): void {
                 console.error(`${TAG} ❌ Erro Fatal DB:`, dbErr.message);
             }
 
-            // 8. Atualizar contador de uso
-            TwilioRepository.upsertUsage({
-                tenant_id: tenantId,
-                subaccount_id: subaccountId,
-                messages_received: 1,
-            }).catch((err) => console.warn(`${TAG} Erro ao atualizar uso:`, err.message));
+            // 8. Atualizar contador de uso (SSOT: podemos no futuro logar em uso real)
+            // TwilioRepository.upsertUsage removido para alinhar ao SSOT. Implementar tracking depois, se necessário.
 
-            // 9. Processar com IA
-            // ANTES: Bloqueava o número Master para evitar respostas em canal de admin.
-            // AGORA (Solicitação do Usuário - v15.14): O Master SERÁ o canal de atendimento da Luminnus.
-            // Portanto, liberamos a IA para responder a todos.
-            const shouldSilenceIA = false; // isMasterNumber && effectiveTo === subaccount.twilio_phone_number; 
+            // ---> MODOS DE INTERCEPTAÇÃO: ADMIN MODE <---
+            const bodyTrimmed = body.trim();
+            const isAdminCommand = bodyTrimmed.startsWith('/admin');
+            const isExitCommand = bodyTrimmed.startsWith('/exit');
 
-            if (!copilotoEnabled || !body.trim() || shouldSilenceIA) {
-                console.log(`${TAG} IA ignorada: Copiloto=${copilotoEnabled}, Texto=${!!body.trim()}, Silenced=${shouldSilenceIA}`);
+            const now = new Date();
+            const isAdminSessionActive = adminSessionExpires ? new Date(adminSessionExpires) > now : false;
+
+            if (isAdminCommand) {
+                const parts = bodyTrimmed.split(' ');
+                const pwd = parts[1];
+
+                if (!adminSecret) {
+                    await TwilioMessageService.sendMessage(tenantId, from, "❌ Modo Admin não configurado neste tenant.", [], receivedAt);
+                    return;
+                }
+
+                // Em prod usaríamos compareHash. Por enquanto, match direto string simples
+                if (pwd === adminSecret) {
+                    // Habilitar sessão por 15 minutos
+                    const expiresAt = new Date(now.getTime() + 15 * 60000).toISOString();
+                    await supabase.from('whatsapp_connections').update({ admin_session_expires_at: expiresAt }).eq('id', connection.id);
+                    await TwilioMessageService.sendMessage(tenantId, from, "✅ Sessão Admin ativada por 15 min. Digite /relatorio para ver os dados ou /exit para sair.", [], receivedAt);
+                    return;
+                } else {
+                    await TwilioMessageService.sendMessage(tenantId, from, "❌ Senha inválida.", [], receivedAt);
+                    return;
+                }
+            }
+
+            if (isExitCommand && isAdminSessionActive) {
+                await supabase.from('whatsapp_connections').update({ admin_session_expires_at: null }).eq('id', connection.id);
+                await TwilioMessageService.sendMessage(tenantId, from, "🔴 Sessão Admin encerrada.", [], receivedAt);
+                return;
+            }
+
+            if (isAdminSessionActive) {
+                // Processa comandos internos (mock de métricas de vendas)
+                if (bodyTrimmed === '/relatorio') {
+                    await TwilioMessageService.sendMessage(tenantId, from, "📊 Relatório Admin:\n\n- 15 Vendas Iniciadas hoje\n- Lucro: R$ 2.450\n- Conversão: 12%\n\n> Retornado via Twilio SSOT", [], receivedAt);
+                } else {
+                    await TwilioMessageService.sendMessage(tenantId, from, "Comando admin não reconhecido. Use /relatorio ou /exit.", [], receivedAt);
+                }
+                return; // Interceptou como admin, não manda pra LIA normal
+            }
+
+            // 9. Processar com IA (Fluxo Normal Cliente-LIA)
+            // Solicitação do Usuário - v15.14: O Master SERÁ o canal de atendimento da Luminnus.
+            const shouldSilenceIA = false;
+
+            if (!copilotoEnabled || !bodyTrimmed || shouldSilenceIA) {
+                console.log(`${TAG} IA ignorada: Copiloto=${copilotoEnabled}, Texto=${!!bodyTrimmed}, Silenced=${shouldSilenceIA}`);
                 return;
             }
 
