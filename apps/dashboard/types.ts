@@ -92,6 +92,66 @@ export interface BusinessCategory {
   icon: string;
 }
 
+// --- Medical Records Types ---
+
+export interface HistoryEntry {
+  id: string;
+  date: string;
+  text: string;
+  icon: string;
+  color: string;
+  type: string;
+}
+
+export interface Prescription {
+  id: string;
+  date: string;
+  doctor: string;
+  medications: string;
+}
+
+export interface MedicalBudget {
+  id: string;
+  title: string;
+  value: string;
+  status: 'Aprovado' | 'Pendente' | 'Cancelado';
+}
+
+export interface MedicalFile {
+  id: string;
+  name: string;
+  type: string;
+}
+
+export interface Patient {
+  id: string;
+  name: string;
+  phone: string;
+  age: string;
+  plan: string;
+  tags: { label: string; color: string }[];
+  appointments: { title: string; doctor: string; date: string; time: string }[];
+  observations: string;
+  privateObservations: string;
+  stats: {
+    consults: number;
+    exams: number;
+    vaccines: number;
+    surgeries: number;
+    procedures: number;
+    cancelled: number;
+  };
+  history: HistoryEntry[];
+  prescriptions: Prescription[];
+  budgets: MedicalBudget[];
+  files: MedicalFile[];
+  financial: {
+    totalBilled: number;
+    totalPaid: number;
+    totalOpen: number;
+  };
+}
+
 // --- Modular System Types ---
 
 export type ModuleId =
@@ -104,7 +164,6 @@ export type ModuleId =
   | 'financial'
   | 'team'
   | 'stock'
-  | 'projects'
   | 'logistics'
   | 'properties'
   | 'medical_records'

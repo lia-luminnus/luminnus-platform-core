@@ -14,7 +14,6 @@ export const MODULE_REGISTRY: Record<ModuleId, ModuleDefinition> = {
 
   // New Modular Options
   stock: { id: 'stock', translationKey: 'stock', icon: 'inventory_2', path: '/stock' },
-  projects: { id: 'projects', translationKey: 'projects', icon: 'rocket_launch', path: '/projects' },
   logistics: { id: 'logistics', translationKey: 'logistics', icon: 'local_shipping', path: '/logistics' },
   properties: { id: 'properties', translationKey: 'properties', icon: 'apartment', path: '/properties' },
   medical_records: { id: 'medical_records', translationKey: 'medicalRecords', icon: 'medical_services', path: '/records' },
@@ -46,9 +45,9 @@ export const CATEGORY_PRESETS: Record<string, ModuleId[]> = {
 
   logistics: ['dashboard', 'lia', 'logistics', 'stock', 'financial', 'team', 'automations', 'whatsapp_agent', 'plan', 'settings', 'support'],
 
-  tech: ['dashboard', 'lia', 'projects', 'automations', 'team', 'files', 'crm', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  tech: ['dashboard', 'lia', 'automations', 'team', 'files', 'crm', 'whatsapp_agent', 'plan', 'settings', 'support'],
 
-  creative: ['dashboard', 'lia', 'projects', 'files', 'crm', 'calendar', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  creative: ['dashboard', 'lia', 'files', 'crm', 'calendar', 'whatsapp_agent', 'plan', 'settings', 'support'],
 
   business_services: ['dashboard', 'lia', 'crm', 'financial', 'reports', 'whatsapp_agent', 'files', 'team', 'automations', 'plan', 'settings', 'support'],
 
@@ -74,7 +73,7 @@ export const getModules = (activeIds: ModuleId[]): ModuleDefinition[] => {
   // Re-sort based on a preferred order (optional, but keeps sidebar tidy)
   const preferredOrder: ModuleId[] = [
     'dashboard', 'crm', 'lia', 'calendar', 'files',
-    'projects', 'stock', 'sales', 'properties', 'medical_records', 'logistics',
+    'stock', 'sales', 'properties', 'medical_records', 'logistics',
     'automations', 'financial', 'reports', 'team',
     'settings', 'integrations', 'whatsapp_agent', 'whatsapp_admin', 'plan', 'support'
   ];

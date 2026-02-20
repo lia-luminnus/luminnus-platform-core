@@ -178,7 +178,6 @@ const AppContent: React.FC = () => {
               <Route path="/logistics" element={<Logistics />} />
               <Route path="/properties" element={<Properties />} />
               <Route path="/records" element={<MedicalRecords />} />
-              <Route path="/projects" element={<PlaceholderModule title="Projetos" icon="rocket_launch" />} />
               <Route path="/reports" element={<PlaceholderModule title="Relatórios" icon="bar_chart" />} />
               <Route path="/integrations" element={<Integrations />} />
               <Route path="/whatsapp" element={<WhatsAppAgent />} />
