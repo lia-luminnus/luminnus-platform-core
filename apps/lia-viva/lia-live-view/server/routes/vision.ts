@@ -183,7 +183,7 @@ export function setupVisionRoutes(app: Express) {
                         else if (file.mimetype.includes('spreadsheet') || file.mimetype.includes('excel') || file.originalname.match(/\.(xls|xlsx|csv)$/i)) folderName = 'Planilhas';
                         else if (file.mimetype.includes('presentation') || file.originalname.match(/\.(ppt|pptx)$/i)) folderName = 'Apresentações';
 
-                        const folderId = await FileService.getOrCreateFolder(finalTenantId, finalUserId, folderName, 'personal');
+                        const folderId = await FileService.getOrCreateFolder(finalTenantId, finalUserId, folderName, 'lia_shared');
 
                         // 2. REGISTRO NO BANCO DE DADOS
                         const fileRecord = await FileService.saveMetadata({
@@ -197,7 +197,7 @@ export function setupVisionRoutes(app: Express) {
                             folder_id: folderId,
                             parse_method: 'gemini-vision',
                             status: 'uploaded',
-                            scope: 'personal',
+                            scope: 'lia_shared',
                             source: 'lia_attachment'
                         });
 
