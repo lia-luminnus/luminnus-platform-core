@@ -15,7 +15,8 @@
             "outputs": [
                 "dist/**",
                 ".next/**",
-                "build/**"
+                "build/**",
+                "tsconfig.tsbuildinfo"
             ]
         },
         "typecheck": {
