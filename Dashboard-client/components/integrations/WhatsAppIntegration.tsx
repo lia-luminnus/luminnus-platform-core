@@ -1,37 +1,25 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import Header from '../Header';
 import { LanguageContext } from '../../contexts/LanguageContext';
 import { useDashboardAuth } from '../../contexts/DashboardAuthContext';
-import { getApiUrl } from '../../config/api';
-import toast from 'react-hot-toast';
-import { supabase } from '../../lib/supabase';
-
+import WhatsAppConnection from '../whatsapp/WhatsAppConnection';
 
 const WhatsAppIntegration: React.FC = () => {
     const navigate = useNavigate();
     const { t } = useContext(LanguageContext);
     const { user, isAdmin, profile } = useDashboardAuth();
 
-    const [loading, setLoading] = useState(true);
-
-    // Connection state
-    const [twilioStatus, setTwilioStatus] = useState<any>(null);
-    const [twilioLoading, setTwilioLoading] = useState(false);
-    const [connecting, setConnecting] = useState(false);
-    const [disconnecting, setDisconnecting] = useState(false);
-
     // v14.0: Admin uses admin tenant, clients use profile.tenant_id
     const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
     const tenantId = isAdmin ? ADMIN_TENANT_ID : (profile?.tenant_id || user?.id || null);
 
-    // 🛡️ SECURITY: Block ONLY if not admin AND no tenant - ensures no client data leakage
+    // 🛡️ SECURITY: Block ONLY if not admin AND no tenant
     if (!tenantId && !isAdmin) {
         console.warn('⚠️ [WhatsApp] No tenant_id found for non-admin user - blocking to prevent data leak');
         return (
             <div className="min-h-screen bg-gray-100 dark:bg-[#0a0a0a] text-gray-900 dark:text-white">
-                <Header />
+                <Header title="WhatsApp Business" />
                 <div className="max-w-4xl mx-auto py-8 px-4">
                     <div className="p-8 rounded-2xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-center">
                         <span className="material-symbols-outlined text-6xl text-red-500 mb-4">error</span>
@@ -45,429 +33,52 @@ const WhatsAppIntegration: React.FC = () => {
         );
     }
 
-    // Clear status when tenant changes to prevent cross-tenant data leakage
-    useEffect(() => {
-        setLoading(true);
-        fetchStatus();
-    }, [tenantId]);
-
-    // Fetch connection status
-    const fetchStatus = async () => {
-        if (!tenantId) return;
-        try {
-            setTwilioLoading(true);
-            const res = await fetch(`${getApiUrl()}/api/whatsapp/twilio/status?tenant_id=${tenantId}`);
-
-            const contentType = res.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                const text = await res.text();
-                if (text.includes('<!DOCTYPE html>') || res.status === 404) {
-                    throw new Error('Servidor retornou erro 404 ou HTML. Verifique se as rotas estão deployadas no backend.');
-                }
-                throw new Error('Resposta do servidor não é JSON válido.');
-            }
-
-            if (res.ok) {
-                const json = await res.json();
-                if (json.status === 'ok') setTwilioStatus(json.data);
-            } else if (res.status === 404) {
-                console.warn('[WhatsApp] Status endpoint not found (404)');
-            }
-        } catch (err: any) {
-            console.warn('[WhatsApp] Status fetch failed:', err);
-        } finally {
-            setTwilioLoading(false);
-            setLoading(false);
-        }
-    };
-
-    const handleConnect = async () => {
-        if (!tenantId) return;
-
-        setConnecting(true);
-        try {
-            const body: any = { tenant_id: tenantId };
-
-            const res = await fetch(`${getApiUrl()}/api/whatsapp/twilio/start`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
-
-            const contentType = res.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                throw new Error('Erro de comunicação com o servidor. Resposta inválida.');
-            }
-
-            const json = await res.json();
-            if (json.status === 'ok' && json.data?.url) {
-                toast.success('✅ Redirecionando para autenticação oficial...');
-                window.location.href = json.data.url;
-            } else {
-                toast.error(`❌ ${json.reason || 'Erro ao conectar WhatsApp'}`);
-            }
-        } catch (err: any) {
-            toast.error(`Erro: ${err.message}`);
-        } finally {
-            setConnecting(false);
-        }
-    };
-
-    // Handle suspend/reactivate
-    const handleAction = async (action: 'suspend' | 'reactivate') => {
-        if (!tenantId) return;
-        try {
-            const res = await fetch(`${getApiUrl()}/api/twilio/subaccount/${action}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tenant_id: tenantId }),
-            });
-            const json = await res.json();
-            if (json.ok) {
-                toast.success(action === 'suspend' ? '⏸️ Conexão suspensa' : '▶️ Conexão reativada');
-                fetchStatus();
-            } else {
-                toast.error(json.error || 'Erro na ação');
-            }
-        } catch (err: any) {
-            toast.error(err.message);
-        }
-    };
-
-    // Handle disconnect — remove number and allow reconnection
-    const handleDisconnect = async () => {
-        if (!tenantId) return;
-        const confirmed = window.confirm(
-            '⚠️ Desconectar remove o número atual. Você poderá reconectar com outro número depois.\n\nDeseja continuar?'
-        );
-        if (!confirmed) return;
-
-        setDisconnecting(true);
-        try {
-            // Try API first
-            const res = await fetch(`${getApiUrl()}/api/twilio/subaccount/disconnect`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tenant_id: tenantId }),
-            });
-            const json = await res.json();
-            if (json.ok) {
-                toast.success('🔌 Número desconectado! Você pode conectar outro.');
-                setTwilioStatus(null);
-                return;
-            }
-            throw new Error(json.error || 'API failed');
-        } catch (err: any) {
-            console.warn('[WhatsApp] API disconnect failed, trying Supabase direct...', err.message);
-
-            // Supabase direct fallback for disconnection
-            try {
-                if (!supabase) throw new Error('Supabase not available');
-                const { error } = await supabase
-                    .from('whatsapp_connections')
-                    .update({ status: 'DISCONNECTED', updated_at: new Date().toISOString() })
-                    .eq('tenant_id', tenantId);
-
-                if (error) throw error;
-
-                toast.success('🔌 Número desconectado (via Supabase). Você pode conectar outro.');
-                setTwilioStatus({ ...twilioStatus, status: 'DISCONNECTED' });
-            } catch (fbErr: any) {
-                toast.error(`❌ Erro ao desconectar: ${fbErr.message}`);
-            }
-        } finally {
-            setDisconnecting(false);
-        }
-    };
-
-    if (loading) {
-        return (
-            <div className="flex flex-col h-full bg-[#f1f5f9] dark:bg-[#06080f]">
-                <Header title="WhatsApp Business" />
-                <div className="flex-1 flex flex-col items-center justify-center gap-4">
-                    <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
-                    <p className="text-sm text-gray-500">Carregando status da integração...</p>
-                    <button
-                        onClick={() => {
-                            setLoading(false);
-                            setTimeout(() => fetchStatus(), 100);
-                        }}
-                        className="mt-4 px-4 py-2 text-xs font-bold text-brand-primary border border-brand-primary/20 rounded-xl hover:bg-brand-primary/10 transition-all"
-                    >
-                        Tentar Novamente
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    const isConnected = twilioStatus?.status === 'ACTIVE';
-
     return (
-        <div className="flex h-full bg-[#0D0D14] overflow-hidden relative">
+        <div className="flex flex-col h-full bg-[#0D0D14] overflow-hidden relative">
+            <Header title="WhatsApp Business" />
+
             {/* Background glow */}
-            <div className="absolute top-0 right-0 w-[700px] h-[700px] bg-purple-500/10 rounded-full blur-[160px] -z-0 pointer-events-none" />
+            <div className="absolute top-0 right-0 w-[700px] h-[700px] bg-emerald-500/10 rounded-full blur-[160px] -z-0 pointer-events-none" />
 
-            {/* Sidebar */}
-            <aside className="w-72 border-r border-white/10 flex flex-col p-6 gap-6 bg-[#12121A]/90 backdrop-blur-2xl z-10 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500" />
-
-                {/* Sidebar header */}
-                <div className="space-y-1">
-                    <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] px-3">WhatsApp Business</h3>
-                </div>
-
-                {/* Navigation items */}
-                <div className="space-y-2">
-                    <button
-                        onClick={() => navigate('/integrations')}
-                        className="w-full flex items-center gap-3 p-3.5 rounded-xl text-white/70 hover:bg-white/10 hover:text-white border border-transparent transition-all group"
-                    >
-                        <span className="material-symbols-outlined text-base text-white/50 group-hover:text-brand-primary transition-colors">arrow_back</span>
-                        <span className="text-[11px] font-black uppercase tracking-widest">Voltar</span>
-                    </button>
-
-                    <button
-                        className="w-full flex items-center justify-between p-3.5 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/10 text-white border border-purple-500/30 shadow-lg shadow-purple-500/10 transition-all"
-                    >
-                        <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined text-base text-purple-400">phone_iphone</span>
-                            <span className="text-[11px] font-black uppercase tracking-widest">Conexão WhatsApp</span>
-                        </div>
-                        {isConnected && (
-                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-green-500 text-white">Ativo</span>
-                        )}
-                    </button>
-                </div>
-
-                {/* Connection info */}
-                <div className="mt-auto space-y-4">
-                    <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-white/40">
-                                {isConnected ? 'Conectado' : 'Desconectado'}
-                            </span>
-                        </div>
-                        {twilioStatus?.phone && (
-                            <p className="text-xs text-white/60 font-mono">{twilioStatus.phone}</p>
-                        )}
+            <div className="flex flex-1 overflow-hidden relative z-10">
+                {/* Sidebar */}
+                <aside className="w-72 border-r border-white/10 flex flex-col p-6 gap-6 bg-[#12121A]/90 backdrop-blur-2xl overflow-y-auto custom-scrollbar shrink-0">
+                    <div className="space-y-1">
+                        <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] px-3">WhatsApp Business</h3>
                     </div>
 
-                    <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/10">
-                        <p className="text-[9px] text-indigo-300/60 leading-relaxed">
-                            <span className="material-symbols-outlined text-xs align-middle mr-1">info</span>
-                            Conecte seu WhatsApp Business para a LIA atender seus clientes automaticamente com IA.
-                        </p>
-                    </div>
-                </div>
-            </aside>
-
-            {/* Main content */}
-            <main className="flex-1 flex flex-col overflow-hidden relative">
-                {/* Header bar */}
-                <header className="p-6 border-b border-white/10 flex justify-between items-center bg-[#15151F]/80 backdrop-blur-xl">
-                    <div className="space-y-0.5">
-                        <h2 className="text-xl font-black text-white tracking-tight">Integração WhatsApp</h2>
-                        <p className="text-[10px] font-black uppercase tracking-widest bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
-                            Conecte seu número WhatsApp Business
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-3">
+                    <div className="space-y-2">
                         <button
-                            onClick={() => fetchStatus()}
-                            disabled={twilioLoading}
-                            className="px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white/70 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
+                            onClick={() => navigate('/integrations')}
+                            className="w-full flex items-center gap-3 p-3.5 rounded-xl text-white/70 hover:bg-white/10 hover:text-white border border-transparent transition-all group"
                         >
-                            <span className={`material-symbols-outlined text-sm ${twilioLoading ? 'animate-spin' : ''}`}>refresh</span>
-                            Atualizar
+                            <span className="material-symbols-outlined text-base text-white/50 group-hover:text-emerald-400 transition-colors">arrow_back</span>
+                            <span className="text-[11px] font-black uppercase tracking-widest">Voltar</span>
+                        </button>
+
+                        <button
+                            className="w-full flex items-center justify-between p-3.5 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/10 text-white border border-emerald-500/30 shadow-lg shadow-emerald-500/10 transition-all"
+                        >
+                            <div className="flex items-center gap-3">
+                                <span className="material-symbols-outlined text-base text-emerald-400">qr_code_scanner</span>
+                                <span className="text-[11px] font-black uppercase tracking-widest">Conexão API</span>
+                            </div>
                         </button>
                     </div>
-                </header>
 
-                {/* Content area */}
-                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                    <div className="max-w-3xl mx-auto space-y-6">
-
-                        {/* Status Card */}
-                        {twilioStatus && twilioStatus?.status !== 'DISCONNECTED' && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className={`p-6 rounded-2xl border ${twilioStatus.status === 'ACTIVE'
-                                    ? 'bg-green-500/5 border-green-500/20'
-                                    : twilioStatus.status === 'ERROR'
-                                        ? 'bg-red-500/5 border-red-500/20'
-                                        : twilioStatus.status === 'ACTION_REQUIRED'
-                                            ? 'bg-purple-500/5 border-purple-500/20'
-                                            : 'bg-amber-500/5 border-amber-500/20'
-                                    }`}
-                            >
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${twilioStatus.status === 'ACTIVE'
-                                            ? 'bg-green-500/20'
-                                            : twilioStatus.status === 'ERROR'
-                                                ? 'bg-red-500/20'
-                                                : twilioStatus.status === 'ACTION_REQUIRED'
-                                                    ? 'bg-purple-500/20'
-                                                    : 'bg-amber-500/20'
-                                            }`}>
-                                            <span className={`material-symbols-outlined text-3xl ${twilioStatus.status === 'ACTIVE'
-                                                ? 'text-green-500'
-                                                : twilioStatus.status === 'ERROR'
-                                                    ? 'text-red-500'
-                                                    : twilioStatus.status === 'ACTION_REQUIRED'
-                                                        ? 'text-purple-500'
-                                                        : 'text-amber-500'
-                                                }`}>
-                                                {twilioStatus.status === 'ACTIVE' ? 'check_circle'
-                                                    : twilioStatus.status === 'ERROR' ? 'error'
-                                                        : twilioStatus.status === 'ACTION_REQUIRED' ? 'warning'
-                                                            : 'hourglass_top'}
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-black text-white">
-                                                {twilioStatus.status === 'ACTIVE' ? 'WhatsApp Conectado e Ativo'
-                                                    : twilioStatus.status === 'ERROR' ? 'Erro na Conexão'
-                                                        : twilioStatus.status === 'ACTION_REQUIRED' ? 'Ação Necessária'
-                                                            : twilioStatus.status === 'PENDING' ? 'Pendente'
-                                                                : 'Conectando...'}
-                                            </h2>
-                                            {twilioStatus.phone && (
-                                                <p className="text-sm text-gray-400 font-mono mt-1">{twilioStatus.phone}</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        {twilioStatus.onboarding_status === 'active' && (
-                                            <button
-                                                onClick={() => handleAction('suspend')}
-                                                className="px-4 py-2.5 text-xs font-bold rounded-xl border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-all uppercase tracking-widest"
-                                            >
-                                                Suspender
-                                            </button>
-                                        )}
-                                        {twilioStatus.onboarding_status === 'suspended' && (
-                                            <button
-                                                onClick={() => handleAction('reactivate')}
-                                                className="px-4 py-2.5 text-xs font-bold rounded-xl bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-all uppercase tracking-widest"
-                                            >
-                                                Reativar
-                                            </button>
-                                        )}
-                                        {/* Desconectar — always available */}
-                                        <button
-                                            onClick={handleDisconnect}
-                                            disabled={disconnecting}
-                                            className="px-4 py-2.5 text-xs font-bold rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all uppercase tracking-widest disabled:opacity-50"
-                                        >
-                                            {disconnecting ? 'Desconectando...' : 'Desconectar'}
-                                        </button>
-                                    </div>
-                                </div>
-                                {twilioStatus.error && (
-                                    <div className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
-                                        <strong>Último erro:</strong> {twilioStatus.error}
-                                    </div>
-                                )}
-                            </motion.div>
-                        )}
-
-                        {/* Connection Form - Only if DISCONNECTED */}
-                        {(!twilioStatus?.status || twilioStatus?.status === 'DISCONNECTED') && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="bg-[#15151F] rounded-2xl border border-white/10 overflow-hidden"
-                            >
-                                {/* Card header */}
-                                <div className="p-6 border-b border-white/10">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
-                                            <span className="material-symbols-outlined text-xl text-purple-400">phone_iphone</span>
-                                        </div>
-                                        <div>
-                                            <h3 className="text-base font-black text-white">Conecte seu WhatsApp em minutos</h3>
-                                            <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest">
-                                                Integração oficial via parceiro Twilio
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="p-6 space-y-5">
-                                    {/* Info banner */}
-                                    <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20">
-                                        <p className="text-sm text-purple-300">
-                                            A Luminnus conecta seu WhatsApp via provedor oficial (Twilio). O processo pode exigir validação do seu número e aprovação da Meta.
-                                        </p>
-                                    </div>
-
-                                    {/* Connect Button */}
-                                    <button
-                                        onClick={handleConnect}
-                                        disabled={connecting}
-                                        className="w-full px-6 py-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-sm shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {connecting ? (
-                                            <>
-                                                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                                Iniciando configuração...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <span className="material-symbols-outlined text-xl">link</span>
-                                                Conectar WhatsApp Oficialmente
-                                            </>
-                                        )}
-                                    </button>
-                                </div>
-                            </motion.div>
-                        )}
-
-                        {/* Benefits */}
-                        <div className="grid grid-cols-3 gap-4">
-                            <div className="p-5 rounded-2xl bg-[#15151F] border border-white/5 text-center group hover:border-purple-500/30 transition-all">
-                                <div className="w-12 h-12 mx-auto rounded-xl bg-purple-500/10 flex items-center justify-center mb-3 group-hover:bg-purple-500/20 transition-all">
-                                    <span className="material-symbols-outlined text-purple-400 text-2xl">shield</span>
-                                </div>
-                                <p className="text-xs font-bold text-white mb-1">100% Seguro</p>
-                                <p className="text-[10px] text-gray-500">Dados criptografados e isolados</p>
-                            </div>
-                            <div className="p-5 rounded-2xl bg-[#15151F] border border-white/5 text-center group hover:border-purple-500/30 transition-all">
-                                <div className="w-12 h-12 mx-auto rounded-xl bg-purple-500/10 flex items-center justify-center mb-3 group-hover:bg-purple-500/20 transition-all">
-                                    <span className="material-symbols-outlined text-purple-400 text-2xl">phone_iphone</span>
-                                </div>
-                                <p className="text-xs font-bold text-white mb-1">Seu Número</p>
-                                <p className="text-[10px] text-gray-500">Use o número que seus clientes já conhecem</p>
-                            </div>
-                            <div className="p-5 rounded-2xl bg-[#15151F] border border-white/5 text-center group hover:border-purple-500/30 transition-all">
-                                <div className="w-12 h-12 mx-auto rounded-xl bg-purple-500/10 flex items-center justify-center mb-3 group-hover:bg-purple-500/20 transition-all">
-                                    <span className="material-symbols-outlined text-purple-400 text-2xl">smart_toy</span>
-                                </div>
-                                <p className="text-xs font-bold text-white mb-1">IA Integrada</p>
-                                <p className="text-[10px] text-gray-500">LIA atende seus clientes 24/7</p>
-                            </div>
-                        </div>
-
-                        {/* Help Section */}
-                        <div className="p-6 rounded-2xl bg-indigo-500/5 border border-indigo-500/20">
-                            <h3 className="text-sm font-bold mb-3 flex items-center gap-2 text-white">
-                                <span className="material-symbols-outlined text-indigo-400">help</span>
-                                Como funciona?
-                            </h3>
-                            <ol className="text-xs text-gray-400 space-y-2 list-decimal list-inside">
-                                <li>Inicie o processo pelo botão <strong className="text-white/80">Conectar WhatsApp Oficialmente</strong>.</li>
-                                <li>Acesse sua conta do Twilio/Facebook para vincular seu número.</li>
-                                <li>A LIA configura automaticamente os webhooks na conclusão.</li>
-                                <li>Personalize o perfil e playbooks da LIA na aba de <strong className="text-white/80">Configuração</strong></li>
-                            </ol>
-                        </div>
+                    <div className="mt-auto p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/10">
+                        <p className="text-[9px] text-indigo-300/60 leading-relaxed">
+                            <span className="material-symbols-outlined text-xs align-middle mr-1">info</span>
+                            Conecte seu WhatsApp lendo o QR Code. A LIA começará a processar mensagens instantaneamente sem necessidade de verificação do Facebook.
+                        </p>
                     </div>
-                </div>
-            </main>
+                </aside>
+
+                {/* Main content */}
+                <main className="flex-1 overflow-y-auto custom-scrollbar p-0 bg-transparent relative">
+                    <WhatsAppConnection tenantIdOverride={tenantId} />
+                </main>
+            </div>
         </div>
     );
 };
