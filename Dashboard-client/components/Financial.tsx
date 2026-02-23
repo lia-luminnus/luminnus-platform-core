@@ -12,7 +12,7 @@ const Financial: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'overview' | 'sheets'>('overview');
     const spreadsheetRef = useRef<SpreadsheetHandle>(null);
 
-    const transactions: Transaction[] = [
+    const transactions: any[] = [
         { id: '1', description: 'Monthly Subscription - Pro Plan', date: '2023-10-28', amount: 299.00, status: 'completed' },
         { id: '2', description: 'API Usage Overage', date: '2023-10-25', amount: -45.50, status: 'completed' },
         { id: '3', description: 'Nexus Integration Setup', date: '2023-10-22', amount: -1200.00, status: 'completed' },

@@ -74,6 +74,24 @@ const INTEGRATIONS_LIST: IntegrationDef[] = [
         planRequired: 'start',
         permissions: ['Enviar mensagens', 'Ler conversas']
     },
+    {
+        id: 'telegram_manager',
+        name: 'Telegram E-Manager',
+        description: 'Painel via Telegram exclusivo para o Dono do Negócio gerenciar a operação.',
+        icon: <MessageSquare className="text-blue-400" />,
+        category: 'communication',
+        planRequired: 'start',
+        permissions: ['Enviar mensagens', 'Receber comandos', 'Alertas']
+    },
+    {
+        id: 'web_widget',
+        name: 'Atendimento Web (Widget)',
+        description: 'Instale a LIA no seu site para atendimento em tempo real por chat e voz.',
+        icon: <Rocket className="text-blue-500" />,
+        category: 'communication',
+        planRequired: 'start',
+        permissions: ['Enviar mensagens', 'Chat no Site', 'Áudio']
+    },
 
     // === PRO/HUB ===
     {
@@ -297,6 +315,16 @@ const Integrations: React.FC = () => {
 
         if (integration.id === 'whatsapp') {
             navigate('/integrations/whatsapp');
+            return;
+        }
+
+        if (integration.id === 'telegram_manager') {
+            navigate('/integrations/telegram');
+            return;
+        }
+
+        if (integration.id === 'web_widget') {
+            navigate('/integrations/widget');
             return;
         }
 

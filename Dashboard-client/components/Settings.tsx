@@ -34,16 +34,16 @@ const Settings: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'perfil' | 'general' | 'modules' | 'sector'>('perfil');
 
     // Profile Edit State
-    const [fullName, setFullName] = useState(profile?.full_name || '');
-    const [companyName, setCompanyName] = useState(profile?.company_name || '');
-    const [phone, setPhone] = useState(profile?.phone || '');
-    const [taxId, setTaxId] = useState(profile?.tax_id || '');
-    const [address, setAddress] = useState(profile?.address || '');
-    const [city, setCity] = useState(profile?.city || '');
-    const [state, setState] = useState(profile?.state || '');
-    const [postalCode, setPostalCode] = useState(profile?.postal_code || '');
-    const [country, setCountry] = useState(profile?.country || 'Brasil');
-    const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || '');
+    const [fullName, setFullName] = useState((profile as any)?.full_name || '');
+    const [companyName, setCompanyName] = useState((profile as any)?.company_name || '');
+    const [phone, setPhone] = useState((profile as any)?.phone || '');
+    const [taxId, setTaxId] = useState((profile as any)?.tax_id || '');
+    const [address, setAddress] = useState((profile as any)?.address || '');
+    const [city, setCity] = useState((profile as any)?.city || '');
+    const [state, setState] = useState((profile as any)?.state || '');
+    const [postalCode, setPostalCode] = useState((profile as any)?.postal_code || '');
+    const [country, setCountry] = useState((profile as any)?.country || 'Brasil');
+    const [avatarUrl, setAvatarUrl] = useState((profile as any)?.avatar_url || '');
     const [isSavingProfile, setIsSavingProfile] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -52,16 +52,16 @@ const Settings: React.FC = () => {
 
     useEffect(() => {
         if (profile) {
-            setFullName(profile.full_name || '');
-            setCompanyName(profile.company_name || '');
-            setPhone(profile.phone || '');
-            setTaxId(profile.tax_id || '');
-            setAddress(profile.address || '');
-            setCity(profile.city || '');
-            setState(profile.state || '');
-            setPostalCode(profile.postal_code || '');
-            setCountry(profile.country || 'Brasil');
-            setAvatarUrl(profile.avatar_url || '');
+            setFullName((profile as any).full_name || '');
+            setCompanyName((profile as any).company_name || '');
+            setPhone((profile as any).phone || '');
+            setTaxId((profile as any).tax_id || '');
+            setAddress((profile as any).address || '');
+            setCity((profile as any).city || '');
+            setState((profile as any).state || '');
+            setPostalCode((profile as any).postal_code || '');
+            setCountry((profile as any).country || 'Brasil');
+            setAvatarUrl((profile as any).avatar_url || '');
         }
     }, [profile]);
 
@@ -133,7 +133,7 @@ const Settings: React.FC = () => {
                 avatar_url: avatarUrl,
                 onboarding_completed: true
             });
-            await refreshProfile(user, true);
+            await refreshProfile(user);
             toast.success('Perfil atualizado com sucesso!');
         } catch (error: any) {
             console.error('[Settings] Erro ao atualizar perfil:', error);
@@ -160,7 +160,7 @@ const Settings: React.FC = () => {
             setAvatarUrl(url);
 
             await updateProfile(user.id, { avatar_url: url });
-            await refreshProfile(user, true);
+            await refreshProfile(user);
 
             toast.success('Foto atualizada e salva!');
         } catch (error: any) {
@@ -314,7 +314,7 @@ const Settings: React.FC = () => {
                                                                         return;
                                                                     }
                                                                     toast.loading('Sincronizando...', { id: 'sync-toast' });
-                                                                    await refreshProfile(user, true);
+                                                                    await refreshProfile(user);
                                                                     toast.success('Perfil sincronizado!', { id: 'sync-toast' });
                                                                 }}
                                                                 className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-amber-500 hover:text-amber-400 transition-colors"

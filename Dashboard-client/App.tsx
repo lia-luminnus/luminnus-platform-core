@@ -22,6 +22,8 @@ import Integrations from './components/Integrations';
 import Reports from './components/Reports';
 import IntegrationsHub from './components/integrations/IntegrationsHub';
 import WhatsAppIntegration from './components/integrations/WhatsAppIntegration';
+import AdminWidget from './components/integrations/AdminWidget';
+import AdminTelegram from './components/integrations/AdminTelegram';
 import Onboarding from './components/Onboarding';
 import AuthBridge from './components/AuthBridge';
 import WhatsAppAgent from './components/WhatsAppAgent';
@@ -265,6 +267,8 @@ const AppContent: React.FC = () => {
                     <Route path="/integrations" element={<Integrations />} />
                     <Route path="/integrations/hub" element={<IntegrationsHub />} />
                     <Route path="/integrations/whatsapp" element={<WhatsAppIntegration />} />
+                    <Route path="/integrations/widget" element={<AdminWidget />} />
+                    <Route path="/integrations/telegram" element={<AdminTelegram />} />
                     <Route path="/calendar" element={<Calendar />} />
                     <Route path="/files" element={<Files />} />
                     <Route path="/automations" element={<Automations />} />

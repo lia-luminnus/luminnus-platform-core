@@ -287,7 +287,7 @@ export class LiaActionHandler {
         // v4.0: Verificar permissão no plano (default: start)
         const plan = (window as any).__liaTenantPlan || 'start';
         if (!isWidgetAllowedInPlan(normalizedType, plan)) {
-            const meta = getWidgetMeta(normalizedType);
+            const meta: any = getWidgetMeta(normalizedType);
             console.log('❌ [VALIDATION] NOT_ALLOWED_BY_PLAN:', normalizedType, 'requires', meta?.planRequired);
             return {
                 success: false,

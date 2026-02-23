@@ -1,6 +1,8 @@
 // ======================================================================
 // 🔄 WRAPPER - Re-exporta do @luminnus/lia-runtime (SSOT)
 // ======================================================================
+// 🔄 WRAPPER - Re-exporta do @luminnus/lia-runtime (SSOT)
+// ======================================================================
 // Este arquivo existe apenas para manter compatibilidade com imports existentes.
 // A implementação real está em packages/lia-runtime.
 // NÃO EDITE ESTE ARQUIVO - Edite packages/lia-runtime/src/live/geminiLiveService.ts
