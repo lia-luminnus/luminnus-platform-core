@@ -1,0 +1,225 @@
+/* Reset and standard properties */
+#lia-widget-container {
+  --lia-primary: #5544ff; /* brand-primary from Dashboard */
+  --lia-text: #333;
+  --lia-bg: #fff;
+  --lia-radius: 16px;
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+#lia-chat-button {
+  width: 60px;
+  height: 60px;
+  background-color: var(--lia-primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 28px;
+  box-shadow: 0 4px 12px rgba(85, 68, 255, 0.4);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+}
+
+#lia-chat-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(85, 68, 255, 0.5);
+}
+
+#lia-chat-window {
+  position: absolute;
+  bottom: 80px;
+  right: 0;
+  width: 320px;
+  height: 480px;
+  max-height: calc(100vh - 120px);
+  background: var(--lia-bg);
+  border-radius: var(--lia-radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  transform-origin: bottom right;
+}
+
+#lia-chat-window.lia-hidden {
+  opacity: 0;
+  transform: scale(0.9);
+  pointer-events: none;
+}
+
+.lia-chat-header {
+  background: var(--lia-primary);
+  color: white;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lia-header-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lia-avatar {
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.lia-title {
+  display: flex;
+  flex-direction: column;
+}
+
+.lia-title span:first-child {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.lia-status {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.lia-close-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+  padding: 0;
+  line-height: 1;
+}
+
+.lia-close-btn:hover {
+  opacity: 1;
+}
+
+.lia-chat-content {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  background: #f8f9fa;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lia-message {
+  max-width: 80%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.lia-received {
+  background: white;
+  align-self: flex-start;
+  color: var(--lia-text);
+  border: 1px solid #eef0f2;
+  border-bottom-left-radius: 4px;
+}
+
+.lia-sent {
+  background: var(--lia-primary);
+  color: white;
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+}
+
+.lia-chat-footer {
+  padding: 16px;
+  background: white;
+  border-top: 1px solid #eef0f2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#lia-chat-input {
+  flex: 1;
+  border: none;
+  background: #f1f3f5;
+  padding: 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  outline: none;
+}
+
+#lia-chat-input:focus {
+  background: #e9ecef;
+}
+
+.lia-chat-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.lia-action-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.2s;
+}
+
+.lia-mic-btn {
+  background: #ffe3e3;
+  color: #fa5252;
+}
+
+.lia-send-btn {
+  background: var(--lia-primary);
+  color: white;
+}
+
+.lia-action-btn:hover {
+  filter: brightness(0.9);
+}
+
+/* Base styles for responsive */
+@media (max-width: 480px) {
+  #lia-widget-container {
+    bottom: 16px;
+    right: 16px;
+  }
+  
+  #lia-chat-window {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    bottom: 0;
+    right: 0;
+    border-radius: 0;
+  }
+}

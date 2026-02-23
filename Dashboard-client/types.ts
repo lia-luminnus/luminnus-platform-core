@@ -71,14 +71,7 @@ export interface Order {
   updatedAt: string;
 }
 
-export interface TeamMember {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  avatar: string;
-  status: 'active' | 'pending';
-}
+// Previous TeamMember definition removed in favor of the full one at EOF
 
 export interface ChatMessage {
   id: string;
@@ -219,6 +212,7 @@ export interface MedicalFile {
 export interface Patient {
   id: string;
   name: string;
+  avatar?: string;
   phone: string;
   age: string;
   plan: string;
@@ -243,4 +237,25 @@ export interface Patient {
     totalPaid: number;
     totalOpen: number;
   };
+}
+
+// --- Team Module Types ---
+
+export type TeamRole = 'Admin' | 'Developer' | 'Membro' | 'Contador' | 'Recepcionista' | 'Atendente' | 'Gestor' | 'Agente IA';
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  role: TeamRole;
+  img: string;
+  border?: string; // Optional: specific custom border color for the UI
+  status: 'Online' | 'Offline' | 'Ausente';
+}
+
+export interface PendingInvitation {
+  id: string;
+  email: string;
+  role: TeamRole;
+  dateSent: string;
 }

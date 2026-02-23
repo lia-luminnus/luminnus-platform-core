@@ -56,8 +56,9 @@ const INTEGRATIONS: IntegrationDef[] = [
 
     // === COMUNICAÇÃO ===
     { id: 'whatsapp', name: 'WhatsApp Business', description: 'Atendimento automático via WhatsApp', icon: '💬', category: 'communication', planRequired: 'start', permissions: ['Enviar mensagens', 'Ler conversas', 'Gerenciar contatos'] },
+    { id: 'telegram_manager', name: 'Telegram E-Manager', description: 'Painel remoto para o Dono do Negócio', icon: '✈️', category: 'communication', planRequired: 'start', permissions: ['Enviar relatórios', 'Receber comandos', 'Alertas de negócio'] },
+    { id: 'web_widget', name: 'Atendimento Web (Widget)', description: 'Botão de chat para o seu site', icon: '🌐', category: 'communication', planRequired: 'start', permissions: ['Enviar mensagens', 'Chat no Site', 'Áudio'] },
     { id: 'slack', name: 'Slack', description: 'Integrar canais e notificações', icon: '💼', category: 'communication', planRequired: 'plus', permissions: ['Enviar mensagens', 'Ler canais', 'Gerenciar bots'] },
-    { id: 'telegram', name: 'Telegram Bot', description: 'Automatizar respostas no Telegram', icon: '✈️', category: 'communication', planRequired: 'plus', permissions: ['Enviar mensagens', 'Receber comandos'] },
     { id: 'discord', name: 'Discord', description: 'Integrar servidores e bots', icon: '🎮', category: 'communication', planRequired: 'plus', permissions: ['Enviar mensagens', 'Gerenciar canais'] },
     { id: 'twilio', name: 'Twilio SMS', description: 'Enviar SMS e notificações', icon: '📱', category: 'communication', planRequired: 'pro', permissions: ['Enviar SMS', 'Receber mensagens'] },
 
@@ -363,9 +364,17 @@ const Integrations: React.FC = () => {
     const blockedCount = INTEGRATIONS.filter(i => !canAccess(i)).length;
 
     const handleConnect = (integration: IntegrationDef) => {
-        // Redirecionamento especial para WhatsApp Admin Governance se o usuário for Admin
-        if (integration.id === 'whatsapp' && isAdminAccess) {
+        // Redirecionamento especial para as configurações de canais da LIA
+        if (integration.id === 'whatsapp') {
             navigate('/admin/whatsapp');
+            return;
+        }
+        if (integration.id === 'telegram_manager') {
+            navigate('/admin/telegram');
+            return;
+        }
+        if (integration.id === 'web_widget') {
+            navigate('/admin/widget');
             return;
         }
 

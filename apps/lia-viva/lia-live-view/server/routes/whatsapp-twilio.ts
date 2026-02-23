@@ -5,26 +5,17 @@
 
 import { Router, Request, Response } from 'express';
 import { supabase } from '../config/supabase.js';
-// Se precisarmos usar um serviço real na Twilio para gerar Auth URL (Embedded Signup da Twilio), importaríamos aqui.
-// Pela requisição do usuário, a plataforma inicia o onboarding retornando uma URL do fluxo da Twilio.
+import { TwilioOnboardingService } from '../services/twilioOnboardingService.js';
 
 const router: Router = Router();
-
-/**
- * Helper: Gerar URL de Onboarding (Fake/Placehoder por enquanto até integrarmos o SDK exacto)
- * Em prod, usaria Twilio SDK para gerar o link do onboarding ou direcionar para OAuth da Twilio.
- */
-function getTwilioOnboardingUrl(tenant_id: string) {
-    // Retorna URL fictícia se não tiver um endpoint OAuth Twilio configurado.
-    // Depende de como o "Twilio Embedded Signup" está configurado na sua app Twilio
-    return `https://www.twilio.com/console/whatsapp/onboarding?state=${tenant_id}`;
-}
+const META_APP_ID = process.env.META_APP_ID || '885283457594424';
+const META_CONFIG_ID = process.env.META_CONFIG_ID || '';
+const META_REDIRECT_URI = process.env.WHATSAPP_OAUTH_REDIRECT || process.env.META_REDIRECT_URI || 'https://luminnus-platform-core.onrender.com/api/whatsapp/embedded/callback';
 
 /**
  * POST /api/whatsapp/twilio/start
- * Inicia onboarding via Twilio
- * Cria registro PENDING na tabela
- * Retorna URL do fluxo
+ * Inicia onboarding via Twilio (Fluxo BYON)
+ * Cria subconta e retorna URL do Meta Embedded Signup
  */
 router.post('/start', async (req: Request, res: Response) => {
     try {
@@ -33,7 +24,15 @@ router.post('/start', async (req: Request, res: Response) => {
             return res.status(400).json({ status: 'error', reason: 'tenant_id é obrigatório' });
         }
 
-        // Criar ou atualizar como PENDING
+        console.log(`🚀 [Twilio SSOT] Iniciando onboarding BYON para tenant: ${tenant_id}`);
+
+        // 1. Criar a subconta Twilio (Fluxo BYON)
+        await TwilioOnboardingService.initByonFlow(tenant_id, {
+            friendlyName: `LIA-${tenant_id.slice(0, 8)}`,
+            billingMode: 'start_plan'
+        });
+
+        // 2. Criar ou atualizar status como PENDING na tabela whatsapp_connections
         const { data: existing } = await supabase
             .from('whatsapp_connections')
             .select('id')
@@ -55,9 +54,32 @@ router.post('/start', async (req: Request, res: Response) => {
                 });
         }
 
-        const url = getTwilioOnboardingUrl(tenant_id);
+        // 3. Gerar state seguro para CSRF
+        const state = `${tenant_id}_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 15)}`;
 
-        res.json({ status: 'ok', data: { url } });
+        // 4. Salvar state no Supabase para validação no callback do Meta
+        await supabase
+            .from('whatsapp_signup_states')
+            .upsert({
+                tenant_id,
+                state,
+                created_at: new Date().toISOString(),
+                expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes expire
+            });
+
+        // 5. Construir URL do Meta Embedded Signup
+        const params = new URLSearchParams({
+            client_id: META_APP_ID,
+            redirect_uri: META_REDIRECT_URI,
+            state,
+            scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management',
+            response_type: 'code',
+            ...(META_CONFIG_ID ? { config_id: META_CONFIG_ID } : {})
+        });
+
+        const signupUrl = `https://www.facebook.com/v18.0/dialog/oauth?${params.toString()}`;
+
+        res.json({ status: 'ok', data: { url: signupUrl } });
     } catch (error: any) {
         console.error('❌ [WhatsApp Twilio Start] Error:', error);
         res.status(500).json({ status: 'error', reason: error.message });
