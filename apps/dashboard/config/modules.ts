@@ -27,6 +27,7 @@ export const MODULE_REGISTRY: Record<ModuleId, ModuleDefinition> = {
   support: { id: 'support', translationKey: 'support', icon: 'support_agent', path: '/support', isCore: true },
   integrations: { id: 'integrations', translationKey: 'integrations', icon: 'sync_alt', path: '/integrations', isCore: true },
   whatsapp_admin: { id: 'whatsapp_admin', translationKey: 'whatsappAdmin', icon: 'chat', path: '/admin/whatsapp' },
+  telegram_admin: { id: 'telegram_admin', translationKey: 'telegramAdmin', icon: 'send', path: '/admin/telegram' },
 };
 
 // 2. Presets: Defines which modules are active by default for each profession
@@ -75,7 +76,7 @@ export const getModules = (activeIds: ModuleId[]): ModuleDefinition[] => {
     'dashboard', 'crm', 'lia', 'calendar', 'files',
     'stock', 'sales', 'properties', 'medical_records', 'logistics',
     'automations', 'financial', 'reports', 'team',
-    'settings', 'integrations', 'whatsapp_agent', 'whatsapp_admin', 'plan', 'support'
+    'settings', 'integrations', 'whatsapp_agent', 'plan', 'support'
   ];
 
   return preferredOrder

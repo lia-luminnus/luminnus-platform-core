@@ -174,7 +174,8 @@ export type ModuleId =
   | 'support'
   | 'integrations'
   | 'whatsapp_agent'
-  | 'whatsapp_admin';
+  | 'whatsapp_admin'
+  | 'telegram_admin';
 
 export interface Integration {
   id: string;

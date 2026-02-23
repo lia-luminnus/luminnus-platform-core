@@ -22,6 +22,8 @@ const MedicalRecords: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editModalTab, setEditModalTab] = useState<'Editar' | 'Informações'>('Editar');
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const LIA_VIVA_URL = import.meta.env.VITE_LIA_VIVA_URL || (import.meta.env.DEV ? "http://localhost:5173" : "https://luminnus-lia.onrender.com");
 
   // States for editing notes
@@ -95,6 +97,22 @@ const MedicalRecords: React.FC = () => {
     updatePatient(patient.id, { privateObservations: tempPrivObs });
     setIsEditingPrivObs(false);
     toast.success('Observações privadas salvas');
+  };
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('A imagem deve ter no máximo 5MB');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        updatePatient(patient.id, { avatar: reader.result as string });
+        toast.success('Foto de perfil atualizada com sucesso!');
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handlePrint = () => {
@@ -308,14 +326,25 @@ const MedicalRecords: React.FC = () => {
                   <div className="relative group flex-shrink-0 mx-auto lg:mx-0">
                     <div className="w-40 h-40 rounded-3xl overflow-hidden border-4 border-brand-primary/20 bg-blue-100 shadow-xl">
                       <img
-                        src="https://api.dicebear.com/7.x/avataaars/svg?seed=Alice&hairColor=f59724&clothingColor=3c91e6"
+                        src={patient.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${patient.name}&hairColor=f59724&clothingColor=3c91e6`}
                         alt="Patient"
                         className="w-full h-full object-cover"
                       />
                     </div>
-                    <button className="absolute bottom-2 right-2 bg-brand-primary text-white p-2 rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-all hover:scale-110 print:hidden">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="absolute bottom-2 right-2 bg-brand-primary text-white p-2 rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-all hover:scale-110 print:hidden"
+                      title="Alterar Fotografia"
+                    >
                       <span className="material-symbols-outlined text-lg">photo_camera</span>
                     </button>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleAvatarUpload}
+                    />
                   </div>
 
                   {/* Patient Info */}

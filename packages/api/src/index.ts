@@ -16,6 +16,8 @@ import whatsappAdminRouter from './routes/whatsappAdmin.js';
 import whatsappWebhookRouter from './routes/whatsappWebhook.js';
 import whatsappIntegrationsRouter from './routes/whatsappIntegrations.js';
 import whatsappEmbeddedRouter from './routes/whatsappEmbedded.js';
+import whatsappEvolutionRouter from './routes/whatsappEvolution.js';
+import telegramAdminRouter from './routes/telegramAdmin.js';
 import assistantRouter from './routes/assistant.js';
 import adminRouter from './routes/admin.js';
 import { errorHandler } from './middleware/error.js';
@@ -68,6 +70,8 @@ app.use('/api/metrics', metricsRouter);
 app.use('/api/briefing', briefingRoutes);
 app.use('/api/integrations/hub', hubRoutes);
 app.use('/api/whatsapp', whatsappWebhookRouter); // Meta Webhook verification
+app.use('/api/whatsapp/evolution', whatsappEvolutionRouter); // Evolution QR Code flow
+app.use('/api/telegram/admin', telegramAdminRouter); // Telegram Webhook & Utils
 app.use('/api/integrations/whatsapp', whatsappIntegrationsRouter); // Client BYO integrations
 app.use('/api/whatsapp/embedded', whatsappEmbeddedRouter); // Embedded Signup flow
 app.use('/api/memory', assistantRouter);

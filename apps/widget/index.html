@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Minha Loja de Teste</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f5f7fa;
+      }
+      header {
+        background-color: #333;
+        color: white;
+        padding: 20px;
+        text-align: center;
+      }
+      .content {
+        max-width: 800px;
+        margin: 40px auto;
+        padding: 20px;
+        background: white;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border-radius: 8px;
+        min-height: 50vh;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Bem-vindo à Loja</h1>
+      <p>Este é um site de teste para o Web Widget da LIA</p>
+    </header>
+    <div class="content">
+      <h2>Nossos Produtos</h2>
+      <p>Role a página ou clique no botão flutuante para falar com o suporte LIA.</p>
+    </div>
+    
+    <!-- Script de Instalação do Widget da LIA -->
+    <script type="module" src="/src/main.ts" data-workspace-id="TEST_WORKSPACE_ID" data-enable-voice="true"></script>
+  </body>
+</html>
