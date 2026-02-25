@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { LanguageContext } from '../../contexts/LanguageContext';
 import toast from 'react-hot-toast';
 import { QrCode, Smartphone, RefreshCw, Zap, ShieldCheck } from 'lucide-react';
+import { getApiUrl } from '../../config/api';
 
 interface EvolutionStatus {
     instanceName: string;
@@ -26,10 +27,20 @@ const WhatsAppConnection: React.FC<{ onComplete?: () => void; tenantIdOverride?:
     const fetchStatus = async () => {
         if (!activeTenantId) return;
         try {
-            const res = await fetch(`/api/whatsapp/evolution/status?tenant_id=${activeTenantId}`);
+            const res = await fetch(`${getApiUrl()}/api/whatsapp/evolution/status?tenant_id=${activeTenantId}`);
             if (res.ok) {
-                const data = await res.json();
-                setStatus(data.status); // e.g., { state: 'open', owner: '5511999999999' }
+                const text = await res.text();
+                if (!text || text.trim() === '' || text.trim().startsWith('<')) {
+                    setStatus(null);
+                    return;
+                }
+                try {
+                    const data = JSON.parse(text);
+                    setStatus(data.status);
+                } catch (parseErr) {
+                    console.error('Erro ao parsear status JSON:', parseErr);
+                    setStatus(null);
+                }
             } else {
                 setStatus(null); // Instance might not exist
             }
@@ -45,13 +56,19 @@ const WhatsAppConnection: React.FC<{ onComplete?: () => void; tenantIdOverride?:
         setGenerating(true);
         setQrCodeData(null);
         try {
-            const res = await fetch(`/api/whatsapp/evolution/instance`, {
+            const res = await fetch(`${getApiUrl()}/api/whatsapp/evolution/instance`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tenant_id: activeTenantId })
             });
 
-            const data = await res.json();
+            const text = await res.text();
+            let data: any = {};
+            if (text && text.trim() !== '' && !text.trim().startsWith('<')) {
+                try { data = JSON.parse(text); } catch (e) {
+                    console.error('API retornou resposta não-JSON:', text.substring(0, 100));
+                }
+            }
             if (res.ok && data.qrcode) {
                 setQrCodeData(data.qrcode.base64);
                 // Start polling after generating
@@ -72,7 +89,7 @@ const WhatsAppConnection: React.FC<{ onComplete?: () => void; tenantIdOverride?:
         if (!confirm) return;
 
         try {
-            const res = await fetch(`/api/whatsapp/evolution/instance`, {
+            const res = await fetch(`${getApiUrl()}/api/whatsapp/evolution/instance`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tenant_id: activeTenantId })
@@ -91,16 +108,22 @@ const WhatsAppConnection: React.FC<{ onComplete?: () => void; tenantIdOverride?:
     const pollStatus = () => {
         clearInterval(pollInterval);
         pollInterval = setInterval(async () => {
-            const res = await fetch(`/api/whatsapp/evolution/status?tenant_id=${activeTenantId}`);
-            if (res.ok) {
-                const data = await res.json();
-                setStatus(data.status);
-                if (data.status?.state === 'open') {
-                    setQrCodeData(null);
-                    clearInterval(pollInterval);
-                    toast.success('WhatsApp Conectado!');
-                    if (onComplete) onComplete();
+            try {
+                const res = await fetch(`${getApiUrl()}/api/whatsapp/evolution/status?tenant_id=${activeTenantId}`);
+                if (res.ok) {
+                    const text = await res.text();
+                    if (!text || text.trim() === '' || text.trim().startsWith('<')) return;
+                    const data = JSON.parse(text);
+                    setStatus(data.status);
+                    if (data.status?.state === 'open') {
+                        setQrCodeData(null);
+                        clearInterval(pollInterval);
+                        toast.success('WhatsApp Conectado!');
+                        if (onComplete) onComplete();
+                    }
                 }
+            } catch (e) {
+                console.error('Erro no polling:', e);
             }
         }, 5000);
     };
