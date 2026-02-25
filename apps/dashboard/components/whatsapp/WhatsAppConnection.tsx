@@ -11,6 +11,8 @@ interface EvolutionStatus {
     profileName?: string;
     profilePicUrl?: string;
     owner?: string;
+}
+
 const getApiUrl = () => import.meta.env.VITE_API_URL || 'https://api.luminnus.ai';
 
 const WhatsAppConnection: React.FC<{ onComplete?: () => void; tenantIdOverride?: string }> = ({ onComplete, tenantIdOverride }) => {
