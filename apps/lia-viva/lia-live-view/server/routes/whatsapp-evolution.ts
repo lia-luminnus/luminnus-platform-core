@@ -91,7 +91,34 @@ router.get('/status', async (req: Request, res: Response) => {
             return res.json({ ok: true, status: null });
         }
         console.error('❌ Erro na API Evolution /status:', error.message);
-        res.status(500).json({ error: 'Falha ao comunicar com Evolution API' });
+
+        // Fallback: Try to get last known status from Supabase
+        try {
+            const { data: conn } = await supabase
+                .from('whatsapp_connections')
+                .select('status, phone_number, config_json')
+                .eq('tenant_id', tenantId)
+                .eq('provider', 'evolution')
+                .maybeSingle();
+
+            if (conn) {
+                return res.json({
+                    ok: true,
+                    status: {
+                        instanceName,
+                        state: conn.status === 'active' ? 'open' : 'close',
+                        owner: conn.phone_number || undefined,
+                        profileName: conn.config_json?.profileName || undefined,
+                    },
+                    source: 'supabase_fallback'
+                });
+            }
+        } catch (dbErr: any) {
+            console.error('❌ Fallback Supabase também falhou:', dbErr.message);
+        }
+
+        // If both Evolution API and Supabase fail, return graceful "not connected" state
+        res.json({ ok: true, status: null, source: 'offline' });
     }
 });
 
