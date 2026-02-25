@@ -81,6 +81,7 @@ import { setupTwilioOnboardingRoutes } from './routes/twilio-onboarding.js';
 import { setupTwilioWebhookRoutes } from './routes/twilio-webhook.js';
 import twilioAdminRoutes from './routes/twilio-admin.js';
 import { setupWhatsAppTwilioRoutes } from './routes/whatsapp-twilio.js';
+import whatsappEvolutionRoutes from './routes/whatsapp-evolution.js';
 import WhatsAppIntelligence from './services/whatsappIntelligence.js';
 import { setSocketIO } from './services/eventBusService.js';
 import { AutomationScheduler } from './services/scheduler.js';
@@ -369,6 +370,7 @@ async function startServer() {
 
   setupWhatsAppRoutes(app); // Conversation history management
   setupWhatsAppWebhookRoutes(app);
+  app.use('/api/whatsapp/evolution', whatsappEvolutionRoutes); // Evolution API QR Code
   setupEmotionRoutes(app);       // Emotion decode for Avatar
   setupAvatarRoutes(app, openai); // Avatar Studio test API
   setupFilesRoutes(app); // Files management API (v2.0)
