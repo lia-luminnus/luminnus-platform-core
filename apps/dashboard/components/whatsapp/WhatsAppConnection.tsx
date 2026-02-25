@@ -11,7 +11,7 @@ interface EvolutionStatus {
     profileName?: string;
     profilePicUrl?: string;
     owner?: string;
-}
+const getApiUrl = () => import.meta.env.VITE_API_URL || 'https://api.luminnus.ai';
 
 const WhatsAppConnection: React.FC<{ onComplete?: () => void; tenantIdOverride?: string }> = ({ onComplete, tenantIdOverride }) => {
     const { activeTenantId: contextTenantId } = useContext(LanguageContext) as any;
@@ -26,9 +26,15 @@ const WhatsAppConnection: React.FC<{ onComplete?: () => void; tenantIdOverride?:
     const fetchStatus = async () => {
         if (!activeTenantId) return;
         try {
-            const res = await fetch(`/api/whatsapp/evolution/status?tenant_id=${activeTenantId}`);
+            const res = await fetch(`${getApiUrl()}/api/whatsapp/evolution/status?tenant_id=${activeTenantId}`);
             if (res.ok) {
-                const data = await res.json();
+                const text = await res.text();
+                // Avoid empty JSON parsing error if backend returns nothing
+                if (!text || text.trim() === '') {
+                    setStatus(null);
+                    return;
+                }
+                const data = JSON.parse(text);
                 setStatus(data.status); // e.g., { state: 'open', owner: '5511999999999' }
             } else {
                 setStatus(null); // Instance might not exist
@@ -45,13 +51,20 @@ const WhatsAppConnection: React.FC<{ onComplete?: () => void; tenantIdOverride?:
         setGenerating(true);
         setQrCodeData(null);
         try {
-            const res = await fetch(`/api/whatsapp/evolution/instance`, {
+            const res = await fetch(`${getApiUrl()}/api/whatsapp/evolution/instance`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tenant_id: activeTenantId })
             });
 
-            const data = await res.json();
+            const text = await res.text();
+            let data: any = {};
+            if (text && text.trim() !== '') {
+                try { data = JSON.parse(text); } catch (e) {
+                    console.error('API HTML Error:', text.substring(0, 100)); // Debug unexpected HTML strings
+                }
+            }
+
             if (res.ok && data.qrcode) {
                 setQrCodeData(data.qrcode.base64);
                 // Start polling after generating
@@ -72,12 +85,20 @@ const WhatsAppConnection: React.FC<{ onComplete?: () => void; tenantIdOverride?:
         if (!confirm) return;
 
         try {
-            const res = await fetch(`/api/whatsapp/evolution/instance`, {
+            const res = await fetch(`${getApiUrl()}/api/whatsapp/evolution/instance`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tenant_id: activeTenantId })
             });
+
+            const text = await res.text();
+            let data: any = {};
+            if (text && text.trim() !== '') {
+                try { data = JSON.parse(text); } catch (e) { }
+            }
+
             if (res.ok) {
+                setStatus(null);
                 toast.success("Desconectado com sucesso.");
                 fetchStatus();
                 setQrCodeData(null);
@@ -91,16 +112,28 @@ const WhatsAppConnection: React.FC<{ onComplete?: () => void; tenantIdOverride?:
     const pollStatus = () => {
         clearInterval(pollInterval);
         pollInterval = setInterval(async () => {
-            const res = await fetch(`/api/whatsapp/evolution/status?tenant_id=${activeTenantId}`);
-            if (res.ok) {
-                const data = await res.json();
-                setStatus(data.status);
-                if (data.status?.state === 'open') {
-                    setQrCodeData(null);
-                    clearInterval(pollInterval);
-                    toast.success('WhatsApp Conectado!');
-                    if (onComplete) onComplete();
+            try {
+                const res = await fetch(`${getApiUrl()}/api/whatsapp/evolution/status?tenant_id=${activeTenantId}`);
+                if (res.ok) {
+                    const text = await res.text();
+                    if (!text || text.trim() === '') return;
+
+                    const data = JSON.parse(text);
+                    setStatus(data.status);
+
+                    if (data.status?.qrcodeBase64) {
+                        setQrCodeData(data.status.qrcodeBase64);
+                    }
+
+                    if (data.status?.state === 'open') {
+                        setQrCodeData(null);
+                        clearInterval(pollInterval);
+                        toast.success('WhatsApp Conectado!');
+                        if (onComplete) onComplete();
+                    }
                 }
+            } catch (err) {
+                console.error("Poll Error:", err);
             }
         }, 5000);
     };
