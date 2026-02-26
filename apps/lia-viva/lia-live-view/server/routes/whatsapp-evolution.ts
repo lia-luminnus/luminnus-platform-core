@@ -37,6 +37,21 @@ console.log(`✅ [Evolution] API URL: ${EVOLUTION_API_URL}`);
 // Helper: sleep function for polling
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Helper: safe JSON parse (Evolution API may return HTML during Render cold starts)
+async function safeJsonParse(response: globalThis.Response): Promise<any> {
+    const text = await response.text();
+    if (!text || text.trim().startsWith('<')) {
+        console.log(`⚠️ [Evolution] Non-JSON response (${response.status}): ${text.substring(0, 150)}`);
+        return null;
+    }
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        console.log(`⚠️ [Evolution] JSON parse failed: ${text.substring(0, 150)}`);
+        return null;
+    }
+}
+
 /**
  * Helper to construct Evolution instance name from tenant_id safely
  */
@@ -240,7 +255,10 @@ router.post('/instance', async (req: Request, res: Response) => {
             }
         });
 
-        const createData = await createResponse.json() as any;
+        const createData = await safeJsonParse(createResponse);
+        if (!createData) {
+            throw new Error('Evolution API retornou resposta inválida (possível cold-start). Tente novamente em 30 segundos.');
+        }
         console.log(`📱 [QR] Create response (${createResponse.status}):`, JSON.stringify(createData).substring(0, 800));
 
         if (!createResponse.ok) {
@@ -279,7 +297,8 @@ router.post('/instance', async (req: Request, res: Response) => {
                         method: 'GET',
                         headers: { apikey: EVOLUTION_GLOBAL_API_KEY }
                     });
-                    const connectData = await connectRes.json() as any;
+                    const connectData = await safeJsonParse(connectRes);
+                    if (!connectData) continue;
 
                     // Log raw response for first 5 attempts for debugging
                     if (attempt < 5) {
