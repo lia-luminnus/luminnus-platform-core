@@ -4,9 +4,16 @@ import { supabase } from '../config/supabase.js';
 
 const router: Router = Router();
 
-// Evolution API Configuration (to be set in Render environment later)
-// Docker maps 8081->8080 inside the container, so from the host we hit port 8081
-const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'http://localhost:8081';
+// Evolution API Configuration
+// In production (Render), use the deployed Evolution API service URL
+// Locally, Docker maps 8081->8080 inside the container
+const EVOLUTION_API_URL = (() => {
+    if (process.env.EVOLUTION_API_URL) return process.env.EVOLUTION_API_URL;
+    if (process.env.NODE_ENV === 'production' || process.env.RENDER) {
+        return 'https://evolution-api-luminnus.onrender.com';
+    }
+    return 'http://localhost:8081';
+})();
 const EVOLUTION_GLOBAL_API_KEY = process.env.EVOLUTION_GLOBAL_API_KEY || '4211a768-bdf3-4eb0-8a1a-3e5f22e8db12';
 
 // Cache temporário em memória para armazenar Base64 QR Codes recebidos via Webhook
