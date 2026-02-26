@@ -49,18 +49,41 @@ router.get('/status', async (req: Request, res: Response) => {
     }
 
     const instanceName = getInstanceName(tenantId);
+    console.log(`[Status] Checking instance: ${instanceName}`);
 
     try {
+        // Use AbortController for timeout (8 seconds max)
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+
         const response = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${instanceName}`, {
             headers: {
                 apikey: EVOLUTION_GLOBAL_API_KEY
-            }
+            },
+            signal: controller.signal
         });
+
+        clearTimeout(timeout);
+
+        // Handle non-OK responses (404, 400, 500, etc.)
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => 'unknown');
+            console.log(`[Status] Evolution API returned ${response.status}: ${errorText.substring(0, 200)}`);
+
+            // Instance doesn't exist — return null status (not an error)
+            if (response.status === 404 || response.status === 400) {
+                return res.json({ ok: true, status: null });
+            }
+
+            // For other errors, try Supabase fallback
+            throw new Error(`Evolution API error ${response.status}`);
+        }
 
         const responseData = await response.json() as any;
 
         // The API returns the connection state.
         const state = responseData?.instance?.state || 'close';
+        console.log(`[Status] Instance ${instanceName}: state=${state}`);
 
         // If it's open, let's grab the profile info
         let profilePicUrl;
@@ -69,7 +92,6 @@ router.get('/status', async (req: Request, res: Response) => {
 
         if (state === 'open') {
             try {
-                // Fetch info assuming Evolution v2 behavior
                 const infoResponse = await fetch(`${EVOLUTION_API_URL}/instance/fetchInstances?instanceName=${instanceName}`, {
                     headers: { apikey: EVOLUTION_GLOBAL_API_KEY }
                 });
@@ -80,7 +102,7 @@ router.get('/status', async (req: Request, res: Response) => {
                 profileName = instanceData?.profileName;
                 profilePicUrl = instanceData?.profilePicUrl;
             } catch (e: any) {
-                console.error("Erro secundário ao buscar profileInfo da Evolution:", e);
+                console.error("[Status] Error fetching profile info:", e.message);
             }
         }
 
@@ -96,11 +118,12 @@ router.get('/status', async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
-        // If 404, instance doesn't exist yet, which is fine, we just return null status
-        if (error?.status === 404 || error?.message?.includes('not found')) {
-            return res.json({ ok: true, status: null });
+        // Handle abort (timeout)
+        if (error.name === 'AbortError') {
+            console.log(`[Status] Evolution API timed out for ${instanceName}`);
+        } else {
+            console.log(`[Status] Error checking ${instanceName}: ${error.message}`);
         }
-        console.error('❌ Erro na API Evolution /status:', error.message);
 
         // Fallback: Try to get last known status from Supabase
         try {
@@ -112,6 +135,7 @@ router.get('/status', async (req: Request, res: Response) => {
                 .maybeSingle();
 
             if (conn) {
+                console.log(`[Status] Using Supabase fallback for ${instanceName}: ${conn.status}`);
                 return res.json({
                     ok: true,
                     status: {
@@ -124,10 +148,10 @@ router.get('/status', async (req: Request, res: Response) => {
                 });
             }
         } catch (dbErr: any) {
-            console.error('❌ Fallback Supabase também falhou:', dbErr.message);
+            console.error('[Status] Supabase fallback failed:', dbErr.message);
         }
 
-        // If both Evolution API and Supabase fail, return graceful "not connected" state
+        // If both fail, return graceful "not connected" state
         res.json({ ok: true, status: null, source: 'offline' });
     }
 });
