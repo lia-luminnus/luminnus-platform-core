@@ -14,6 +14,13 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import OpenAI from 'openai';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
+
+// Convert import.meta.url to a path
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { execSync } from 'child_process';
 
 // ===========================================================
@@ -152,6 +159,16 @@ app.use(corsHandler);
 // v15.6: Prioridade máxima para Webhooks
 setupTwilioWebhookRoutes(app);
 console.log('🏁 [Twilio] Webhook priorizado no stack de rotas');
+
+// ===========================================================
+// LIA WIDGET STATIC HOSTING (Deliver widget.js)
+// ===========================================================
+// We point statically to apps/widget/dist so endpoints can request /widget.js
+app.use(express.static(path.join(__dirname, '../../../../apps/widget/dist')));
+app.get('/widget.js', (req, res) => {
+  res.sendFile(path.join(__dirname, '../../../../apps/widget/dist/widget.js'));
+});
+
 
 // Middleware removido daqui e movido para o topo
 

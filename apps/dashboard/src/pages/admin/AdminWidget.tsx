@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { useDashboardAuth } from '../../../contexts/DashboardAuthContext';
+import { getApiUrl } from '../../../config/api';
 
 const AdminWidget: React.FC = () => {
+    const { profile, user } = useDashboardAuth();
     const [enableVoice, setEnableVoice] = useState(false);
     const [devEmail, setDevEmail] = useState('');
 
@@ -24,7 +27,14 @@ const AdminWidget: React.FC = () => {
         setDevEmail('');
     };
 
-    const scriptCode = `<script src="https://cdn.luminnus.com.br/widget.js" data-workspace-id="SEU_WORKSPACE_ID" ${enableVoice ? 'data-enable-voice="true"' : ''}></script>`;
+    // Tries to find the most accurate ID. Tenant ID is best, fallback to User ID.
+    const workspaceId = profile?.tenant_id || user?.id || 'SEU_WORKSPACE_ID';
+
+    // Note: Temporary solution: Pointing the widget source to the api server where we can eventually route it.
+    // If you have a specific render URL serving the widget, put that host here.
+    const widgetHostUrl = getApiUrl().replace('/api', '') + '/widget.js'; // Fallback to Unified Engine Host or you can use your preferred domain.
+
+    const scriptCode = `<script src="${widgetHostUrl}" data-workspace-id="${workspaceId}" ${enableVoice ? 'data-enable-voice="true"' : ''}></script>`;
 
     const copyScript = () => {
         navigator.clipboard.writeText(scriptCode);
