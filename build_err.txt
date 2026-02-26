@@ -1,0 +1,36 @@
+
+> @luminnus/dashboard@0.1.0 build D:\luminnus-platform-core\apps\dashboard
+> vite build
+
+[36mvite v5.4.21 [32mbuilding for production...[36m[39m
+
+/index.css doesn't exist at build time, it will remain unchanged to be resolved at runtime
+transforming...
+[32mÔ£ô[39m 1693 modules transformed.
+x Build failed in 23.32s
+error during build:
+[vite:esbuild] Transform failed with 1 error:
+D:/luminnus-platform-core/apps/dashboard/components/whatsapp/WhatsAppConnection.tsx:14:16: ERROR: Unexpected "="
+file: D:/luminnus-platform-core/apps/dashboard/components/whatsapp/WhatsAppConnection.tsx:14:16
+
+Unexpected "="
+12 |      profilePicUrl?: string;
+13 |      owner?: string;
+14 |  const getApiUrl = () => import.meta.env.VITE_API_URL || 'https://api.luminnus.ai';
+   |                  ^
+15 |  
+16 |  const WhatsAppConnection: React.FC<{ onComplete?: () => void; tenantIdOverride?: string }> = ({ onComplete, tenantIdOverride }) => {
+
+    at failureErrorWithLog (D:\luminnus-platform-core\node_modules\.pnpm\esbuild@0.21.5\node_modules\esbuild\lib\main.js:1472:15)
+    at D:\luminnus-platform-core\node_modules\.pnpm\esbuild@0.21.5\node_modules\esbuild\lib\main.js:755:50
+    at responseCallbacks.<computed> (D:\luminnus-platform-core\node_modules\.pnpm\esbuild@0.21.5\node_modules\esbuild\lib\main.js:622:9)
+    at handleIncomingPacket (D:\luminnus-platform-core\node_modules\.pnpm\esbuild@0.21.5\node_modules\esbuild\lib\main.js:677:12)
+    at Socket.readFromStdout (D:\luminnus-platform-core\node_modules\.pnpm\esbuild@0.21.5\node_modules\esbuild\lib\main.js:600:7)
+    at Socket.emit (node:events:519:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
+D:\luminnus-platform-core\apps\dashboard:
+ÔÇëERR_PNPM_RECURSIVE_RUN_FIRST_FAILÔÇë @luminnus/dashboard@0.1.0 build: `vite build`
+Exit status 1

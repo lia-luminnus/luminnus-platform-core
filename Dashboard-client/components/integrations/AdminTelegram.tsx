@@ -12,7 +12,8 @@ const AdminTelegram: React.FC = () => {
     const [connectedGroup, setConnectedGroup] = useState<{ id: string, name: string } | null>(null);
 
     // Bot username for LIA Manager
-    const botUsername = 'LominousManagerBot';
+    // Você pode alterar este nome caso crie outro bot no BotFather (basta configurar a ENV)
+    const botUsername = import.meta.env?.VITE_TELEGRAM_BOT_USERNAME || 'Lia_Lumi_Bot';
 
     useEffect(() => {
         loadTelegramConfig();

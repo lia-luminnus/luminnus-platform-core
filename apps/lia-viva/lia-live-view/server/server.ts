@@ -73,6 +73,7 @@ import adminRoutes from './routes/admin.js';
 import { setupWhatsAppRoutes, setupWhatsAppIntegrationRoutes } from './routes/whatsapp.js';
 import { setupWhatsAppWebhookRoutes } from './routes/whatsapp-webhook.js';
 import whatsappAdminRoutes from './routes/whatsapp-admin.js';
+import telegramAdminRoutes from './routes/telegram-admin.js';
 import { setupDashboardRoutes } from './routes/dashboard.js';
 import { setupGoogleAuthRoutes } from './routes/google-auth.js';
 import { setupAutomationRoutes } from './routes/automations.js';
@@ -400,6 +401,9 @@ async function startServer() {
   app.use('/api/admin/whatsapp', whatsappAdminRoutes);
   app.use('/api/admin/twilio', twilioAdminRoutes);
   app.use('/api/admin', adminRoutes);
+
+  // Telegram E-Manager Webhook Routing
+  app.use('/api/telegram-admin', telegramAdminRoutes);
 
   // Twilio Multi-Tenant Routes
   setupTwilioOnboardingRoutes(app);

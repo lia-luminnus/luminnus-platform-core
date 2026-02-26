@@ -1,6 +1,7 @@
 packages:
   - "apps/web"
   - "apps/widget"
+  - "apps/dashboard"
 
   - "apps/lia-viva/lia-live-view"
   - "Dashboard-client"

@@ -337,10 +337,13 @@ const Integrations: React.FC = () => {
     // v2.1: Google Workspace conta cada serviço individualmente (Gmail=1, Calendar=1, etc.)
     const connectedIntegrations = userIntegrations.filter(ui => ui.status === 'active');
 
+    // Dedup para evitar contar 2x caso o banco possua linhas duplicadas por acidente para o mesmo provider
+    const uniqueConnectedIntegrations = Array.from(new Map(connectedIntegrations.map(ui => [ui.provider, ui])).values()) as UserIntegration[];
+
     // Calcular total real considerando serviços Google
     const calculateActiveCount = () => {
         let count = 0;
-        connectedIntegrations.forEach(ui => {
+        uniqueConnectedIntegrations.forEach(ui => {
             if (ui.provider === 'google_workspace' && ui.services && ui.services.length > 0) {
                 // Google Workspace: cada serviço conta como 1
                 count += ui.services.length;

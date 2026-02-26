@@ -10,8 +10,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
     server: {
-      port: 3001,
-      strictPort: true,
+      port: 3002,
+      strictPort: false,
       host: '0.0.0.0',
       proxy: {
         // Admin routes are hosted on LIA Live View server (port 3006)
