@@ -13,9 +13,19 @@ const EVOLUTION_GLOBAL_API_KEY = process.env.EVOLUTION_GLOBAL_API_KEY || '4211a7
 // Necessário pois a Evolution API v2 muitas vezes retorna `{count: 0}` nas chamadas síncronas de /connect
 const pendingQrCodes: Record<string, string> = {};
 
-const WEBHOOK_URL = process.env.WEBHOOK_BASE_URL
-    ? `${process.env.WEBHOOK_BASE_URL}/api/whatsapp/evolution/webhook`
-    : 'http://host.docker.internal:3006/api/whatsapp/evolution/webhook';
+const WEBHOOK_URL = (() => {
+    if (process.env.WEBHOOK_BASE_URL) {
+        return `${process.env.WEBHOOK_BASE_URL}/api/whatsapp/evolution/webhook`;
+    }
+    // Auto-detect production on Render: use the public API URL
+    if (process.env.NODE_ENV === 'production' || process.env.RENDER) {
+        return 'https://api.luminnus.ai/api/whatsapp/evolution/webhook';
+    }
+    return 'http://host.docker.internal:3006/api/whatsapp/evolution/webhook';
+})();
+
+console.log(`✅ [Evolution] Webhook URL: ${WEBHOOK_URL}`);
+console.log(`✅ [Evolution] API URL: ${EVOLUTION_API_URL}`);
 
 // Helper: sleep function for polling
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -190,8 +200,9 @@ router.post('/instance', async (req: Request, res: Response) => {
         // 2. If no QR from create, poll /instance/connect AND webhook cache (hybrid approach)
         if (!qrcodeBase64) {
             console.log('🔍 [QR] Polling /instance/connect + webhook cache for QR code...');
+            console.log(`🔍 [QR] Webhook URL configured as: ${WEBHOOK_URL}`);
 
-            for (let attempt = 0; attempt < 25; attempt++) {
+            for (let attempt = 0; attempt < 30; attempt++) {
                 // Check webhook cache first (fastest path)
                 if (pendingQrCodes[instanceName]) {
                     qrcodeBase64 = pendingQrCodes[instanceName];
@@ -203,12 +214,21 @@ router.post('/instance', async (req: Request, res: Response) => {
                 // Try /instance/connect directly
                 try {
                     const connectRes = await fetch(`${EVOLUTION_API_URL}/instance/connect/${instanceName}`, {
+                        method: 'GET',
                         headers: { apikey: EVOLUTION_GLOBAL_API_KEY }
                     });
                     const connectData = await connectRes.json() as any;
 
-                    // Evolution v2 may return the base64 QR code directly in connect response
-                    const base64FromConnect = connectData?.base64 || connectData?.qrcode?.base64;
+                    // Log raw response for debugging (first 3 attempts only to avoid noise)
+                    if (attempt < 3) {
+                        console.log(`🔍 [QR] /connect response (attempt ${attempt + 1}):`, JSON.stringify(connectData).substring(0, 500));
+                    }
+
+                    // Evolution v2 may return the base64 QR code in various fields
+                    const base64FromConnect = connectData?.base64 
+                        || connectData?.qrcode?.base64 
+                        || connectData?.instance?.qrcode?.base64
+                        || connectData?.qr?.base64;
                     if (base64FromConnect) {
                         qrcodeBase64 = base64FromConnect;
                         console.log(`✅ [QR] Got QR from /connect response (attempt ${attempt + 1})`);
@@ -216,7 +236,7 @@ router.post('/instance', async (req: Request, res: Response) => {
                     }
 
                     // Also check if connect returns a pairingCode or code field
-                    if (connectData?.code) {
+                    if (connectData?.code && typeof connectData.code === 'string' && connectData.code.length > 50) {
                         // Some versions return the QR code as a raw string
                         qrcodeBase64 = connectData.code;
                         console.log(`✅ [QR] Got QR code string from /connect (attempt ${attempt + 1})`);
@@ -343,19 +363,21 @@ router.post('/webhook', async (req: Request, res: Response) => {
         const isQrEvent = eventLower.includes('qrcode') || eventLower.includes('qr_code') || eventLower.includes('qr.code');
 
         // Also check if ANY event contains a base64 QR code (some Evolution versions embed it in connection.update)
-        const qrcodeBase64 = data.qrcode?.base64 || data.qr?.base64 || data.base64 || body.qrcode?.base64 || '';
+        const qrcodeBase64 = data.qrcode?.base64 || data.qr?.base64 || data.base64 || body.qrcode?.base64
+            || data.qrcode?.pairingCode || '';
 
         if (isQrEvent || qrcodeBase64) {
-            console.log(`✅ [Webhook] QR Code detected! Event: "${event}" | Base64 length: ${qrcodeBase64.length}`);
+            console.log(`✅ [Webhook] QR Code detected! Event: "${event}" | Instance: "${instanceName}" | Base64 length: ${qrcodeBase64.length}`);
             if (qrcodeBase64) {
                 pendingQrCodes[instanceName] = qrcodeBase64;
+                console.log(`✅ [Webhook] QR Code cached for instance: ${instanceName}`);
             }
         } else if (eventLower.includes('messages')) {
             console.log(`[Webhook] Mensagem recebida na instância ${instanceName}`);
         } else if (eventLower.includes('connection')) {
-            // Log connection update data to see if QR code is hidden inside
-            const dataStr = JSON.stringify(data).substring(0, 300);
-            console.log(`[Webhook] Connection update: ${dataStr}`);
+            // Log full connection update data to diagnose QR code issues
+            const dataStr = JSON.stringify(data).substring(0, 500);
+            console.log(`[Webhook] Connection update for ${instanceName}: ${dataStr}`);
         }
 
         res.status(200).send('OK');
