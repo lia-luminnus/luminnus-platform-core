@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useDashboardAuth } from '../../../contexts/DashboardAuthContext';
-import { getApiUrl } from '../../../config/api';
-
+// import { getApiUrl } from '../../../config/api'; // Not available in this app's architecture
 const AdminWidget: React.FC = () => {
     const { profile, user } = useDashboardAuth();
     const [enableVoice, setEnableVoice] = useState(false);
@@ -31,8 +30,12 @@ const AdminWidget: React.FC = () => {
     const workspaceId = profile?.tenant_id || user?.id || 'SEU_WORKSPACE_ID';
 
     // Note: Temporary solution: Pointing the widget source to the api server where we can eventually route it.
-    // If you have a specific render URL serving the widget, put that host here.
-    const widgetHostUrl = getApiUrl().replace('/api', '') + '/widget.js'; // Fallback to Unified Engine Host or you can use your preferred domain.
+    // Use environment variable if available, otherwise default to the production backend route on Render where the widget is served.
+    const baseUrl = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_WIDGET_URL
+        ? import.meta.env.VITE_WIDGET_URL
+        : 'https://luminnus-platform-core.onrender.com';
+
+    const widgetHostUrl = `${baseUrl.replace(/\/$/, '')}/widget.js`;
 
     const scriptCode = `<script src="${widgetHostUrl}" data-workspace-id="${workspaceId}" ${enableVoice ? 'data-enable-voice="true"' : ''}></script>`;
 
