@@ -202,31 +202,28 @@ router.post('/instance', async (req: Request, res: Response) => {
         // Evolution API only generates QR codes for NEW instances.
         // A stale instance stuck in "connecting" state blocks QR generation.
         console.log('🧹 [QR] Step 1: Cleaning up stale instance (if exists)...');
-        try {
-            // First logout (disconnects WhatsApp session)
-            await fetch(`${EVOLUTION_API_URL}/instance/logout/${instanceName}`, {
-                method: 'DELETE',
-                headers: { apikey: EVOLUTION_GLOBAL_API_KEY }
-            });
-            console.log('🧹 [QR] Logout sent.');
-        } catch (e: any) {
-            console.log(`🧹 [QR] Logout skipped (instance may not exist): ${e.message}`);
-        }
 
         try {
-            // Then delete the instance completely
+            // Delete the instance completely (Evolution API handles logout internally)
             const delRes = await fetch(`${EVOLUTION_API_URL}/instance/delete/${instanceName}`, {
                 method: 'DELETE',
                 headers: { apikey: EVOLUTION_GLOBAL_API_KEY }
             });
             const delData = await delRes.text();
-            console.log(`🧹 [QR] Delete response (${delRes.status}): ${delData.substring(0, 200)}`);
+
+            if (!delRes.ok && delRes.status !== 404) {
+                console.error(`❌ [QR] Failed to delete existing instance (${delRes.status}):`, delData.substring(0, 200));
+                // We shouldn't throw here, sometimes Evolution returns 500 but still deletes it partially.
+                // We'll let it try to create, but warn in logs.
+            } else {
+                console.log(`🧹 [QR] Delete response (${delRes.status}): ${delData.substring(0, 200)}`);
+            }
         } catch (e: any) {
-            console.log(`🧹 [QR] Delete skipped: ${e.message}`);
+            console.log(`🧹 [QR] Delete network error skipped: ${e.message}`);
         }
 
-        // Small delay to let Evolution API clean up
-        await sleep(1500);
+        // Delay to let Evolution API clear Baileys session files entirely from disk
+        await sleep(2500);
 
         // ── Step 2: Create FRESH instance with qrcode:true ──
         console.log('📱 [QR] Step 2: Creating fresh instance with qrcode:true...');
