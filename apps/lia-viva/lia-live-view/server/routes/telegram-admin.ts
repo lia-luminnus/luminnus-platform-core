@@ -44,28 +44,29 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
 
             // Forward the message to the LIA cognitive engine (lia-chat Edge Function)
             try {
-                const supabaseUrl = process.env.SUPABASE_URL || '';
-                const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '';
-
-                // Using a unique conversation ID per user for Telegram context
+                // Using internal route to unified memory and chat logic
+                const port = process.env.PORT || 3000;
+                const localApiUrl = `http://127.0.0.1:${port}/api/chat`;
                 const conversationId = `telegram_admin_${linkData.user_id}`;
 
-                const liaResponse = await fetch(`${supabaseUrl}/functions/v1/lia-chat`, {
+                const liaResponse = await fetch(localApiUrl, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${supabaseKey}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         message: text,
                         conversationId: conversationId,
-                        isAdmin: true // Telegram E-Manager is strictly for admins
+                        userId: linkData.user_id, // Identifica o admin dono
+                        tenantId: linkData.user_id, // Admins operam no próprio tenant
+                        liaMode: 'DIAGNOSTIC',    // Permite uso de todos os super-comandos
+                        admin_diagnostic_mode: true
                     })
                 });
 
                 if (liaResponse.ok) {
                     const liaData = await liaResponse.json() as any;
-                    const replyText = liaData.response || 'Não consegui processar sua solicitação no momento.';
+                    const replyText = liaData.reply || liaData.response || 'Não consegui processar sua solicitação no momento.';
                     await sendTelegramMessage(chatId, replyText);
                 } else {
                     console.error('[Telegram->LIA Error]', await liaResponse.text());
