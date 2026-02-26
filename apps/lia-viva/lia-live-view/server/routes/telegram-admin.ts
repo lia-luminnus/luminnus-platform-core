@@ -31,13 +31,12 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        // If it's a regular message, check if this chat ID is bound to an active E-Manager user
         const { data: linkData, error: linkError } = await supabase
             .from('user_integrations')
             .select('user_id')
             .eq('provider', 'telegram_manager')
             .eq('status', 'active')
-            .contains('config_json', { telegram_chat_id: String(chatId) })
+            .contains('config', { telegram_chat_id: String(chatId) })
             .single();
 
         if (linkData?.user_id) {

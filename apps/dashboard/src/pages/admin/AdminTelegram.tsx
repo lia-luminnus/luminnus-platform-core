@@ -25,15 +25,15 @@ const AdminTelegram: React.FC = () => {
         try {
             const { data, error } = await supabase
                 .from('user_integrations')
-                .select('services, config_json, status')
+                .select('services, config, status')
                 .eq('user_id', profile.id)
                 .eq('provider', 'telegram_manager')
                 .single();
 
             if (data && data.status === 'active') {
                 setConnectedGroup({
-                    id: data.config_json?.telegram_chat_id || '',
-                    name: data.config_json?.telegram_user_name || 'Conta Telegram'
+                    id: data.config?.telegram_chat_id || '',
+                    name: data.config?.telegram_user_name || 'Conta Telegram'
                 });
             }
         } catch (error) {
@@ -60,7 +60,7 @@ const AdminTelegram: React.FC = () => {
                 .eq('provider', 'telegram_manager')
                 .maybeSingle();
 
-            const configJson = {
+            const configObj = {
                 telegram_chat_id: telegramId,
                 telegram_user_name: 'Admin E-Manager'
             };
@@ -69,7 +69,7 @@ const AdminTelegram: React.FC = () => {
             if (existing) {
                 res = await supabase
                     .from('user_integrations')
-                    .update({ status: 'active', config_json: configJson })
+                    .update({ status: 'active', config: configObj })
                     .eq('id', existing.id);
             } else {
                 res = await supabase
@@ -78,7 +78,7 @@ const AdminTelegram: React.FC = () => {
                         user_id: profile?.id,
                         provider: 'telegram_manager',
                         status: 'active',
-                        config_json: configJson
+                        config: configObj
                     });
             }
 
@@ -101,7 +101,7 @@ const AdminTelegram: React.FC = () => {
         try {
             await supabase
                 .from('user_integrations')
-                .update({ status: 'disconnected', config_json: {} })
+                .update({ status: 'disconnected', config: {} })
                 .eq('user_id', profile.id)
                 .eq('provider', 'telegram_manager');
 
