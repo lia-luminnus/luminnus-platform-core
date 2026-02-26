@@ -134,7 +134,7 @@ router.get('/status', async (req: Request, res: Response) => {
 
 /**
  * POST /api/whatsapp/evolution/instance
- * Cria a instância (se não existir) e gera o QR Code em base64
+ * Limpa instância existente (se houver), cria nova e gera QR Code em base64
  */
 router.post('/instance', async (req: Request, res: Response) => {
     const { tenant_id } = req.body;
@@ -144,10 +144,46 @@ router.post('/instance', async (req: Request, res: Response) => {
     }
 
     const instanceName = getInstanceName(tenant_id);
+    console.log(`\n🚀 [QR] ===== Starting QR Code Generation =====`);
+    console.log(`🚀 [QR] Instance: ${instanceName} | Tenant: ${tenant_id}`);
+    console.log(`🚀 [QR] Webhook URL: ${WEBHOOK_URL}`);
+    console.log(`🚀 [QR] Evolution API: ${EVOLUTION_API_URL}`);
 
     try {
-        // 1. Tentar criar a instância (Evolution v1/v2 endpoint)
         let qrcodeBase64: string | undefined;
+
+        // ── Step 1: Clean up any stale instance ──
+        // Evolution API only generates QR codes for NEW instances.
+        // A stale instance stuck in "connecting" state blocks QR generation.
+        console.log('🧹 [QR] Step 1: Cleaning up stale instance (if exists)...');
+        try {
+            // First logout (disconnects WhatsApp session)
+            await fetch(`${EVOLUTION_API_URL}/instance/logout/${instanceName}`, {
+                method: 'DELETE',
+                headers: { apikey: EVOLUTION_GLOBAL_API_KEY }
+            });
+            console.log('🧹 [QR] Logout sent.');
+        } catch (e: any) {
+            console.log(`🧹 [QR] Logout skipped (instance may not exist): ${e.message}`);
+        }
+
+        try {
+            // Then delete the instance completely
+            const delRes = await fetch(`${EVOLUTION_API_URL}/instance/delete/${instanceName}`, {
+                method: 'DELETE',
+                headers: { apikey: EVOLUTION_GLOBAL_API_KEY }
+            });
+            const delData = await delRes.text();
+            console.log(`🧹 [QR] Delete response (${delRes.status}): ${delData.substring(0, 200)}`);
+        } catch (e: any) {
+            console.log(`🧹 [QR] Delete skipped: ${e.message}`);
+        }
+
+        // Small delay to let Evolution API clean up
+        await sleep(1500);
+
+        // ── Step 2: Create FRESH instance with qrcode:true ──
+        console.log('📱 [QR] Step 2: Creating fresh instance with qrcode:true...');
 
         const createResponse = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
             method: 'POST',
@@ -159,6 +195,7 @@ router.post('/instance', async (req: Request, res: Response) => {
                 webhook: {
                     url: WEBHOOK_URL,
                     byEvents: false,
+                    base64: true,
                     events: [
                         "QRCODE_UPDATED",
                         "MESSAGES_UPSERT",
@@ -172,38 +209,32 @@ router.post('/instance', async (req: Request, res: Response) => {
             }
         });
 
-        const createResponseData = await createResponse.json() as any;
+        const createData = await createResponse.json() as any;
+        console.log(`📱 [QR] Create response (${createResponse.status}):`, JSON.stringify(createData).substring(0, 800));
+
         if (!createResponse.ok) {
-            console.log('Evolution API Error Response:', JSON.stringify(createResponseData, null, 2));
-
-            const errMsgRaw = createResponseData?.message || createResponseData?.response?.message || 'Failed to create instance';
+            const errMsgRaw = createData?.message || createData?.response?.message || 'Failed to create instance';
             const finalErrMsg = Array.isArray(errMsgRaw) ? errMsgRaw.join(', ') : String(errMsgRaw);
-            const msgStr = finalErrMsg.toLowerCase();
-
-            const alreadyExists = msgStr.includes('already exists') ||
-                msgStr.includes('has already been used') ||
-                msgStr.includes('already in use');
-
-            if (!alreadyExists) {
-                console.error('❌ Failed to create Evolution instance:', finalErrMsg);
-                throw new Error(finalErrMsg);
-            }
-            console.log('✅ Instance already exists in Evolution API. Falling back to connect...');
-        } else {
-            // Check if create returned the QR code directly
-            qrcodeBase64 = createResponseData?.qrcode?.base64;
-            if (qrcodeBase64) {
-                console.log('✅ [QR] Got QR code directly from /create response!');
-            }
+            console.error('❌ [QR] Failed to create instance:', finalErrMsg);
+            throw new Error(finalErrMsg);
         }
 
-        // 2. If no QR from create, poll /instance/connect AND webhook cache (hybrid approach)
+        // Check if create response contains QR code directly
+        qrcodeBase64 = createData?.qrcode?.base64
+            || createData?.base64
+            || createData?.qr?.base64
+            || createData?.instance?.qrcode?.base64;
+
+        if (qrcodeBase64) {
+            console.log('✅ [QR] Got QR code directly from /create response!');
+        }
+
+        // ── Step 3: If no QR from create, poll webhook cache + /connect ──
         if (!qrcodeBase64) {
-            console.log('🔍 [QR] Polling /instance/connect + webhook cache for QR code...');
-            console.log(`🔍 [QR] Webhook URL configured as: ${WEBHOOK_URL}`);
+            console.log('🔍 [QR] Step 3: QR not in create response, polling webhook cache + /connect...');
 
             for (let attempt = 0; attempt < 30; attempt++) {
-                // Check webhook cache first (fastest path)
+                // Check webhook cache first (fastest path when webhook works)
                 if (pendingQrCodes[instanceName]) {
                     qrcodeBase64 = pendingQrCodes[instanceName];
                     console.log(`✅ [QR] Got QR from webhook cache (attempt ${attempt + 1})`);
@@ -219,41 +250,44 @@ router.post('/instance', async (req: Request, res: Response) => {
                     });
                     const connectData = await connectRes.json() as any;
 
-                    // Log raw response for debugging (first 3 attempts only to avoid noise)
-                    if (attempt < 3) {
-                        console.log(`🔍 [QR] /connect response (attempt ${attempt + 1}):`, JSON.stringify(connectData).substring(0, 500));
+                    // Log raw response for first 5 attempts for debugging
+                    if (attempt < 5) {
+                        console.log(`🔍 [QR] /connect attempt ${attempt + 1}:`, JSON.stringify(connectData).substring(0, 500));
                     }
 
-                    // Evolution v2 may return the base64 QR code in various fields
-                    const base64FromConnect = connectData?.base64 
-                        || connectData?.qrcode?.base64 
+                    // Check all possible QR code fields
+                    const base64FromConnect = connectData?.base64
+                        || connectData?.qrcode?.base64
                         || connectData?.instance?.qrcode?.base64
                         || connectData?.qr?.base64;
                     if (base64FromConnect) {
                         qrcodeBase64 = base64FromConnect;
-                        console.log(`✅ [QR] Got QR from /connect response (attempt ${attempt + 1})`);
+                        console.log(`✅ [QR] Got QR from /connect (attempt ${attempt + 1})`);
                         break;
                     }
 
-                    // Also check if connect returns a pairingCode or code field
+                    // Check for raw QR code string (some versions)
                     if (connectData?.code && typeof connectData.code === 'string' && connectData.code.length > 50) {
-                        // Some versions return the QR code as a raw string
                         qrcodeBase64 = connectData.code;
                         console.log(`✅ [QR] Got QR code string from /connect (attempt ${attempt + 1})`);
                         break;
                     }
                 } catch (connectErr: any) {
-                    console.log(`⚠️ [QR] /connect attempt ${attempt + 1} failed:`, connectErr.message);
+                    if (attempt < 5) {
+                        console.log(`⚠️ [QR] /connect attempt ${attempt + 1} error:`, connectErr.message);
+                    }
                 }
 
                 await sleep(1000);
             }
         }
 
+        // ── Final: return result ──
         if (!qrcodeBase64) {
-            console.log('⚠️ [QR] No QR code after 25s. Evolution API may need more time or webhook is unreachable.');
+            console.log('❌ [QR] No QR code obtained after 30 seconds of polling.');
+            console.log('❌ [QR] Possible causes: Evolution API not generating QR, webhook not receiving events, or API version incompatibility.');
         } else {
-            console.log('✅ [QR] QR Code ready to send to frontend!');
+            console.log(`✅ [QR] QR Code ready! Base64 length: ${qrcodeBase64.length}`);
         }
 
         // Register in Supabase
@@ -268,7 +302,7 @@ router.post('/instance', async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
-        console.error('❌ Erro na API Evolution /create/connect:', error.message);
+        console.error('❌ [QR] Error in QR generation flow:', error.message);
         res.status(500).json({ error: error.message || 'Falha ao criar instância Evolution' });
     }
 });
