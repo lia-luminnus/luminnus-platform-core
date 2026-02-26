@@ -75,6 +75,7 @@ const AdminTelegram: React.FC = () => {
                 res = await supabase
                     .from('user_integrations')
                     .insert({
+                        id: crypto.randomUUID(),
                         user_id: profile?.id,
                         provider: 'telegram_manager',
                         status: 'active',
