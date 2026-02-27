@@ -1,20 +1,61 @@
 
-import React, { useContext } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useContext, useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LanguageContext } from '../contexts/LanguageContext';
 import { useAppStore } from '../store/useAppStore';
 import { getModules } from '../config/modules';
 import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 import { toast } from 'react-hot-toast';
+import { getApiUrl } from '../config/api';
+
+interface ChannelStatus {
+  whatsapp: boolean;
+  telegram: boolean;
+  web_widget: boolean;
+}
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { t } = useContext(LanguageContext);
   const { isSidebarCollapsed, toggleSidebar, activeModules } = useAppStore();
-  const { user, signOut } = useDashboardAuth();
+  const { user, session, signOut } = useDashboardAuth();
+
+  const [channels, setChannels] = useState<ChannelStatus>({
+    whatsapp: false,
+    telegram: false,
+    web_widget: false,
+  });
 
   // Em desenvolvimento, sempre volta ao admin
   const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+  // Fetch integration statuses
+  useEffect(() => {
+    const fetchStatus = async () => {
+      if (!user?.id || !session?.access_token) return;
+      try {
+        const response = await fetch(`${getApiUrl()}/api/integrations`, {
+          headers: { 'Authorization': `Bearer ${session.access_token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const integrations = data.integrations || [];
+          setChannels({
+            whatsapp: integrations.some((i: any) => i.provider === 'whatsapp' && (i.status === 'active' || i.status === 'connected')),
+            telegram: integrations.some((i: any) => i.provider === 'telegram_manager' && (i.status === 'active' || i.status === 'connected')),
+            web_widget: integrations.some((i: any) => i.provider === 'web_widget' && (i.status === 'active' || i.status === 'connected')),
+          });
+        }
+      } catch (err) {
+        console.warn('[Sidebar] Erro ao buscar status dos canais:', err);
+      }
+    };
+    fetchStatus();
+    // Refresh every 60s
+    const interval = setInterval(fetchStatus, 60000);
+    return () => clearInterval(interval);
+  }, [user?.id, session?.access_token]);
 
   const handleLogout = async () => {
     try {
@@ -33,6 +74,33 @@ const Sidebar: React.FC = () => {
   };
 
   const navItems = getModules(activeModules);
+
+  const CHANNEL_INDICATORS = [
+    {
+      key: 'whatsapp',
+      label: 'WhatsApp',
+      icon: '💬',
+      color: 'green',
+      connected: channels.whatsapp,
+      route: '/integrations/whatsapp',
+    },
+    {
+      key: 'telegram',
+      label: 'Telegram',
+      icon: '✈️',
+      color: 'blue',
+      connected: channels.telegram,
+      route: '/integrations/telegram',
+    },
+    {
+      key: 'web_widget',
+      label: 'Web Widget',
+      icon: '🌐',
+      color: 'purple',
+      connected: channels.web_widget,
+      route: '/integrations/widget',
+    },
+  ];
 
   return (
     <aside
@@ -87,6 +155,45 @@ const Sidebar: React.FC = () => {
           );
         })}
       </nav>
+
+      {/* === INDICADORES DE CONEXÃO DOS CANAIS === */}
+      <div className={`px-3 pb-2 flex flex-col gap-1 ${isSidebarCollapsed ? 'items-center' : ''}`}>
+        <div className={`text-[9px] font-black uppercase tracking-[0.15em] text-gray-500/60 mb-1 ${isSidebarCollapsed ? 'hidden' : 'px-2 hidden lg:block'}`}>
+          Canais
+        </div>
+        {CHANNEL_INDICATORS.map((ch) => (
+          <button
+            key={ch.key}
+            onClick={() => navigate(ch.route)}
+            title={`${ch.label}: ${ch.connected ? 'Conectado' : 'Desconectado'}`}
+            className={`flex items-center gap-2 rounded-xl transition-all duration-200 hover:bg-white/5 ${isSidebarCollapsed
+                ? 'justify-center p-2'
+                : 'justify-start px-3 py-1.5 w-full'
+              }`}
+          >
+            {/* Status Dot */}
+            <div className="relative flex h-2 w-2 flex-shrink-0">
+              {ch.connected && (
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${ch.connected ? 'bg-green-400' : ''
+                  }`}></span>
+              )}
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${ch.connected ? 'bg-green-500' : 'bg-red-500/70'
+                }`}></span>
+            </div>
+
+            {/* Icon + Label */}
+            {!isSidebarCollapsed && (
+              <div className="flex items-center gap-1.5 hidden lg:flex">
+                <span className="text-xs">{ch.icon}</span>
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${ch.connected ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                  {ch.label}
+                </span>
+              </div>
+            )}
+          </button>
+        ))}
+      </div>
 
       <div className="p-4 flex flex-col gap-4 items-center w-full mt-auto">
         <div className={`flex items-center gap-2 p-2 rounded-xl bg-gray-50 dark:bg-white/5 ${isSidebarCollapsed ? 'justify-center' : 'justify-start w-full px-4'}`}>
