@@ -6,7 +6,7 @@ import { useAppStore } from '../store/useAppStore';
 import { getModules } from '../config/modules';
 import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 import { toast } from 'react-hot-toast';
-import { getApiUrl } from '../config/api';
+import { supabase } from '../lib/supabase';
 
 interface ChannelStatus {
   whatsapp: boolean;
@@ -19,7 +19,7 @@ const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useContext(LanguageContext);
   const { isSidebarCollapsed, toggleSidebar, activeModules } = useAppStore();
-  const { user, session, signOut } = useDashboardAuth();
+  const { user, profile, signOut } = useDashboardAuth();
 
   const [channels, setChannels] = useState<ChannelStatus>({
     whatsapp: false,
@@ -27,46 +27,60 @@ const Sidebar: React.FC = () => {
     web_widget: false,
   });
 
-  // Em desenvolvimento, sempre volta ao admin
-  const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-  // Fetch integration statuses
+  // Fetch integration statuses from Supabase
+  // Telegram & Web Widget → user_integrations (user_id)
+  // WhatsApp → whatsapp_connections (tenant_id)
   useEffect(() => {
     const fetchStatus = async () => {
-      if (!user?.id || !session?.access_token) return;
+      const userId = profile?.id || user?.id;
+      const tenantId = profile?.tenant_id || user?.id;
+      if (!userId) return;
+
       try {
-        const response = await fetch(`${getApiUrl()}/api/integrations`, {
-          headers: { 'Authorization': `Bearer ${session.access_token}` }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          const integrations = data.integrations || [];
-          setChannels({
-            whatsapp: integrations.some((i: any) => i.provider === 'whatsapp' && (i.status === 'active' || i.status === 'connected')),
-            telegram: integrations.some((i: any) => i.provider === 'telegram_manager' && (i.status === 'active' || i.status === 'connected')),
-            web_widget: integrations.some((i: any) => i.provider === 'web_widget' && (i.status === 'active' || i.status === 'connected')),
-          });
+        // 1. Check Telegram & Web Widget from user_integrations
+        const { data: userIntegrations } = await supabase
+          .from('user_integrations')
+          .select('provider, status')
+          .eq('user_id', userId);
+
+        const integrations = userIntegrations || [];
+
+        // 2. Check WhatsApp from whatsapp_connections
+        let whatsappConnected = false;
+        if (tenantId) {
+          const { data: waConnections } = await supabase
+            .from('whatsapp_connections')
+            .select('status')
+            .eq('tenant_id', tenantId)
+            .limit(1);
+
+          whatsappConnected = (waConnections || []).some(
+            (c: any) => c.status === 'active' || c.status === 'connected'
+          );
         }
+
+        setChannels({
+          whatsapp: whatsappConnected,
+          telegram: integrations.some((i: any) => i.provider === 'telegram_manager' && (i.status === 'active' || i.status === 'connected')),
+          web_widget: integrations.some((i: any) => i.provider === 'web_widget' && (i.status === 'active' || i.status === 'connected')),
+        });
       } catch (err) {
         console.warn('[Sidebar] Erro ao buscar status dos canais:', err);
       }
     };
     fetchStatus();
-    // Refresh every 60s
-    const interval = setInterval(fetchStatus, 60000);
+    const interval = setInterval(fetchStatus, 30000);
     return () => clearInterval(interval);
-  }, [user?.id, session?.access_token]);
+  }, [profile?.id, user?.id, profile?.tenant_id]);
 
   const handleLogout = async () => {
     try {
       toast.loading('Saindo...', { id: 'logout' });
-      // O signOut do contexto já cuida do redirecionamento correto (Admin vs User)
       await signOut();
       toast.success('Até logo!', { id: 'logout' });
     } catch (err) {
       console.error('Erro ao fazer logout:', err);
       toast.error('Erro ao sair. Redirecionando...', { id: 'logout' });
-      // Fallback de emergência caso o signOut falhe
       const isProd = import.meta.env.PROD;
       const landingPage = import.meta.env.VITE_LANDING_PAGE_URL || (isProd ? 'https://luminnus.ai' : 'http://localhost:8080');
       window.location.href = landingPage;
@@ -80,7 +94,6 @@ const Sidebar: React.FC = () => {
       key: 'whatsapp',
       label: 'WhatsApp',
       icon: '💬',
-      color: 'green',
       connected: channels.whatsapp,
       route: '/integrations/whatsapp',
     },
@@ -88,7 +101,6 @@ const Sidebar: React.FC = () => {
       key: 'telegram',
       label: 'Telegram',
       icon: '✈️',
-      color: 'blue',
       connected: channels.telegram,
       route: '/integrations/telegram',
     },
@@ -96,7 +108,6 @@ const Sidebar: React.FC = () => {
       key: 'web_widget',
       label: 'Web Widget',
       icon: '🌐',
-      color: 'purple',
       connected: channels.web_widget,
       route: '/integrations/widget',
     },
@@ -174,8 +185,7 @@ const Sidebar: React.FC = () => {
             {/* Status Dot */}
             <div className="relative flex h-2 w-2 flex-shrink-0">
               {ch.connected && (
-                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${ch.connected ? 'bg-green-400' : ''
-                  }`}></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-green-400"></span>
               )}
               <span className={`relative inline-flex rounded-full h-2 w-2 ${ch.connected ? 'bg-green-500' : 'bg-red-500/70'
                 }`}></span>

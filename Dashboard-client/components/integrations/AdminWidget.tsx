@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useDashboardAuth } from '../../contexts/DashboardAuthContext';
 import { getApiUrl } from '../../config/api';
+import { supabase } from '../../lib/supabase';
 
 const AdminWidget: React.FC = () => {
     const { profile, user } = useDashboardAuth();
@@ -35,11 +36,44 @@ const AdminWidget: React.FC = () => {
     // If you have a specific render URL serving the widget, put that host here.
     const widgetHostUrl = getApiUrl().replace('/api', '') + '/widget.js'; // Fallback to Unified Engine Host or you can use your preferred domain.
 
-    const scriptCode = `<script src="${widgetHostUrl}" data-workspace-id="${workspaceId}" data-agent-name="${agentName}" ${enableVoice ? 'data-enable-voice="true"' : ''}></script>`;
+    const displayName = agentName.trim() || 'Suporte LIA';
+    const scriptCode = `<script src="${widgetHostUrl}" data-workspace-id="${workspaceId}" data-agent-name="${displayName}" ${enableVoice ? 'data-enable-voice="true"' : ''}></script>`;
 
-    const copyScript = () => {
+    const copyScript = async () => {
         navigator.clipboard.writeText(scriptCode);
         toast.success('Script copiado para a área de transferência!');
+
+        // Register web_widget as active in user_integrations
+        const userId = profile?.id || user?.id;
+        if (userId) {
+            try {
+                const { data: existing } = await supabase
+                    .from('user_integrations')
+                    .select('id')
+                    .eq('user_id', userId)
+                    .eq('provider', 'web_widget')
+                    .maybeSingle();
+
+                if (existing) {
+                    await supabase
+                        .from('user_integrations')
+                        .update({ status: 'active', config: { agent_name: displayName, enable_voice: enableVoice } })
+                        .eq('id', existing.id);
+                } else {
+                    await supabase
+                        .from('user_integrations')
+                        .insert({
+                            id: crypto.randomUUID(),
+                            user_id: userId,
+                            provider: 'web_widget',
+                            status: 'active',
+                            config: { agent_name: displayName, enable_voice: enableVoice }
+                        });
+                }
+            } catch (err) {
+                console.warn('[AdminWidget] Erro ao registrar web_widget:', err);
+            }
+        }
     };
 
     return (
@@ -101,7 +135,7 @@ const AdminWidget: React.FC = () => {
                         <input
                             type="text"
                             value={agentName}
-                            onChange={(e) => setAgentName(e.target.value || 'Suporte LIA')}
+                            onChange={(e) => setAgentName(e.target.value)}
                             placeholder="Ex: Atendimento Minha Empresa"
                             maxLength={40}
                             className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-brand-primary transition-colors text-sm"
