@@ -584,28 +584,28 @@ class BackendService {
     }
 
     /**
-     * Busca configurações do Agente WhatsApp
+     * Busca configurações do Agente por canal
      */
-    async getWhatsAppSettings(): Promise<any | null> {
+    async getWhatsAppSettings(channel: string = 'whatsapp'): Promise<any | null> {
         try {
             const { tenantId, headers } = this.getAuthContext();
-            const response = await fetch(`${BACKEND_URL}/api/whatsapp/settings?tenantId=${tenantId}`, {
+            const response = await fetch(`${BACKEND_URL}/api/whatsapp/settings?tenantId=${tenantId}&channel=${channel}`, {
                 method: 'GET',
                 headers
             });
             const data = await response.json();
             return data.ok ? data.settings : null;
         } catch (error) {
-            console.error('❌ Erro ao buscar settings do WhatsApp:', error);
+            console.error('❌ Erro ao buscar settings:', error);
             return null;
         }
     }
 
     /**
-     * Salva configurações do Agente WhatsApp
+     * Salva configurações do Agente por canal
      * v15.1: Fallback direto via Supabase se o backend falhar
      */
-    async saveWhatsAppSettings(settings: any): Promise<boolean> {
+    async saveWhatsAppSettings(settings: any, channel: string = 'whatsapp'): Promise<boolean> {
         const { tenantId, headers } = this.getAuthContext();
 
         // 1. Tentar via backend primeiro
@@ -613,7 +613,7 @@ class BackendService {
             const response = await fetch(`${BACKEND_URL}/api/whatsapp/settings`, {
                 method: 'POST',
                 headers,
-                body: JSON.stringify({ ...settings, tenant_id: tenantId })
+                body: JSON.stringify({ ...settings, tenant_id: tenantId, channel })
             });
             if (response.ok) return true;
             console.warn('⚠️ Backend save failed (' + response.status + '), trying Supabase direct...');
@@ -630,10 +630,11 @@ class BackendService {
                 .from('whatsapp_agent_settings')
                 .upsert({
                     tenant_id: tenantId,
+                    channel,
                     profile_json: settings.profile_json || {},
                     playbooks_json: settings.playbooks_json || [],
                     updated_at: new Date().toISOString()
-                }, { onConflict: 'tenant_id' });
+                }, { onConflict: 'tenant_id,channel' });
 
             if (error) {
                 console.error('❌ Supabase direct save failed:', error);
@@ -643,7 +644,7 @@ class BackendService {
             console.log('✅ Settings saved via Supabase direct fallback');
             return true;
         } catch (fbError) {
-            console.error('❌ Erro ao salvar settings do WhatsApp (ambos falharam):', fbError);
+            console.error('❌ Erro ao salvar settings (ambos falharam):', fbError);
             return false;
         }
     }

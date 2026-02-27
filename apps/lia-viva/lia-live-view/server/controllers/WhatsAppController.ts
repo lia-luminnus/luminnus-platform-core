@@ -18,8 +18,9 @@ export class WhatsAppController extends BaseController {
         try {
             const tenantId = (req.query.tenantId || req.headers['x-tenant-id']) as string;
             if (!tenantId) return this.handleBadRequest(res, 'tenantId é obrigatório');
+            const channel = (req.query.channel as string) || 'whatsapp';
 
-            const settings = await WhatsAppRepository.getSettings(tenantId);
+            const settings = await WhatsAppRepository.getSettings(tenantId, channel);
             return this.handleSuccess(res, { settings });
         } catch (error) {
             return this.handleError(res, error, 'WhatsAppController.getSettings');
@@ -30,7 +31,7 @@ export class WhatsAppController extends BaseController {
         const TAG = '[WhatsApp.saveSettings]';
         try {
             const tenant_id = (req.body.tenant_id || req.headers['x-tenant-id']) as string;
-            const { profile_json, playbooks_json, knowledge_items_json, segment_key } = req.body;
+            const { profile_json, playbooks_json, knowledge_items_json, segment_key, channel = 'whatsapp' } = req.body;
 
             if (!tenant_id) {
                 console.error(`${TAG} tenant_id ausente`);
@@ -41,6 +42,7 @@ export class WhatsAppController extends BaseController {
 
             const settings = await WhatsAppRepository.upsertSettings({
                 tenant_id,
+                channel,
                 profile_json,
                 playbooks_json,
                 knowledge_items_json,

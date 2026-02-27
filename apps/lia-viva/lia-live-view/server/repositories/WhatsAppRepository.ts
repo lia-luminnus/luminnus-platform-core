@@ -6,35 +6,37 @@ import { supabase } from '../config/supabase.js';
  */
 export const WhatsAppRepository = {
     // --- Settings ---
-    async getSettings(tenantId: string) {
+    async getSettings(tenantId: string, channel: string = 'whatsapp') {
         const { data, error } = await supabase
             .from('whatsapp_agent_settings')
             .select('*')
             .eq('tenant_id', tenantId)
+            .eq('channel', channel)
             .maybeSingle();
 
         if (error) {
-            console.error(`[WhatsAppRepo.getSettings] Erro para tenant ${tenantId}:`, error.message);
+            console.error(`[WhatsAppRepo.getSettings] Erro para tenant ${tenantId} channel ${channel}:`, error.message);
             throw error;
         }
         return data;
     },
     async upsertSettings(settings: any) {
-        const { tenant_id, ...rest } = settings;
+        const { tenant_id, channel = 'whatsapp', ...rest } = settings;
         if (!tenant_id) throw new Error('tenant_id é obrigatório para upsertSettings');
 
         const { data, error } = await supabase
             .from('whatsapp_agent_settings')
             .upsert({
                 tenant_id,
+                channel,
                 ...rest,
                 updated_at: new Date().toISOString()
-            }, { onConflict: 'tenant_id' })
+            }, { onConflict: 'tenant_id,channel' })
             .select()
             .single();
 
         if (error) {
-            console.error(`[WhatsAppRepo.upsertSettings] Erro para tenant ${tenant_id}:`, error.message);
+            console.error(`[WhatsAppRepo.upsertSettings] Erro para tenant ${tenant_id} channel ${channel}:`, error.message);
             throw error;
         }
         return data;

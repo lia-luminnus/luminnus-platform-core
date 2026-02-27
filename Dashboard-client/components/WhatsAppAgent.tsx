@@ -14,10 +14,18 @@ import { supabase } from '../lib/supabase';
 
 import { LIAProvider } from './lia/LIAContext';
 
+type ChannelType = 'whatsapp' | 'telegram' | 'web_widget';
+
+const CHANNEL_OPTIONS: { id: ChannelType; label: string; icon: string; color: string }[] = [
+    { id: 'whatsapp', label: 'WhatsApp', icon: '📱', color: 'from-green-500 to-green-600' },
+    { id: 'telegram', label: 'Telegram', icon: '✈️', color: 'from-blue-400 to-blue-500' },
+    { id: 'web_widget', label: 'Web Widget', icon: '🌐', color: 'from-purple-500 to-purple-600' }
+];
 const WhatsAppAgentContent: React.FC = () => {
     const { t } = useContext(LanguageContext);
     const { user, isAdmin, profile } = useDashboardAuth();
     const [activeTab, setActiveTab] = useState<'config' | 'inbox' | 'summaries' | 'kanban' | 'audio' | 'briefings'>('config');
+    const [activeChannel, setActiveChannel] = useState<ChannelType>('whatsapp');
     const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
     const [notification, setNotification] = useState<{ message: string, type: 'success' | 'info' | 'error' } | null>(null);
     const [status, setStatus] = useState<any>(null);
@@ -217,52 +225,78 @@ const WhatsAppAgentContent: React.FC = () => {
 
     return (
         <div className="flex flex-col h-full bg-[#f1f5f9] dark:bg-[#06080f] overflow-hidden">
-            <Header title={t('whatsappAgent' as any) || 'WhatsApp (Agente)'} />
+            <Header title={t('whatsappAgent' as any) || 'LIA (Treinamento)'} />
 
-            {/* Status Header Unificado */}
-            <div className="px-6 py-2 bg-white dark:bg-[#0a0d14] border-b border-gray-200 dark:border-white/5 flex items-center justify-between shadow-sm z-10 transition-colors">
-                <div className="flex items-center gap-4">
-                    {loadingStatus ? (
-                        <div className="w-20 h-6 bg-gray-200 dark:bg-white/5 animate-pulse rounded-full"></div>
-                    ) : (
-                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${isOnline
-                            ? "bg-green-500/10 text-green-500 border-green-500/20"
-                            : "bg-red-500/10 text-red-500 border-red-500/20"
-                            }`}>
-                            <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} ${isOnline ? 'animate-pulse' : ''}`}></div>
-                            <span className="text-[10px] font-black uppercase tracking-widest">
-                                {isOnline ? t('waConnected') : 'Desconectado'}
-                            </span>
-                        </div>
-                    )}
-                    <p className="text-[10px] font-bold text-gray-400 font-mono">
-                        {status && (!status.tenant_id || status.tenant_id === tenantId)
-                            ? (status.phone_masked || status.phone || 'Número não definido')
-                            : 'Número não definido'
-                        }
-                    </p>
-                </div>
-                <div className="flex gap-2">
-                    <button
-                        onClick={() => handleAction('hub')}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-gray-300 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5 transition-all text-gray-700 dark:text-gray-300"
-                    >
-                        <span className="material-symbols-outlined text-xs">settings_ethernet</span>
-                        Gerenciar Conexão
-                    </button>
-                    {!isOnline && (
+            {/* === SELETOR DE CANAL === */}
+            <div className="px-6 py-3 bg-white dark:bg-[#0a0d14] border-b border-gray-200 dark:border-white/5 flex items-center gap-3 z-20">
+                <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 mr-2">Canal:</span>
+                {CHANNEL_OPTIONS.map((ch) => {
+                    const isActive = activeChannel === ch.id;
+                    return (
+                        <button
+                            key={ch.id}
+                            onClick={() => {
+                                setActiveChannel(ch.id);
+                                setActiveTab('config');
+                            }}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 ${isActive
+                                    ? `bg-gradient-to-r ${ch.color} text-white shadow-lg scale-105`
+                                    : 'bg-gray-100 dark:bg-white/5 text-gray-500 hover:text-gray-800 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10'
+                                }`}
+                        >
+                            <span className="text-sm">{ch.icon}</span>
+                            {ch.label}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Status Header — só para WhatsApp */}
+            {activeChannel === 'whatsapp' && (
+                <div className="px-6 py-2 bg-white dark:bg-[#0a0d14] border-b border-gray-200 dark:border-white/5 flex items-center justify-between shadow-sm z-10 transition-colors">
+                    <div className="flex items-center gap-4">
+                        {loadingStatus ? (
+                            <div className="w-20 h-6 bg-gray-200 dark:bg-white/5 animate-pulse rounded-full"></div>
+                        ) : (
+                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${isOnline
+                                ? "bg-green-500/10 text-green-500 border-green-500/20"
+                                : "bg-red-500/10 text-red-500 border-red-500/20"
+                                }`}>
+                                <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} ${isOnline ? 'animate-pulse' : ''}`}></div>
+                                <span className="text-[10px] font-black uppercase tracking-widest">
+                                    {isOnline ? t('waConnected') : 'Desconectado'}
+                                </span>
+                            </div>
+                        )}
+                        <p className="text-[10px] font-bold text-gray-400 font-mono">
+                            {status && (!status.tenant_id || status.tenant_id === tenantId)
+                                ? (status.phone_masked || status.phone || 'Número não definido')
+                                : 'Número não definido'
+                            }
+                        </p>
+                    </div>
+                    <div className="flex gap-2">
                         <button
                             onClick={() => handleAction('hub')}
-                            className="px-4 py-1.5 rounded-lg bg-brand-primary text-white text-[9px] font-black uppercase tracking-widest shadow-lg shadow-brand-primary/20 hover:scale-105 active:scale-95 transition-all"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-gray-300 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5 transition-all text-gray-700 dark:text-gray-300"
                         >
-                            Configurar Agora
+                            <span className="material-symbols-outlined text-xs">settings_ethernet</span>
+                            Gerenciar Conexão
                         </button>
-                    )}
+                        {!isOnline && (
+                            <button
+                                onClick={() => handleAction('hub')}
+                                className="px-4 py-1.5 rounded-lg bg-brand-primary text-white text-[9px] font-black uppercase tracking-widest shadow-lg shadow-brand-primary/20 hover:scale-105 active:scale-95 transition-all"
+                            >
+                                Configurar Agora
+                            </button>
+                        )}
+                    </div>
                 </div>
-            </div >
+            )}
 
-            {/* Banner de Erro/CTA */}
-            {!loadingStatus && !isOnline && (
+            {/* Banner de Erro/CTA — só para WhatsApp */}
+            {activeChannel === 'whatsapp' && !loadingStatus && !isOnline && (
                 <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-2.5 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <span className="material-symbols-outlined text-amber-500 text-lg">warning</span>
@@ -312,7 +346,7 @@ const WhatsAppAgentContent: React.FC = () => {
                         transition={{ duration: 0.2 }}
                         className="h-full"
                     >
-                        {activeTab === 'config' && <WhatsAppConfig onSave={() => showNotify('Configurações salvas com sucesso!', 'success')} />}
+                        {activeTab === 'config' && <WhatsAppConfig channel={activeChannel} onSave={() => showNotify('Configurações salvas com sucesso!', 'success')} />}
                         {activeTab === 'inbox' && <WhatsAppInbox activeLeadId={selectedLeadId} />}
                         {activeTab === 'kanban' && <WhatsAppKanban onOpenChat={(leadId) => {
                             setSelectedLeadId(leadId);

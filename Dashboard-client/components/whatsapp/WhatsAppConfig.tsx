@@ -5,9 +5,31 @@ import CustomSelect from '../ui/CustomSelect';
 
 interface WhatsAppConfigProps {
     onSave?: () => void;
+    channel?: 'whatsapp' | 'telegram' | 'web_widget';
 }
 
-const WhatsAppConfig: React.FC<WhatsAppConfigProps> = ({ onSave }) => {
+const CHANNEL_OBJECTIVES: Record<string, { label: string; value: string }[]> = {
+    whatsapp: [
+        { label: 'Vendas', value: 'vendas' },
+        { label: 'Suporte', value: 'suporte' },
+        { label: 'Agendamento', value: 'agendamento' },
+        { label: 'Financeiro', value: 'financeiro' }
+    ],
+    telegram: [
+        { label: 'Relatórios / Dashboard', value: 'relatorios' },
+        { label: 'Alertas e Notificações', value: 'alertas' },
+        { label: 'Controle Remoto', value: 'controle' },
+        { label: 'Suporte Interno', value: 'suporte_interno' }
+    ],
+    web_widget: [
+        { label: 'Suporte e Dúvidas', value: 'suporte' },
+        { label: 'Vendas', value: 'vendas' },
+        { label: 'Agendamento', value: 'agendamento' },
+        { label: 'FAQ / Informações', value: 'faq' }
+    ]
+};
+
+const WhatsAppConfig: React.FC<WhatsAppConfigProps> = ({ onSave, channel = 'whatsapp' }) => {
     const [config, setConfig] = useState({
         objective: 'vendas',
         tone: 'Consultivo',
@@ -145,9 +167,9 @@ REGRAS:
             const { tenantId } = backendService.getAuthContext();
 
             try {
-                const settings = await backendService.getWhatsAppSettings();
+                const settings = await backendService.getWhatsAppSettings(channel);
                 if (settings && settings.profile_json) {
-                    console.log('✅ Settings loaded via Backend');
+                    console.log(`✅ Settings loaded via Backend (channel: ${channel})`);
                     applySettings(settings);
                 } else {
                     console.warn('⚠️ Backend returned empty settings, trying Supabase direct...');
@@ -171,6 +193,7 @@ REGRAS:
                     .from('whatsapp_agent_settings')
                     .select('*')
                     .eq('tenant_id', tId)
+                    .eq('channel', channel)
                     .maybeSingle();
 
                 if (data) {
@@ -197,13 +220,13 @@ REGRAS:
         };
 
         loadSettings();
-    }, []);
+    }, [channel]);
 
     const handleSaveSettings = async () => {
         const success = await backendService.saveWhatsAppSettings({
             profile_json: config,
             playbooks_json: playbooks
-        });
+        }, channel);
 
         if (success) {
             alert('Configurações salvas com sucesso!');
@@ -329,12 +352,7 @@ REGRAS:
                                 <CustomSelect
                                     value={config.objective}
                                     onChange={(value) => setConfig({ ...config, objective: value })}
-                                    options={[
-                                        { label: 'Vendas', value: 'vendas' },
-                                        { label: 'Suporte', value: 'suporte' },
-                                        { label: 'Agendamento', value: 'agendamento' },
-                                        { label: 'Financeiro', value: 'financeiro' }
-                                    ]}
+                                    options={CHANNEL_OBJECTIVES[channel] || CHANNEL_OBJECTIVES.whatsapp}
                                     variant="glass"
                                     placeholder="Selecione o objetivo"
                                 />
