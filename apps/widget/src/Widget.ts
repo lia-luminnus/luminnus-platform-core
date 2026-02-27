@@ -134,15 +134,24 @@ export class LiaWidget {
         try {
             this.appendTypingIndicator();
 
-            const apiUrl = 'https://lia-chat-api.onrender.com';
-            const response = await fetch(`${apiUrl}/chat`, {
+            // Use the script's own origin to find the API, or fallback to the production URL
+            const scriptSrc = this.getScriptSrc();
+            const apiUrl = scriptSrc
+                ? new URL(scriptSrc).origin
+                : 'https://luminnus-platform-core.onrender.com';
+
+            // Generate a persistent session ID for this browser tab
+            const sessionId = this.getOrCreateSessionId();
+
+            const response = await fetch(`${apiUrl}/api/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     message: text,
                     liaMode: 'NORMAL',
-                    userId: 'widget-user', // TBD: generate or read persistent sessionId
-                    conversationId: this.workspaceId // Usar workspaceId como thread base por enquanto
+                    userId: sessionId,
+                    tenantId: this.workspaceId,
+                    conversationId: `widget-${this.workspaceId}-${sessionId}`
                 }),
             });
 
@@ -186,6 +195,26 @@ export class LiaWidget {
         msgEl.textContent = text;
         this.chatContent.appendChild(msgEl);
         this.chatContent.scrollTop = this.chatContent.scrollHeight;
+    }
+
+    private getScriptSrc(): string | null {
+        const scripts = document.getElementsByTagName('script');
+        for (let i = 0; i < scripts.length; i++) {
+            if (scripts[i].src.includes('widget.js')) {
+                return scripts[i].src;
+            }
+        }
+        return null;
+    }
+
+    private getOrCreateSessionId(): string {
+        const key = 'lia-widget-session-id';
+        let id = sessionStorage.getItem(key);
+        if (!id) {
+            id = 'w-' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+            sessionStorage.setItem(key, id);
+        }
+        return id;
     }
 
     private render() {

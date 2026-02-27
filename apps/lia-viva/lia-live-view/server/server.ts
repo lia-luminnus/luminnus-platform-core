@@ -21,7 +21,7 @@ import { execSync } from 'child_process';
 // Convert import.meta.url to a path
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-import { execSync } from 'child_process';
+
 
 // ===========================================================
 // GLOBAL ERROR HANDLERS (v4.1.1 - Diagnosis)
@@ -163,10 +163,21 @@ console.log('🏁 [Twilio] Webhook priorizado no stack de rotas');
 // ===========================================================
 // LIA WIDGET STATIC HOSTING (Deliver widget.js)
 // ===========================================================
-// We point statically to apps/widget/dist so endpoints can request /widget.js
-app.use(express.static(path.join(__dirname, '../../../../apps/widget/dist')));
+const widgetDistPath = path.resolve(__dirname, '../../../../apps/widget/dist');
+console.log(`📦 [Widget] Serving from: ${widgetDistPath}`);
+console.log(`📦 [Widget] widget.js exists: ${fs.existsSync(path.join(widgetDistPath, 'widget.js'))}`);
+
 app.get('/widget.js', (req, res) => {
-  res.sendFile(path.join(__dirname, '../../../../apps/widget/dist/widget.js'));
+  const filePath = path.join(widgetDistPath, 'widget.js');
+  if (!fs.existsSync(filePath)) {
+    console.error('❌ [Widget] widget.js NOT FOUND at:', filePath);
+    res.status(404).send('// widget.js not found');
+    return;
+  }
+  res.setHeader('Content-Type', 'application/javascript');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.sendFile(filePath);
 });
 
 
