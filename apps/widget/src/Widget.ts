@@ -3,6 +3,7 @@ import './style.css';
 export class LiaWidget {
     private workspaceId: string | null = null;
     private enableVoice: boolean = false;
+    private agentName: string = 'Suporte LIA';
     private container: HTMLElement;
     private chatWindow: HTMLElement;
     private chatContent: HTMLElement;
@@ -27,6 +28,7 @@ export class LiaWidget {
             if (script.src.includes('widget.js') || script.hasAttribute('data-workspace-id')) {
                 this.workspaceId = script.getAttribute('data-workspace-id');
                 this.enableVoice = script.getAttribute('data-enable-voice') === 'true';
+                this.agentName = script.getAttribute('data-agent-name') || 'Suporte LIA';
                 break;
             }
         }
@@ -40,11 +42,13 @@ export class LiaWidget {
         // Header
         const header = document.createElement('div');
         header.className = 'lia-chat-header';
+        // Use first 3 chars of agentName for avatar, or 'LIA' as default
+        const avatarText = this.agentName.substring(0, 3).toUpperCase();
         header.innerHTML = `
       <div class="lia-header-info">
-        <div class="lia-avatar">LIA</div>
+        <div class="lia-avatar">${avatarText}</div>
         <div class="lia-title">
-          <span>Suporte LIA</span>
+          <span>${this.agentName}</span>
           <span class="lia-status">Online agora</span>
         </div>
       </div>
@@ -60,7 +64,7 @@ export class LiaWidget {
         // Initial message
         const initialMsg = document.createElement('div');
         initialMsg.className = 'lia-message lia-received';
-        initialMsg.textContent = 'Olá! Pronto para transformar seu atendimento?';
+        initialMsg.textContent = `Olá! Bem-vindo ao ${this.agentName}. Como posso ajudar?`;
         content.appendChild(initialMsg);
 
         // Footer

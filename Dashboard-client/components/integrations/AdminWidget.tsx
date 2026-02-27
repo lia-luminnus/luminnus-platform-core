@@ -7,6 +7,7 @@ import { getApiUrl } from '../../config/api';
 const AdminWidget: React.FC = () => {
     const { profile, user } = useDashboardAuth();
     const [enableVoice, setEnableVoice] = useState(false);
+    const [agentName, setAgentName] = useState('Suporte LIA');
     const [devEmail, setDevEmail] = useState('');
 
     const handleVoiceToggle = () => {
@@ -34,7 +35,7 @@ const AdminWidget: React.FC = () => {
     // If you have a specific render URL serving the widget, put that host here.
     const widgetHostUrl = getApiUrl().replace('/api', '') + '/widget.js'; // Fallback to Unified Engine Host or you can use your preferred domain.
 
-    const scriptCode = `<script src="${widgetHostUrl}" data-workspace-id="${workspaceId}" ${enableVoice ? 'data-enable-voice="true"' : ''}></script>`;
+    const scriptCode = `<script src="${widgetHostUrl}" data-workspace-id="${workspaceId}" data-agent-name="${agentName}" ${enableVoice ? 'data-enable-voice="true"' : ''}></script>`;
 
     const copyScript = () => {
         navigator.clipboard.writeText(scriptCode);
@@ -88,6 +89,24 @@ const AdminWidget: React.FC = () => {
                                 </div>
                             </motion.div>
                         )}
+                    </div>
+
+                    {/* Nome do Agente */}
+                    <div className="bg-white dark:bg-white/5 p-6 rounded-3xl border border-gray-200 dark:border-white/10">
+                        <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+                            <span className="material-symbols-outlined text-brand-primary">badge</span>
+                            Nome do Agente
+                        </h3>
+                        <p className="text-sm text-gray-500 mb-4">Personalize o nome que aparece no widget do seu site. Ex.: "Atendimento Acme", "Suporte TechStore"</p>
+                        <input
+                            type="text"
+                            value={agentName}
+                            onChange={(e) => setAgentName(e.target.value || 'Suporte LIA')}
+                            placeholder="Ex: Atendimento Minha Empresa"
+                            maxLength={40}
+                            className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-brand-primary transition-colors text-sm"
+                        />
+                        <p className="text-[11px] text-gray-400 mt-2">O nome aparecerá no cabeçalho do chat e na mensagem de boas-vindas.</p>
                     </div>
 
                     {/* Copiar Script */}
@@ -171,9 +190,9 @@ const AdminWidget: React.FC = () => {
                                     <div className="bg-white dark:bg-[#1A1F2E] rounded-2xl shadow-xl border border-gray-100 dark:border-white/10 w-full max-w-[240px] overflow-hidden ml-auto flex flex-col">
                                         <div className="bg-brand-primary p-3 text-white flex items-center justify-between shadow-sm">
                                             <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center text-[10px]">LIA</div>
+                                                <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center text-[10px]">{agentName.substring(0, 3).toUpperCase()}</div>
                                                 <div>
-                                                    <div className="text-xs font-bold leading-tight">Suporte LIA</div>
+                                                    <div className="text-xs font-bold leading-tight">{agentName}</div>
                                                     <div className="text-[9px] text-white/70">Online agora</div>
                                                 </div>
                                             </div>
@@ -181,7 +200,7 @@ const AdminWidget: React.FC = () => {
                                         </div>
                                         <div className="p-3 bg-gray-50 dark:bg-black/20 h-32 flex flex-col gap-2">
                                             <div className="bg-white dark:bg-gray-800 p-2 text-[10px] rounded-lg rounded-tl-none self-start shadow-sm border border-gray-100 dark:border-white/5 w-4/5">
-                                                Olá! Pronto para transformar seu atendimento?
+                                                Olá! Bem-vindo ao {agentName}. Como posso ajudar?
                                             </div>
                                         </div>
                                         <div className="p-2 border-t border-gray-100 dark:border-white/10 bg-white dark:bg-[#1A1F2E] flex gap-2">
