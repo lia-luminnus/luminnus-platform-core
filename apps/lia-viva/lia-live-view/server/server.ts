@@ -125,10 +125,17 @@ function corsHandler(req: any, res: any, next: any) {
   const origin = req.headers.origin;
 
   // Em dev ou se não há restrição, permitir tudo
-  if (allowedOrigins.length === 0 || !origin) {
+  // IMPORTANT: file:// sends origin as the string "null", must handle this
+  if (allowedOrigins.length === 0 || !origin || origin === 'null') {
     res.header('Access-Control-Allow-Origin', '*');
   } else if (allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
+  } else {
+    // For widget: allow ANY origin for chat/widget routes
+    const widgetPaths = ['/api/chat', '/chat', '/widget.js'];
+    if (widgetPaths.some(p => req.path.startsWith(p))) {
+      res.header('Access-Control-Allow-Origin', '*');
+    }
   }
 
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
