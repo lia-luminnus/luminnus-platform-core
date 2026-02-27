@@ -275,20 +275,49 @@ router.post('/instance', async (req: Request, res: Response) => {
             console.log('✅ [QR] Got QR code directly from /create response!');
         }
 
-        // ── Step 3: If no QR from create, poll webhook cache + /connect ──
+        // Register in Supabase EARLY so the webhook can update it
+        await processSupabaseConnectionRecord(tenant_id, instanceName);
+
+        // ── Step 3: If no QR from create, poll webhook cache + /connect + Supabase ──
         if (!qrcodeBase64) {
-            console.log('🔍 [QR] Step 3: QR not in create response, polling webhook cache + /connect...');
+            console.log('🔍 [QR] Step 3: QR not in create response, polling webhook cache + /connect + Supabase...');
 
             for (let attempt = 0; attempt < 30; attempt++) {
-                // Check webhook cache first (fastest path when webhook works)
+                // 1. Check webhook cache first (fastest path when webhook hits same instance)
                 if (pendingQrCodes[instanceName]) {
                     qrcodeBase64 = pendingQrCodes[instanceName];
-                    console.log(`✅ [QR] Got QR from webhook cache (attempt ${attempt + 1})`);
+                    console.log(`✅ [QR] Got QR from memory cache (attempt ${attempt + 1})`);
                     delete pendingQrCodes[instanceName];
                     break;
                 }
 
-                // Try /instance/connect directly
+                // 2. Check Supabase (crucial for multi-process environments like Render)
+                try {
+                    const { data: dbConn } = await supabase
+                        .from('whatsapp_connections')
+                        .select('config_json')
+                        .eq('tenant_id', tenant_id)
+                        .maybeSingle();
+
+                    if (dbConn?.config_json?.qrcodeBase64) {
+                        qrcodeBase64 = dbConn.config_json.qrcodeBase64;
+                        console.log(`✅ [QR] Got QR from Supabase! (attempt ${attempt + 1})`);
+
+                        // Clean up the DB field so it doesn't stay there forever
+                        const newConfig = { ...dbConn.config_json };
+                        delete newConfig.qrcodeBase64;
+                        await supabase
+                            .from('whatsapp_connections')
+                            .update({ config_json: newConfig })
+                            .eq('tenant_id', tenant_id);
+
+                        break;
+                    }
+                } catch (dbErr: any) {
+                    if (attempt < 2) console.log(`⚠️ [QR] Supabase poll error:`, dbErr.message);
+                }
+
+                // 3. Try /instance/connect directly (Evolution API might return raw string code)
                 try {
                     const connectRes = await fetch(`${EVOLUTION_API_URL}/instance/connect/${instanceName}`, {
                         method: 'GET',
@@ -310,6 +339,8 @@ router.post('/instance', async (req: Request, res: Response) => {
                     if (base64FromConnect) {
                         qrcodeBase64 = base64FromConnect;
                         console.log(`✅ [QR] Got QR from /connect (attempt ${attempt + 1})`);
+                        // Also clean up supabase if we got it from API
+                        await processSupabaseConnectionRecord(tenant_id, instanceName);
                         break;
                     }
 
@@ -317,6 +348,7 @@ router.post('/instance', async (req: Request, res: Response) => {
                     if (connectData?.code && typeof connectData.code === 'string' && connectData.code.length > 50) {
                         qrcodeBase64 = connectData.code;
                         console.log(`✅ [QR] Got QR code string from /connect (attempt ${attempt + 1})`);
+                        await processSupabaseConnectionRecord(tenant_id, instanceName);
                         break;
                     }
                 } catch (connectErr: any) {
@@ -336,9 +368,6 @@ router.post('/instance', async (req: Request, res: Response) => {
         } else {
             console.log(`✅ [QR] QR Code ready! Base64 length: ${qrcodeBase64.length}`);
         }
-
-        // Register in Supabase
-        await processSupabaseConnectionRecord(tenant_id, instanceName);
 
         res.json({
             ok: true,
@@ -451,7 +480,29 @@ router.post('/webhook', async (req: Request, res: Response) => {
             console.log(`✅ [Webhook] QR Code detected! Event: "${event}" | Instance: "${instanceName}" | Base64 length: ${qrcodeBase64.length}`);
             if (qrcodeBase64) {
                 pendingQrCodes[instanceName] = qrcodeBase64;
-                console.log(`✅ [Webhook] QR Code cached for instance: ${instanceName}`);
+                console.log(`✅ [Webhook] QR Code cached in memory for instance: ${instanceName}`);
+
+                // Save to Supabase (needed for multi-process or Render deployments)
+                try {
+                    // Try to find the tenant_id by instanceName because webhook doesn't provide tenant_id
+                    const { data: dbRecords, error: searchErr } = await supabase
+                        .from('whatsapp_connections')
+                        .select('id, tenant_id, config_json');
+
+                    if (!searchErr && dbRecords) {
+                        const record = dbRecords.find(r => r.config_json?.instanceName === instanceName);
+                        if (record) {
+                            const newConfig = { ...record.config_json, qrcodeBase64 };
+                            await supabase
+                                .from('whatsapp_connections')
+                                .update({ config_json: newConfig })
+                                .eq('id', record.id);
+                            console.log(`✅ [Webhook] QR Code saved to Supabase for tenant: ${record.tenant_id}`);
+                        }
+                    }
+                } catch (dbErr: any) {
+                    console.error('❌ [Webhook] Error saving QR to Supabase:', dbErr.message);
+                }
             }
         } else if (eventLower.includes('messages')) {
             console.log(`[Webhook] Mensagem recebida na instância ${instanceName}`);
