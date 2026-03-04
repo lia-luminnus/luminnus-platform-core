@@ -81,40 +81,67 @@ Deno.serve(async (req: Request) => {
         });
 
         if (action === "delete") {
-            // 1. Clean up associated data first to avoid FK errors
-            await adminClient.from("tenant_members").delete().eq("user_id", userId);
+            try {
+                // 1. Get the tenant_id first so we can clean up tenant specific data
+                const { data: tenantMembers } = await adminClient
+                    .from("tenant_members")
+                    .select("tenant_id")
+                    .eq("user_id", userId);
 
-            // Delete subscriptions
-            await adminClient.from("subscriptions").delete().eq("user_id", userId);
+                // 2. Clear out user specific generic data to prevent FK errors
+                await adminClient.from("files").delete().eq("user_id", userId);
+                await adminClient.from("file_folders").delete().eq("owner_user_id", userId);
+                await adminClient.from("user_integrations").delete().eq("user_id", userId);
 
-            // Delete messages and conversations potentially linked
-            await adminClient.from("conversations").delete().eq("user_id", userId);
+                // 3. Clear out tenant specific data if they owned one
+                if (tenantMembers && tenantMembers.length > 0) {
+                    for (const tm of tenantMembers) {
+                        const tenantId = tm.tenant_id;
+                        // Wipe messages and conversations
+                        await adminClient.from("messages").delete().eq("tenant_id", tenantId);
+                        await adminClient.from("conversations").delete().eq("tenant_id", tenantId);
+                        // Wipe whatsapp data
+                        const { data: instances } = await adminClient.from("whatsapp_instances").select("id").eq("tenant_id", tenantId);
+                        if (instances && instances.length > 0) {
+                            for (const inst of instances) {
+                                await adminClient.from("whatsapp_qr_codes").delete().eq("instance_id", inst.id);
+                            }
+                        }
+                        await adminClient.from("whatsapp_instances").delete().eq("tenant_id", tenantId);
+                        // Wipe billing
+                        await adminClient.from("subscriptions").delete().eq("tenant_id", tenantId);
+                        // Finally wipe tenant and its members
+                        await adminClient.from("tenant_members").delete().eq("tenant_id", tenantId);
+                        await adminClient.from("tenants").delete().eq("id", tenantId);
+                    }
+                }
 
-            // 2. Delete from profiles
-            const { error: profileError } = await adminClient
-                .from("profiles")
-                .delete()
-                .eq("id", userId);
+                // 4. Delete cross-referenced billing/members logic connected to user_id directly
+                await adminClient.from("tenant_members").delete().eq("user_id", userId);
+                await adminClient.from("subscriptions").delete().eq("user_id", userId);
 
-            if (profileError) {
-                console.error("Error deleting profile:", profileError);
-                // Continue anyway, it might not exist
-            }
+                // 5. Delete from profiles
+                await adminClient.from("profiles").delete().eq("id", userId);
 
-            // 3. Delete from auth.users using Admin API
-            const { error: authError } = await adminClient.auth.admin.deleteUser(userId);
+                // 6. Delete from auth.users using Admin API (Final wipe)
+                const { error: authError } = await adminClient.auth.admin.deleteUser(userId);
 
-            if (authError) {
+                if (authError) {
+                    throw new Error(`Failed to delete from auth: ${authError.message}`);
+                }
+
                 return new Response(
-                    JSON.stringify({ error: `Failed to delete from auth: ${authError.message}` }),
+                    JSON.stringify({ success: true, message: "User deleted completely from Supabase including all relations" }),
+                    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                );
+            } catch (err: any) {
+                console.error("Deep Wipe Error:", err);
+                return new Response(
+                    JSON.stringify({ error: err.message || "Unknown error during deep wipe" }),
                     { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
                 );
             }
 
-            return new Response(
-                JSON.stringify({ success: true, message: "User deleted completely from Supabase" }),
-                { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
         } else if (action === "reset") {
             // Reset user onboarding and remove any active plan
             const { error: resetError } = await adminClient
