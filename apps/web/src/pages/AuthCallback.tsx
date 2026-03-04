@@ -122,12 +122,14 @@ const AuthCallback: React.FC = () => {
                     hasActivePlan = true;
                 }
 
-                // v6.0: FIX CRÍTICO - Permitir que novos usuários (sem plano/perfil) acessem o Dashboard
-                // O Dashboard é quem deve lidar com o Onboarding e criação de perfil.
-                // Se bloquearmos aqui, o usuário nunca consegue entrar para criar a conta.
+                // Modificação: Redirecionar usuários sem plano de volta para o site (página de planos)
                 if (!hasActivePlan) {
-                    console.log('[AuthCallback] Usuário sem plano detectado. Redirecionando para Onboarding no Dashboard.');
-                    hasActivePlan = true;
+                    console.log('[AuthCallback] Usuário sem plano detectado. Redirecionando para a página de planos no site.');
+                    setMessage('Você não possui um plano ativo.');
+                    setTimeout(() => {
+                        window.location.href = '/planos';
+                    }, 800);
+                    return;
                 }
 
                 if (hasActivePlan) {
@@ -151,15 +153,7 @@ const AuthCallback: React.FC = () => {
                     setTimeout(() => {
                         window.location.href = redirectFinalUrl;
                     }, 800);
-                } else {
-                    // CÓDIGO MORTO: Mantido apenas por segurança, mas o if acima garante que sempre entra no bloco verdadeiro
-                    console.log('[AuthCallback] Sem plano ativo, redirecionando para o site principal');
-                    setMessage('Você não possui um plano ativo.');
-                    setTimeout(() => {
-                        navigate('/');
-                    }, 800);
                 }
-
             } catch (error) {
                 console.error('[AuthCallback] Erro no fluxo:', error);
                 navigate('/');

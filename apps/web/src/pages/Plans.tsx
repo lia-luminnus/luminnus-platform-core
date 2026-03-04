@@ -268,13 +268,15 @@ const Plans = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                     <div className="flex flex-col items-center justify-center space-y-2">
                       <div className="flex items-center gap-3">
                         {(() => {
-                          const colors = plan.color.match(/hsl\([^)]+\)/g) || [];
-                          const gradient = colors.length === 2
-                            ? `linear-gradient(to right, ${colors[0]}, ${colors[1]})`
-                            : 'linear-gradient(to right, #7C3AED, #FF2E9E)';
+                          // Hardcoded reliable gradients per plan (the DB format is Tailwind, not raw CSS)
+                          const planGradients: Record<string, string> = {
+                            'Start': 'linear-gradient(to right, #22D3EE, #0EA5E9)',
+                            'Plus': 'linear-gradient(to right, #7C3AED, #FF2E9E)',
+                            'Pro': 'linear-gradient(to right, #FF2E9E, #F97316)',
+                          };
+                          const gradient = planGradients[plan.name] || 'linear-gradient(to right, #7C3AED, #FF2E9E)';
 
-                          const numericAnnual = parseFloat(plan.annualPrice.replace(/[^0-9]/g, ''));
-                          const monthlyEquivalent = isAnnual ? Math.round(numericAnnual / 12) : plan.price;
+                          const displayPrice = isAnnual ? plan.annualPrice : plan.price;
 
                           return (
                             <>
@@ -287,7 +289,7 @@ const Plans = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                                   backgroundClip: 'text'
                                 }}
                               >
-                                {isAnnual ? `$${monthlyEquivalent}` : plan.price}
+                                {displayPrice}
                               </p>
                               {isAnnual && plan.discount > 0 && (
                                 <span className="px-2 py-1 text-sm font-bold rounded-full bg-gradient-to-r from-[#7C3AED] to-[#FF2E9E] text-white shadow-md transform -rotate-12">

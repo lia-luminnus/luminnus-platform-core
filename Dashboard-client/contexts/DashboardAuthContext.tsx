@@ -211,14 +211,12 @@ export const DashboardAuthProvider = ({ children }: { children: React.ReactNode 
                     sessionStorage.removeItem(sessionKey); // Limpar imediatamente
                     useAppStore.getState().resetOnboarding();
                     setAdminOnboardingDone(false);
-                } else if (sessionDone) {
-                    setAdminOnboardingDone(true);
-                    // Sincronizar store local também
-                    useAppStore.getState().completeOnboarding();
                 } else {
-                    console.log('[DashboardAuth] 🔄 Admin - Resetando onboarding (Sincronamente)');
-                    useAppStore.getState().resetOnboarding();
-                    setAdminOnboardingDone(false);
+                    // Admin login normal (sem admin_access): PULAR onboarding
+                    console.log('[DashboardAuth] ✅ Admin login normal - pulando onboarding');
+                    setAdminOnboardingDone(true);
+                    sessionStorage.setItem(sessionKey, 'true');
+                    useAppStore.getState().completeOnboarding();
                 }
             }
 
@@ -323,12 +321,12 @@ export const DashboardAuthProvider = ({ children }: { children: React.ReactNode 
                 const sessionKey = `onboarding_session_done:${currentUser.id}`;
                 const sessionDone = sessionStorage.getItem(sessionKey) === 'true';
 
-                if (sessionDone) {
-                    setAdminOnboardingDone(true);
-                } else if (!useAppStore.getState().onboarding_completed) {
-                    console.log('[DashboardAuth] 🔄 Admin - Resetando onboarding para esta sessão');
-                    useAppStore.getState().resetOnboarding();
+                if (!sessionDone) {
+                    // Admin login normal: marcar como done (só resetar se admin_access na URL)
+                    sessionStorage.setItem(sessionKey, 'true');
                 }
+                setAdminOnboardingDone(true);
+                useAppStore.getState().completeOnboarding();
             }
 
             // 🔑 SSOT: Sincronizar estado

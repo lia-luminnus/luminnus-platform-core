@@ -94,8 +94,8 @@ const Auth = () => {
       return;
     }
 
-    // User without any plan goes to home (to see pricing)
-    navigate('/', { replace: true });
+    // User without any plan goes to pricing page
+    navigate('/planos', { replace: true });
   }, [user, hasActivePlan, userPlan, planLoading, navigate]);
 
   /**
