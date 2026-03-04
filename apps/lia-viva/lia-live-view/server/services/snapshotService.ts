@@ -42,13 +42,17 @@ export const SnapshotService = {
                 .eq('tenant_id', profile.id)
                 .maybeSingle();
 
+            // 3.5. Definir limites do plano antes de buscar propriedades
+            const planId = profile.plan_level || 'start';
+            const planLimits = systemManifest.PLANS[planId];
+
             // 4. Buscar Imóveis
             const { data: properties } = await supabase
                 .from('properties')
                 .select('*')
                 .eq('tenant_id', profile.id)
                 .order('updated_at', { ascending: false })
-                .limit(planLimits.max_items || 20);
+                .limit(planLimits?.max_items || 20);
 
             // 5. Buscar Logs do Hub (Sincronização Recente)
             const { data: hubLogs } = await supabase
@@ -59,9 +63,6 @@ export const SnapshotService = {
                 .limit(5);
 
             // 6. Montar o snapshot baseado no Product Catalog Manifest
-            const planId = profile.plan_level || 'start';
-            const planLimits = systemManifest.PLANS[planId];
-
             const snapshot = {
                 timestamp: new Date().toISOString(),
                 tenant_id: profile.id,

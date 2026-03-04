@@ -34,6 +34,8 @@ export interface Plan {
   name: string;
   price: string;
   annualPrice: string;
+  annualTotal?: string;
+  annualSavings?: string;
   period: string;
   description: string;
   features: string[];
@@ -120,17 +122,22 @@ function convertPlanFromDB(dbPlan: PlanFromDB): Plan {
     ? Math.round(((expectedAnnual - numericAnnualPrice) / expectedAnnual) * 100)
     : 0;
 
+  const annualTotal = numericAnnualPrice;
+  const annualSavings = expectedAnnual - numericAnnualPrice;
+
   return {
     id: dbPlan.id,
     name: dbPlan.plan_name,
     price: dbPlan.price,
-    annualPrice: dbPlan.annual_price || `€${Math.round(numericPrice * 12)}`,
+    annualPrice: dbPlan.annual_price || `$${Math.round(numericPrice * 12)}`,
+    annualTotal: `$${Math.round(annualTotal).toLocaleString()}`,
+    annualSavings: annualSavings > 0 ? `$${Math.round(annualSavings)}` : undefined,
     period: '/mês',
     description: dbPlan.description,
     features: dbPlan.features || [],
     color: `from-[hsl(${gradientStart})] to-[hsl(${gradientEnd})]`,
     popular: dbPlan.is_popular || false,
-    discount: calculatedDiscount > 0 ? calculatedDiscount : 20, // Default 20% se não houver desconto configurado
+    discount: calculatedDiscount > 0 ? calculatedDiscount : 20,
     liaQuote: dbPlan.lia_quote || '',
     maxChannels: dbPlan.max_channels,
     maxConversations: dbPlan.max_conversations,

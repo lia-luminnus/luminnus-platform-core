@@ -32,8 +32,8 @@ import { toast } from "sonner";
 
 // Lista completa de recursos disponíveis
 const allAvailableFeatures = [
-    "Integração com WhatsApp (1 número)",
-    "WhatsApp Business (vários números)",
+    "Integração com Telegram",
+    "Web Widget (chat no site)",
     "Chat online no site (widget simples)",
     "Chat integrado (com histórico)",
     "Integração com e-mail",

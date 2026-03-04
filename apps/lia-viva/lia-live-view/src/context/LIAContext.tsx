@@ -142,6 +142,9 @@ export interface LIAState {
   isProcessingUpload: boolean;
   setIsProcessingUpload: (processing: boolean) => void;
 
+  // Real-Time Tool Execution Feedback
+  activeTool: { name: string, args: any } | null;
+
   // Múltiplos Containers Dinâmicos
   dynamicContainers: DynamicContainer[];
   addDynamicContainer: (type: any, data: any) => string;
@@ -220,6 +223,7 @@ export function LIAProvider({ children }: LIAProviderProps) {
   const [dynamicContent, setDynamicContent] = useState<DynamicContent | null>(null);
   const [isProcessingUpload, setIsProcessingUpload] = useState(false);
   const [dynamicContainers, setDynamicContainers] = useState<DynamicContainer[]>([]);
+  const [activeTool, setActiveTool] = useState<{ name: string, args: any } | null>(null);
 
   // Refs para controle de áudio e modo
   const isLiveActiveRef = useRef(false);
@@ -1357,6 +1361,16 @@ export function LIAProvider({ children }: LIAProviderProps) {
       window.dispatchEvent(new CustomEvent('lia-file-uploaded', { detail: fileData }));
     };
 
+    const handleToolExecutionStart = (payload: any) => {
+      console.log('🔧 [LIAContext] Ferramenta iniciada:', payload.toolName);
+      setActiveTool({ name: payload.toolName, args: payload.args });
+    };
+
+    const handleToolExecutionEnd = (payload: any) => {
+      console.log('✅ [LIAContext] Ferramenta finalizada:', payload.toolName);
+      setActiveTool(null);
+    };
+
     // Registrar eventos
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
@@ -1367,6 +1381,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
     socket.on('user-transcript', handleUserTranscript);
     socket.on('audio-ack', handleAudioAck);
     socket.on('file-uploaded', handleFileUploaded);
+    socket.on('whatsapp:tool_execution_start', handleToolExecutionStart);
+    socket.on('whatsapp:tool_execution_end', handleToolExecutionEnd);
 
     // Cleanup
     return () => {
@@ -1379,6 +1395,8 @@ export function LIAProvider({ children }: LIAProviderProps) {
       socket.off('user-transcript', handleUserTranscript);
       socket.off('audio-ack', handleAudioAck);
       socket.off('file-uploaded', handleFileUploaded);
+      socket.off('whatsapp:tool_execution_start', handleToolExecutionStart);
+      socket.off('whatsapp:tool_execution_end', handleToolExecutionEnd);
     };
   }, []); // CRITICAL: Empty deps - handlers use refs internally
 

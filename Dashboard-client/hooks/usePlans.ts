@@ -30,33 +30,35 @@ export interface Plan {
     };
 }
 
-// Fallback plans sincronizados com o site (luminnus.ai/planos)
+// Fallback plans sincronizados com o site (luminnus.ai/planos) — v2.0 USD
 export const fallbackPlans: Plan[] = [
     {
         id: "7c3aed01-3211-4bda-bc6b-4e5a9d828590",
         name: "Start",
-        // Mensal: €29/mês | Anual: €26/mês (-10%, fidelidade 12 meses)
-        price: "€29",
-        annualPrice: "€26",
-        annualTotal: "€313",
-        annualSavings: "€36",
+        // Mensal: $29/mês | Anual: $26/mês (-10%, fidelidade 12 meses)
+        price: "$29",
+        annualPrice: "$26",
+        annualTotal: "$312",
+        annualSavings: "$36",
         period: "/mês",
         description: "Ideal para pequenos negócios e profissionais autônomos",
         features: [
             "1.000 Créditos LIA / mês",
-            "Integração com WhatsApp (1 número)",
-            "Chat online no site (widget simples)",
+            "Chat online no site ( Web Widget)",
+            "Integração com Telegram",
             "Integração com e-mail",
             "Criação de 1 fluxo de automação",
             "Agendamento simples (Google Agenda)",
             "Relatórios básicos de atendimento",
+            "Acesso à LIA via painel (respostas simples)",
+            "CRM de leads integrado",
             "Suporte por e-mail",
             "1 usuário"
         ],
         color: "from-[#22D3EE] to-[#0EA5E9]",
         popular: false,
         discount: 10,
-        liaQuote: "O plano Start é perfeito se você está começando! Com 1.000 créditos por mês, vou cuidar dos seus clientes 24h e liberar seu tempo para crescer. 🚀",
+        liaQuote: "O plano Start é perfeito se você está começando! Com 1.000 créditos por mês, cada visitante do seu site é atendido em segundos. Nunca mais perca um lead! 🚀",
         maxChannels: 1,
         maxConversations: 100,
         maxMessages: 1000,
@@ -64,69 +66,70 @@ export const fallbackPlans: Plan[] = [
         creditHighlights: [
             "~1.000 mensagens/mês",
             "~200 min de voz",
-            "~330 disparos marketing"
+            "~500 qualificações de leads"
         ]
     },
     {
         id: "7c3aed02-3211-4bda-bc6b-4e5a9d828590",
         name: "Plus",
-        // Mensal: €249/mês | Anual: €199/mês (-20%, fidelidade 12 meses)
-        price: "€249",
-        annualPrice: "€199",
-        annualTotal: "€2.390",
-        annualSavings: "€600",
+        // Mensal: $99/mês | Anual: $79/mês (-20%, fidelidade 12 meses)
+        price: "$99",
+        annualPrice: "$79",
+        annualTotal: "$948",
+        annualSavings: "$240",
         period: "/mês",
         description: "Para empresas em crescimento que precisam escalar",
         features: [
-            "12.000 Créditos LIA / mês",
-            "WhatsApp Business (vários números)",
-            "Chat integrado (com histórico)",
+            "5.000 Créditos LIA / mês",
+            "Chat integrado (com histórico completo)",
+            "Telegram + Web Widget",
             "E-mail profissional",
             "Integração com CRM (HubSpot, RD Station, Pipedrive)",
-            "Agenda integrada (Google, Outlook)",
             "Google Sheets / Excel online",
             "10 fluxos de automação customizados",
             "Gatilhos por palavras-chave",
             "Etiquetas automáticas",
-            "Relatórios detalhados",
-            "Suporte prioritário",
-            "Até 3 usuários"
+            "Relatórios detalhados de conversão",
+            "Suporte prioritário 24/7",
+            "Até 3 usuários",
+            "Agenda Google Integrada",
+            "Painel personalizável"
         ],
         color: "from-[#7C3AED] to-[#FF2E9E]",
         popular: true,
         discount: 20,
-        liaQuote: "Esse é o plano que recomendo para quem já tem um fluxo constante de clientes! Com 12.000 créditos, posso atender milhares de mensagens, usar voz e integrar com tudo. 🚀",
+        liaQuote: "Esse é o plano que recomendo para quem já tem um fluxo constante de leads! Com 5.000 créditos, posso atender, qualificar e agendar milhares de visitantes. Conversão na veia! 🚀",
         maxChannels: 5,
         maxConversations: 500,
         maxMessages: 5000,
-        creditosPlano: 12000,
+        creditosPlano: 5000,
         creditHighlights: [
-            "~12.000 mensagens/mês",
-            "~2.400 min de voz",
-            "~4.000 disparos marketing"
+            "~5.000 mensagens/mês",
+            "~1.000 min de voz",
+            "~2.500 qualificações de leads"
         ]
     },
     {
         id: "7c3aed03-3211-4bda-bc6b-4e5a9d828590",
         name: "Pro",
-        // Mensal: €899/mês | Anual: €719/mês (-20%, fidelidade 12 meses)
-        price: "€899",
-        annualPrice: "€719",
-        annualTotal: "€8.630",
-        annualSavings: "€5.400",
+        // Mensal: $249/mês | Anual: $199/mês (-20%, fidelidade 12 meses)
+        price: "$249",
+        annualPrice: "$199",
+        annualTotal: "$2.388",
+        annualSavings: "$600",
         period: "/mês",
-        description: "Solução enterprise totalmente personalizada",
+        description: "Solução customizada para operações intensivas e robustas",
         features: [
-            "40.000 Créditos LIA / mês",
+            "15.000 Créditos LIA / mês",
             "Assistente LIA com personalidade customizável",
             "Construtor visual de fluxos com IA",
-            "Múltiplas instâncias personalizadas da LIA",
-            "Integração com ERP (SAP, Conta Azul, Bling)",
+            "Criação de múltiplas instâncias personalizadas da LIA",
+            "Integração básica com ERP (Conta Azul, Bling)",
+            "Integração por API e Webhooks",
             "Sistemas financeiros e bancários",
             "Ferramentas internas da empresa",
-            "Integração por API e Webhooks",
             "Canais e integrações ilimitados",
-            "Relatórios financeiros inteligentes",
+            "Criação de relatórios financeiros inteligentes",
             "Gestão de equipe com permissões",
             "10+ usuários",
             "Suporte com gestor dedicado",
@@ -135,19 +138,19 @@ export const fallbackPlans: Plan[] = [
         color: "from-[#FF2E9E] to-[#F97316]",
         popular: false,
         discount: 20,
-        liaQuote: "O Pro é para quem quer uma LIA 100% personalizada! Com 40.000 créditos, vou me adaptar ao seu negócio e trabalhar como parte do time. 💎",
+        liaQuote: "O Pro é para quem quer uma LIA 100% personalizada! Com 15.000 créditos, vou me adaptar ao seu negócio e converter cada visitante em cliente. 💎",
         maxChannels: "Ilimitado",
         maxConversations: "Ilimitado",
         maxMessages: "Ilimitado",
-        creditosPlano: 40000,
+        creditosPlano: 15000,
         creditHighlights: [
-            "~40.000 mensagens/mês",
-            "~8.000 min de voz",
-            "~13.300 disparos marketing"
+            "~15.000 mensagens/mês",
+            "~3.000 min de voz",
+            "~7.500 qualificações de leads"
         ],
         customCTA: {
             text: "Solicitar proposta personalizada",
-            action: "https://wa.me/YOUR_WHATSAPP_NUMBER?text=Olá!%20Gostaria%20de%20solicitar%20uma%20proposta%20personalizada%20do%20plano%20Pro"
+            action: "mailto:contato@luminnus.ai?subject=Proposta%20Pro%20Personalizada"
         }
     }
 ];
@@ -190,20 +193,20 @@ function convertPlanFromDB(dbPlan: any): Plan {
         const numAnnual = parsePrice(dbPlan.annual_price);
         if (numAnnual > numericPrice * 2) {
             // annual_price no banco é o total anual
-            displayAnnual = `€${Math.round(numAnnual / 12)}`;
-            annualTotal = `€${numAnnual.toLocaleString('pt-BR')}`;
-            annualSavings = `€${Math.round((numericPrice * 12) - numAnnual)}`;
+            displayAnnual = `$${Math.round(numAnnual / 12)}`;
+            annualTotal = `$${numAnnual.toLocaleString('pt-BR')}`;
+            annualSavings = `$${Math.round((numericPrice * 12) - numAnnual)}`;
         } else {
             // annual_price no banco já é o mensal com desconto
             displayAnnual = dbPlan.annual_price;
-            annualTotal = `€${Math.round(numAnnual * 12).toLocaleString('pt-BR')}`;
-            annualSavings = `€${Math.round((numericPrice - numAnnual) * 12)}`;
+            annualTotal = `$${Math.round(numAnnual * 12).toLocaleString('pt-BR')}`;
+            annualSavings = `$${Math.round((numericPrice - numAnnual) * 12)}`;
         }
     } else {
         const discountedMonthly = Math.round(numericPrice * (1 - discountPct / 100));
-        displayAnnual = `€${discountedMonthly}`;
-        annualTotal = `€${(discountedMonthly * 12).toLocaleString('pt-BR')}`;
-        annualSavings = `€${Math.round((numericPrice - discountedMonthly) * 12)}`;
+        displayAnnual = `$${discountedMonthly}`;
+        annualTotal = `$${(discountedMonthly * 12).toLocaleString('pt-BR')}`;
+        annualSavings = `$${Math.round((numericPrice - discountedMonthly) * 12)}`;
     }
 
     return {

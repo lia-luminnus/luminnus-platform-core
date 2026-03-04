@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { supabase } from '../config/supabase.js';
+import { OpenAIService } from '../services/openAIService.js';
 
 const router: Router = Router();
 
@@ -16,7 +17,44 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
         }
 
         const chatId = body.message.chat.id;
-        const text = body.message.text;
+        let text = body.message.text;
+
+        const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+
+        // Processamento de mensagens de voz
+        if (body.message.voice && TELEGRAM_BOT_TOKEN) {
+            try {
+                const fileId = body.message.voice.file_id;
+                // 1. Obter o path do arquivo
+                const fileReq = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`);
+                if (!fileReq.ok) throw new Error('Falha ao obter file_id do Telegram');
+                const fileRes = await fileReq.json();
+
+                const filePath = fileRes.result.file_path;
+
+                // 2. Fazer download do arquivo de áudio
+                const audioReq = await fetch(`https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`);
+                if (!audioReq.ok) throw new Error('Falha no download do áudio');
+                const arrayBuffer = await audioReq.arrayBuffer();
+                const buffer = Buffer.from(arrayBuffer);
+
+                // 3. Transcrever usando OpenAI Whisper
+                text = await OpenAIService.transcribe(buffer, 'audio.ogg');
+                console.log(`[Telegram Webhook] Áudio transcrito: "${text}"`);
+
+            } catch (err: any) {
+                console.error('[Telegram Webhook] Erro ao processar áudio:', err.message);
+                await sendTelegramMessage(chatId, `⚠️ Erro ao processar sua mensagem de voz. Por favor, tente enviar por texto.`);
+                res.status(200).send('OK');
+                return;
+            }
+        }
+
+        if (!text) {
+            console.log(`[Telegram Webhook] Ignorando mensagem sem texto (ex: figurinhas, fotos sem legenda etc)`);
+            res.status(200).send('OK');
+            return;
+        }
 
         if (text === '/myid') {
             // Reply pointing out their CHAT ID

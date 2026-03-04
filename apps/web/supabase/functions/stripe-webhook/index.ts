@@ -93,6 +93,8 @@ async function sendWelcomeEmail(
         return false;
     }
 
+    const resendFrom = Deno.env.get("RESEND_FROM") || "Luminnus <lia@luminnus.ai>";
+
     const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -141,7 +143,7 @@ async function sendWelcomeEmail(
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                from: "Luminnus <lia@luminnus.ai>",
+                from: resendFrom,
                 to: [email],
                 subject: "Bem-vindo à Luminnus — seu acesso à LIA está liberado",
                 html: htmlContent,

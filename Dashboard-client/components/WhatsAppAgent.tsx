@@ -17,7 +17,8 @@ import { LIAProvider } from './lia/LIAContext';
 type ChannelType = 'whatsapp' | 'telegram' | 'web_widget';
 
 const CHANNEL_OPTIONS: { id: ChannelType; label: string; icon: string; color: string }[] = [
-    { id: 'whatsapp', label: 'WhatsApp', icon: '📱', color: 'from-green-500 to-green-600' },
+    // WhatsApp oculto no lançamento
+    // { id: 'whatsapp', label: 'WhatsApp', icon: '📱', color: 'from-green-500 to-green-600' },
     { id: 'telegram', label: 'Telegram', icon: '✈️', color: 'from-blue-400 to-blue-500' },
     { id: 'web_widget', label: 'Web Widget', icon: '🌐', color: 'from-purple-500 to-purple-600' }
 ];
@@ -25,7 +26,7 @@ const WhatsAppAgentContent: React.FC = () => {
     const { t } = useContext(LanguageContext);
     const { user, isAdmin, profile } = useDashboardAuth();
     const [activeTab, setActiveTab] = useState<'config' | 'inbox' | 'summaries' | 'kanban' | 'audio' | 'briefings'>('config');
-    const [activeChannel, setActiveChannel] = useState<ChannelType>('whatsapp');
+    const [activeChannel, setActiveChannel] = useState<ChannelType>('telegram');
     const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
     const [notification, setNotification] = useState<{ message: string, type: 'success' | 'info' | 'error' } | null>(null);
     const [status, setStatus] = useState<any>(null);
@@ -240,8 +241,8 @@ const WhatsAppAgentContent: React.FC = () => {
                                 setActiveTab('config');
                             }}
                             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 ${isActive
-                                    ? `bg-gradient-to-r ${ch.color} text-white shadow-lg scale-105`
-                                    : 'bg-gray-100 dark:bg-white/5 text-gray-500 hover:text-gray-800 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10'
+                                ? `bg-gradient-to-r ${ch.color} text-white shadow-lg scale-105`
+                                : 'bg-gray-100 dark:bg-white/5 text-gray-500 hover:text-gray-800 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10'
                                 }`}
                         >
                             <span className="text-sm">{ch.icon}</span>

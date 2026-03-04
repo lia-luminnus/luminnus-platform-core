@@ -34,14 +34,16 @@ export const AUDIT_ACTIONS = {
     LIA_TOOL_INVOKE: 'lia.tool_invoke'
 } as const;
 
-// Feature flags per plan
+// Feature flags per plan (v2.0 — sem WhatsApp, foco leads)
 export const PLAN_FEATURES = {
-    [PLAN_IDS.START]: ['chat', 'basic_calendar'],
-    [PLAN_IDS.PLUS]: ['chat', 'multimodal', 'files', 'calendar', 'reports'],
+    [PLAN_IDS.START]: ['chat', 'web_widget', 'telegram', 'crm', 'basic_calendar'],
+    [PLAN_IDS.PLUS]: ['chat', 'web_widget', 'telegram', 'crm', 'multimodal', 'files', 'calendar', 'reports', 'automations'],
     [PLAN_IDS.PRO]: [
-        'chat', 'multimodal', 'live',
+        'chat', 'web_widget', 'telegram', 'crm',
+        'multimodal', 'live',
         'files', 'calendar', 'reports',
-        'automations', 'advanced_reports', 'api_access'
+        'automations', 'advanced_reports', 'api_access',
+        'team', 'financial'
     ]
 } as const;
 

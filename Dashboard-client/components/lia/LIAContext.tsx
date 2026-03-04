@@ -18,7 +18,7 @@ import { detectDashboardIntent } from './services/liaIntentDetector';
 // v8.2: LOCAL ANSWER SERVICE - Import estático para interceptação síncrona
 import { tryLocalAnswer, isLocalQuery } from './services/localAnswerService';
 // v9.0: INTENT ROUTER & RESPONSE GATE - SSOT Protocol Enforcement
-import { classifyIntent, detectAttachmentType, getIncidentTemplateInstruction, getHybridTemplateInstruction, IntentMode, ContextScope, QuickAction } from './services/intentRouter';
+import { classifyIntent, detectAttachmentType, IntentMode, ContextScope, QuickAction } from './services/intentRouter';
 import { validateResponse, suggestQuickActions, recordTelemetry } from './services/responseGate';
 // Toast notifications
 import toast from 'react-hot-toast';
@@ -969,10 +969,6 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
         let messageToSocket = text;
         if (intentOutput.mode === 'A' || intentOutput.mode === 'C') {
-            const instruction = intentOutput.mode === 'A'
-                ? getIncidentTemplateInstruction()
-                : getHybridTemplateInstruction();
-            messageToSocket = `${text}\n\n[SISTEMA: PROTOCOLO DE LEITURA DE ARQUIVO ATIVADO]\n${instruction}`;
             console.log(`🛡️ [IntentRouter] Mode ${intentOutput.mode} ativado para ${scopeKey}`);
         }
 
@@ -2098,10 +2094,6 @@ export function LIAProvider({ children }: LIAProviderProps) {
 
             let finalPrompt = prompt;
             if (intentOutput.mode === 'A' || intentOutput.mode === 'C') {
-                const instruction = intentOutput.mode === 'A'
-                    ? getIncidentTemplateInstruction()
-                    : getHybridTemplateInstruction();
-                finalPrompt = `${instruction}\n\n=== PEDIDO DO USUÁRIO ===\n${prompt}`;
                 console.log(`🛡️ [IntentRouter] Mode ${intentOutput.mode} (Vision) ativado para ${scopeKey}`);
             }
 

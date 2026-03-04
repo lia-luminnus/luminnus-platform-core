@@ -39,13 +39,6 @@ const GOOGLE_SCOPES: Record<string, string[]> = {
     docs: [
         'https://www.googleapis.com/auth/documents',
         'https://www.googleapis.com/auth/documents.readonly'
-    ],
-    slides: [
-        'https://www.googleapis.com/auth/presentations',
-        'https://www.googleapis.com/auth/presentations.readonly'
-    ],
-    maps: [
-        'https://www.googleapis.com/auth/userinfo.profile'
     ]
 };
 
@@ -108,7 +101,7 @@ router.get('/google', async (req: Request, res: Response) => {
         authUrl.searchParams.set('response_type', 'code');
         authUrl.searchParams.set('scope', Array.from(scopes).join(' '));
         authUrl.searchParams.set('access_type', 'offline');
-        authUrl.searchParams.set('prompt', 'consent');
+        authUrl.searchParams.set('prompt', 'consent select_account');
         authUrl.searchParams.set('state', state);
 
         console.log(`[OAuth Google] Iniciando fluxo para serviços: ${selectedServices.join(', ')}`);

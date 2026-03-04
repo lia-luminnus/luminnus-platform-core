@@ -259,14 +259,38 @@ export class ToolService {
             },
             {
                 name: 'updateGoogleSheet',
-                description: 'Edita uma planilha EXISTENTE.',
+                description: `Edita uma planilha EXISTENTE no Google Sheets. Use para adicionar dados, formatar, inserir fórmulas, ou criar novas abas.
+Se o spreadsheetId não for fornecido, usa automaticamente a última planilha criada.
+Operações disponíveis: addSheet (nova aba), updateRange (editar células), addFormula (inserir fórmula), formatRange (negrito/moeda/cor), freezeRows (congelar linhas).`,
                 parameters: {
                     type: 'object',
                     properties: {
-                        spreadsheetId: { type: 'string' },
-                        operations: { type: 'array', items: { type: 'object' } }
+                        spreadsheetId: { type: 'string', description: 'ID da planilha (ex: 1k0lgxHV26U3...). OBRIGATÓRIO: Tente extrair esse ID dos links "https://docs.google.com/spreadsheets/d/..." que estão no histórico do chat. Se vazio, o sistema tentará usar a última criada na memória.' },
+                        operations: {
+                            type: 'array',
+                            description: 'Lista de operações para aplicar na planilha.',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    addSheet: { type: 'object', properties: { title: { type: 'string' } }, description: 'Adicionar nova aba' },
+                                    updateRange: { type: 'object', properties: { range: { type: 'string', description: 'Ex: Página1!A1:C5' }, values: { type: 'array', items: { type: 'array', items: { type: 'string' } } } }, description: 'Atualizar células' },
+                                    addFormula: { type: 'object', properties: { range: { type: 'string' }, formula: { type: 'string', description: 'Ex: =SUM(B2:B10)' } }, description: 'Inserir fórmula' },
+                                    formatRange: { type: 'object', properties: { range: { type: 'string' }, format: { type: 'string', enum: ['bold', 'currency', 'date', 'color'] }, color: { type: 'string', description: 'Hex color ex: #FF0000' } }, description: 'Formatar células' },
+                                    freezeRows: { type: 'number', description: 'Congelar N primeiras linhas' },
+                                    addChart: {
+                                        type: 'object',
+                                        properties: {
+                                            title: { type: 'string' },
+                                            type: { type: 'string', enum: ['PIE', 'LINE', 'COLUMN'] },
+                                            sourceRange: { type: 'string', description: 'Ex: Página1!A1:B10' }
+                                        },
+                                        description: 'Adicionar gráfico'
+                                    }
+                                }
+                            }
+                        }
                     },
-                    required: ['spreadsheetId', 'operations']
+                    required: ['operations']
                 }
             },
             {
@@ -385,6 +409,20 @@ REGRAS:
                         description: {
                             type: 'string',
                             description: 'Detalhes completos e tópicos a lembrar. Use bullets (•) para listar.'
+                        },
+                        // v18.0: Parâmetros para multi-turnos (evitar perda de contexto)
+                        attendees: {
+                            type: 'array',
+                            items: { type: 'string' },
+                            description: 'Lista de e-mails dos convidados para a reunião. OBRIGATÓRIO se o usuário mencionou com quem vai reunir.'
+                        },
+                        createMeet: {
+                            type: 'boolean',
+                            description: 'Defina como true SE o usuário pediu link do Meet/chamada/vídeo.'
+                        },
+                        emailTo: {
+                            type: 'string',
+                            description: 'E-mail do destinatário caso o usuário tenha pedido para enviar um e-mail confirmando o agendamento.'
                         }
                     },
                     required: ['title', 'start', 'end']
@@ -490,6 +528,35 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                     },
                     required: ['fileId']
                 }
+            },
+            {
+                name: 'searchFiles',
+                description: 'Pesquisa arquivos enviados pelo usuário (fotos, documentos, recibos) por data, nome ou categoria.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        query: { type: 'string', description: 'Termo para buscar no nome do arquivo (opcional).' },
+                        startDate: { type: 'string', description: 'Data inicial (ISO String, ex: "2026-01-01T00:00:00Z").' },
+                        endDate: { type: 'string', description: 'Data final (ISO String).' },
+                        category: { type: 'string', enum: ['all', 'images', 'documents', 'spreadsheets', 'presentations'], default: 'all' },
+                        limit: { type: 'number', description: 'Número máximo de arquivos (padrão 50).' }
+                    }
+                }
+            },
+            {
+                name: 'getFinancialRecords',
+                description: 'Recupera dados financeiros (despesas, receitas, recibos processados) do usuário armazenados na memória.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        period: { type: 'string', enum: ['this_week', 'this_month', 'last_month', 'this_year', 'all'], default: 'this_month' }
+                    }
+                }
+            },
+            {
+                name: 'getProactiveInsights',
+                description: 'Analisa dados financeiros, CRM e atividade do usuário para gerar alertas e sugestões proativas sobre o negócio. Use no início de conversas ou quando o usuário perguntar sobre visão geral.',
+                parameters: { type: 'object', properties: {} }
             },
             {
                 name: 'getSystemHealth',
@@ -1006,19 +1073,23 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                     const fullPrompt = context.userPrompt || '';
 
                     // Detectar intenção de envio de email junto com agendamento
-                    const shouldSendEmail = /\b(enviar|mandar|enviar e-?mail|enviar email|enviar convite|mandar e-?mail|mandar email|mandar convite)\b/i.test(fullPrompt);
+                    // v18.0: Usar intenção da IA preferencialmente
+                    const aiWantsEmail = !!args.emailTo;
+                    const regexWantsEmail = /\b(enviar|mandar|enviar e-?mail|enviar email|enviar convite|mandar e-?mail|mandar email|mandar convite)\b/i.test(fullPrompt);
+                    const shouldSendEmail = aiWantsEmail || regexWantsEmail;
 
                     // Extrair destinatário do prompt se mencionado
                     let emailRecipient: string | null = null;
                     if (shouldSendEmail) {
-                        // Tentar extrair email do prompt (formato: "para email@exemplo.com" ou "para email@exemplo.com")
-                        const emailMatch = fullPrompt.match(/\b(?:para|to|enviar para|mandar para)\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/i);
-                        if (emailMatch) {
-                            emailRecipient = emailMatch[1];
-                        }
-                        // Se não encontrou email explícito, tentar extrair do args se disponível
-                        if (!emailRecipient && args.emailTo) {
+                        // Se a IA forneceu o destino com base no contexto histórico, esse é o SSOT
+                        if (args.emailTo) {
                             emailRecipient = args.emailTo;
+                        } else {
+                            // Fallback para extração manual apenas no último prompt
+                            const emailMatch = fullPrompt.match(/\b(?:para|to|enviar para|mandar para)\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/i);
+                            if (emailMatch) {
+                                emailRecipient = emailMatch[1];
+                            }
                         }
                     }
 
@@ -1062,13 +1133,17 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                         }
                     }
 
-                    // v16.3: Toggles de Meet link (Desligado por padrão, exceto se solicitado)
-                    // Ativa se o usuário explicitamente mencionar reunion/meet/chamada ou enviar e-mail
-                    const wantsMeet = /\b(meet|reuniã?o|chamada|vídeo|videochamada)\b/i.test(fullPrompt) || shouldSendEmail;
-                    const explicitlyNoMeet = /\b(sem link|sem meet|não precisa de link)\b/i.test(prompt);
-                    const createMeet = wantsMeet && !explicitlyNoMeet;
+                    // v16.3 / v18.0: Toggles de Meet link 
+                    // Se a IA ativou o createMeet através da ferramenta (porque viu no histórico), use.
+                    // Senão, use fallback de regex.
+                    let createMeet = args.createMeet === true;
+                    if (!createMeet) {
+                        const wantsMeetRegex = /\b(meet|reuniã?o|chamada|vídeo|videochamada)\b/i.test(fullPrompt) || shouldSendEmail;
+                        const explicitlyNoMeetRegex = /\b(sem link|sem meet|não precisa de link)\b/i.test(prompt);
+                        createMeet = wantsMeetRegex && !explicitlyNoMeetRegex;
+                    }
 
-                    // v16.4: Guardrail Rigoroso de Ano (Evita hallucinations de 2024/2028 se estamos em 2026)
+                    // v16.4: Guardrail Rigoroso de Ano
                     const now = new Date();
                     const currentYear = now.getFullYear();
                     const forceStart = new Date(args.start);
@@ -1082,6 +1157,17 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                         args.end = forceEnd.toISOString();
                     }
 
+                    // v18.0: Suporte a Arrays no attendees ou string separada por vírgula
+                    let parsedAttendees: string[] = [];
+                    if (Array.isArray(args.attendees)) {
+                        parsedAttendees = args.attendees;
+                    } else if (typeof args.attendees === 'string') {
+                        parsedAttendees = args.attendees.split(',').map((e: string) => e.trim());
+                    } else if (emailRecipient) {
+                        // Se vai mandar e-mail de aviso, garante que o cara tá convidado no Calendar tb
+                        parsedAttendees = [emailRecipient];
+                    }
+
                     console.log(`📅 [ToolService] createCalendarEvent args:`, JSON.stringify(args, null, 2));
                     const result = await GoogleWorkspaceTools.createCalendarEvent(
                         userId,
@@ -1092,7 +1178,8 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                         args.description,
                         args.forceCreate || false,
                         reminders,
-                        createMeet
+                        createMeet,
+                        parsedAttendees
                     );
 
                     // Se evento foi criado com sucesso E usuário pediu para enviar email, enviar automaticamente
@@ -1574,6 +1661,76 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                     const manifest = SnapshotService.getProductManifest();
                     return { success: true, message: "Manifesto do produto obtido com sucesso.", manifest };
                 }
+
+                // ========== FILE & FINANCIAL TOOLS ==========
+                case 'analyzeFile': {
+                    const { fileService } = await import('./fileService.js');
+                    const analysis = await fileService.getFileAnalysis(args.fileId);
+                    return { success: true, data: analysis };
+                }
+                case 'searchFiles': {
+                    const { fileService } = await import('./fileService.js');
+                    const files = await fileService.searchFiles(tenantId, {
+                        query: args.query,
+                        startDate: args.startDate,
+                        endDate: args.endDate,
+                        category: args.category,
+                        limit: args.limit
+                    });
+                    return { success: true, count: files.length, data: files };
+                }
+                case 'getFinancialRecords': {
+                    // Busca as memórias importantes que sejam da categoria financial_expense ou related
+                    const { supabase } = await import('../config/supabase.js');
+                    if (!supabase) return { error: 'Supabase não inicializado' };
+
+                    // Definindo a janela de tempo baseada no período
+                    const now = new Date();
+                    let startDate = new Date(0); // all
+
+                    if (args.period === 'this_week') {
+                        startDate = new Date(now);
+                        startDate.setDate(now.getDate() - now.getDay());
+                    } else if (args.period === 'this_month') {
+                        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                    } else if (args.period === 'last_month') {
+                        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                        now.setDate(0); // Último dia do mês passado
+                    } else if (args.period === 'this_year') {
+                        startDate = new Date(now.getFullYear(), 0, 1);
+                    }
+
+                    const { data, error } = await supabase
+                        .from('long_term_memory')
+                        .select('key, value, created_at, category')
+                        .eq('user_id', userId)
+                        .gte('created_at', startDate.toISOString())
+                        .lte('created_at', now.toISOString())
+                        .in('category', ['financial_expense', 'financial_income', 'finance', 'work'])
+                        .order('created_at', { ascending: false });
+
+                    if (error) {
+                        return { success: false, error: 'Falha ao buscar registros financeiros.' };
+                    }
+
+                    // Tentar filtrar os que realmente se parecem com registros financeiros e parsear
+                    const records = (data || []).map(row => {
+                        let parsedValue = row.value;
+                        try {
+                            if (typeof row.value === 'string') parsedValue = JSON.parse(row.value);
+                        } catch (e) { }
+                        return { ...row, value: parsedValue };
+                    });
+
+                    return { success: true, count: records.length, data: records };
+                }
+                case 'getProactiveInsights': {
+                    const { ProactiveInsightsService } = await import('./proactiveInsightsService.js');
+                    const insights = await ProactiveInsightsService.analyzeForUser(userId, tenantId);
+                    const formatted = ProactiveInsightsService.formatForChat(insights);
+                    return { success: true, count: insights.length, insights, formatted };
+                }
+
                 default:
                     return { error: `Ferramenta ${name} não encontrada.` };
             }

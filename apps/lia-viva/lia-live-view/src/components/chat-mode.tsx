@@ -58,6 +58,8 @@ export function ChatMode() {
     createConversation,
     // Estados por escopo
     typingByScope,
+    // Real-Time Tool Execution State
+    activeTool,
   } = useLIA()
 
   // Gerenciamento de conversa Chat isolada
@@ -147,7 +149,21 @@ export function ChatMode() {
   // Logic for phased thinking text (Thinking -> Generating)
   const [phasedThinkingText, setPhasedThinkingText] = useState("Lia Pensando...")
   useEffect(() => {
-    if (isTyping) {
+    if (activeTool) {
+      // Mapa amigável de ferramentas
+      const toolNames: Record<string, string> = {
+        'createGoogleSheet': 'Gerando Google Sheets...',
+        'createGoogleDoc': 'Gerando Google Docs...',
+        'createGoogleSlide': 'Gerando Google Slides...',
+        'sendGmail': 'Enviando email...',
+        'searchGmail': 'Olhando seus emails...',
+        'createCalendarEvent': 'Agendando evento...',
+        'dashboardGetSnapshot': 'Buscando dados da conta...',
+        'dashboardExtractInfo': 'Analisando dados...'
+      };
+      const friendlyName = toolNames[activeTool.name] || `Executando ${activeTool.name}...`;
+      setPhasedThinkingText(friendlyName);
+    } else if (isTyping) {
       setPhasedThinkingText("Lia Pensando...")
       const timer = setTimeout(() => {
         setPhasedThinkingText("Lia Gerando...")
@@ -157,7 +173,7 @@ export function ChatMode() {
       // Reset when not typing
       setPhasedThinkingText("Lia Pensando...")
     }
-  }, [isTyping])
+  }, [isTyping, activeTool])
 
   // Scroll to bottom when messages change
   useEffect(() => {

@@ -554,19 +554,23 @@ Detectei que você quer **${effectiveRequest.action.replace('_', ' ')}**. Esta e
      * Patterns: análise de dados, JSON, planilhas, documentos, raciocínio longo
      */
     private static isComplexTask(prompt: string): boolean {
-        const complexPatterns = [
-            /(?:analis[ae]|extrair?|processar?)\s+(?:dados|documento|planilha|tabela)/i,
-            /(?:gerar?|criar?)\s+(?:json|csv|xlsx|relatório|planilha)/i,
-            /(?:organizar?|estruturar?)\s+(?:dados|informações)/i,
-            /(?:comparar?|cruzar?)\s+(?:dados|documentos|planilhas)/i,
-            /(?:resumir?|sintetizar?)\s+(?:documento|contrato|relatório)\s+(?:longo|extenso|grande)/i,
+        const lower = prompt.toLowerCase();
+        const keywords = [
+            'balanço', 'planilha', 'sheet', 'sheets', 'slides', 'slide',
+            'google docs', 'google sheets', 'google slides', 'google drive',
+            'relatório', 'spreadsheet', 'apresentação', 'documento'
         ];
-        return complexPatterns.some(p => p.test(prompt));
+        if (keywords.some(k => lower.includes(k))) return true;
+        if (/(?:gerar|criar|montar|fazer|analisar|extrair|processar|organizar|estruturar|comparar|cruzar)\s/i.test(prompt)) {
+            const targets = ['json', 'csv', 'xlsx', 'dados', 'tabela', 'doc'];
+            if (targets.some(t => lower.includes(t))) return true;
+        }
+        return false;
     }
 
     /**
      * Pipeline MiniMax 2.5 (tarefas complexas via OpenRouter)
-     * Ideal para: análise de documentos, extração JSON, raciocínio longo
+     * Ideal para: analise de documentos, extracao JSON, raciocinio longo
      */
     private static async complexTaskPipeline(req: AIRequest): Promise<AIResponse> {
         console.log('[AIRouter] Pipeline Complexo: MiniMax 2.5 via OpenRouter');
@@ -615,3 +619,4 @@ Detectei que você quer **${effectiveRequest.action.replace('_', ' ')}**. Esta e
         }
     }
 }
+

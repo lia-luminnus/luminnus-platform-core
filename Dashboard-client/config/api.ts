@@ -29,7 +29,7 @@ export function getApiUrl(): string {
 
     // 2. Fallback APENAS para desenvolvimento local
     if (isLocalhost) {
-        return 'http://127.0.0.1:3006';
+        return 'http://localhost:3006';
     }
 
     // 3. ERRO CRÍTICO: produção sem config

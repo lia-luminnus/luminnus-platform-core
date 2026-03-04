@@ -16,15 +16,18 @@ export class GoogleService {
         // 1. Fetch tokens from integrations_connections table
         console.log(`🔍 [GoogleService] Buscando conexão para user: ${userId} (tenant: ${tenantId})`);
 
-        const { data, error } = await (supabase as any)
+        const { data: rows, error } = await (supabase as any)
             .from('integrations_connections')
             .select('*')
             .eq('user_id', userId)
             .eq('provider', 'google_workspace')
-            .single();
+            .order('updated_at', { ascending: false })
+            .limit(1);
+
+        const data = rows && rows.length > 0 ? rows[0] : null;
 
         if (data) {
-            console.log(`✅ [GoogleService] Conexão encontrada para ${userId}`);
+            console.log(`✅ [GoogleService] Conexão encontrada para ${userId} (Tenant da conexão: ${data.tenant_id})`);
         }
 
         if (error) {

@@ -322,7 +322,72 @@ export function setupVisionRoutes(app: Express) {
                 }
             }
 
-            // 4. Persistir mensagens no Banco de Dados
+            // 4. Structured Financial Extraction (v19.0)
+            // Se o arquivo parece ser um recibo, nota fiscal ou comprovante, extrair dados estruturados
+            try {
+                const financialFilePatterns = /recibo|nota\s*fiscal|comprovante|invoice|receipt|boleto|cupom|fatura|nf-?e?|danfe/i;
+                const isFinancialFile = files.some(f => financialFilePatterns.test(f.originalname)) ||
+                    financialFilePatterns.test(userPrompt) ||
+                    /abastec|combust|gasolina|diesel|etanol|posto|pagamento|compra|despesa/i.test(userPrompt);
+
+                const isImageOrPdf = files.some(f => f.mimetype.startsWith('image/') || f.mimetype === 'application/pdf');
+
+                if (isFinancialFile && isImageOrPdf && result?.text) {
+                    console.log('💰 [Vision] Detectado documento financeiro - extraindo dados estruturados...');
+
+                    const extractionPrompt = `Analise o seguinte texto que foi extraído de um documento financeiro (recibo, nota fiscal, comprovante, etc).
+Extraia os dados estruturados em JSON. Se algum campo não for encontrado, use null.
+
+TEXTO DA ANÁLISE:
+${result.text}
+
+RETORNE APENAS JSON VÁLIDO neste formato:
+{
+  "type": "expense" ou "income",
+  "value": 123.45,
+  "currency": "BRL",
+  "date": "2026-03-04",
+  "category": "combustivel|alimentacao|transporte|servicos|material|saude|educacao|outros",
+  "vendor": "Nome do estabelecimento",
+  "description": "Descrição breve da transação",
+  "items": [{"name": "item", "qty": 1, "price": 10.00}]
+}`;
+
+                    try {
+                        const { OpenAIService } = await import('../services/openAIService.js');
+                        const extractionResult = await OpenAIService.chat(extractionPrompt, [], 'gpt-4o-mini');
+                        const extractedText = extractionResult?.text || '';
+
+                        // Parsear o JSON da resposta
+                        const jsonMatch = extractedText.match(/\{[\s\S]*\}/);
+                        if (jsonMatch) {
+                            const financialData = JSON.parse(jsonMatch[0]);
+
+                            if (financialData.value && financialData.value > 0) {
+                                const { saveMemory } = await import('../config/supabase.js');
+                                const memoryKey = `financial_${financialData.type || 'expense'}_${Date.now()}`;
+                                const memoryValue = JSON.stringify({
+                                    ...financialData,
+                                    source_file: files[0]?.originalname,
+                                    extracted_at: new Date().toISOString()
+                                });
+
+                                await saveMemory(userId, memoryKey, memoryValue, true);
+                                console.log(`✅ [Vision] Dados financeiros salvos: ${memoryKey} = R$${financialData.value}`);
+
+                                // Enriquecer a resposta da LIA com confirmação
+                                result.text += `\n\n💰 **Registro financeiro salvo automaticamente:**\n- Valor: R$ ${financialData.value?.toFixed(2)}\n- Categoria: ${financialData.category || 'outros'}\n- Estabelecimento: ${financialData.vendor || 'N/A'}\n\n_Você pode me pedir um relatório financeiro a qualquer momento._`;
+                            }
+                        }
+                    } catch (extractError: any) {
+                        console.warn('⚠️ [Vision] Falha na extração financeira estruturada:', extractError.message);
+                    }
+                }
+            } catch (financialDetectError: any) {
+                console.warn('⚠️ [Vision] Erro na detecção de documento financeiro:', financialDetectError.message);
+            }
+
+            // 5. Persistir mensagens no Banco de Dados
             const conversationId = req.body.conversationId;
             let messageId = req.body.messageId;
             const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

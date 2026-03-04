@@ -33,8 +33,6 @@ const GOOGLE_SERVICES: GoogleService[] = [
   { id: 'drive', name: 'Drive', icon: <Folder className="w-4 h-4 text-yellow-500" />, description: 'Arquivos' },
   { id: 'sheets', name: 'Sheets', icon: <FileText className="w-4 h-4 text-green-600" />, description: 'Planilhas' },
   { id: 'docs', name: 'Docs', icon: <FileText className="w-4 h-4 text-blue-600" />, description: 'Documentos' },
-  { id: 'slides', name: 'Slides', icon: <Globe className="w-4 h-4 text-orange-500" />, description: 'Apresentações' },
-  { id: 'maps', name: 'Maps', icon: <Map className="w-4 h-4 text-green-500" />, description: 'Rotas' },
 ];
 
 interface IntegrationDef {
@@ -53,16 +51,17 @@ const INTEGRATIONS: IntegrationDef[] = [
   {
     id: 'google_workspace',
     name: 'Google Workspace',
-    description: 'Gmail, Calendar, Meet, Drive, Sheets, Docs, Slides e Maps em uma única conexão',
+    description: 'Gmail, Calendar, Meet, Drive, Sheets e Docs em uma única conexão',
     icon: <span className="text-blue-500 font-black">G</span>,
     category: 'productivity',
     planRequired: 'start',
-    permissions: ['Gmail', 'Calendar', 'Meet', 'Drive', 'Sheets', 'Docs', 'Slides', 'Maps'],
+    permissions: ['Gmail', 'Calendar', 'Meet', 'Drive', 'Sheets', 'Docs'],
     isComposite: true
   },
 
   // === COMUNICAÇÃO ===
-  { id: 'whatsapp', name: 'WhatsApp Business', description: 'Atendimento automático via WhatsApp', icon: <MessageCircle className="text-green-500" />, category: 'communication', planRequired: 'start', permissions: ['Enviar mensagens', 'Ler conversas'] },
+  // WhatsApp oculto no lançamento
+  // { id: 'whatsapp', name: 'WhatsApp Business', description: 'Atendimento automático via WhatsApp', icon: <MessageCircle className="text-green-500" />, category: 'communication', planRequired: 'start', permissions: ['Enviar mensagens', 'Ler conversas'] },
   { id: 'slack', name: 'Slack', description: 'Integrar canais e notificações', icon: <Briefcase className="text-indigo-400" />, category: 'communication', planRequired: 'plus', permissions: ['Enviar mensagens', 'Ler canais'] },
   { id: 'telegram', name: 'Telegram Bot', description: 'Automatizar respostas no Telegram', icon: <Rocket className="text-blue-400" />, category: 'communication', planRequired: 'plus', permissions: ['Enviar mensagens', 'Receber comandos'] },
   { id: 'discord', name: 'Discord', description: 'Integrar servidores e bots', icon: <Gamepad2 className="text-indigo-500" />, category: 'communication', planRequired: 'plus', permissions: ['Enviar mensagens', 'Gerenciar canais'] },
@@ -240,10 +239,11 @@ const AdminIntegrations = ({ onSectionChange }: AdminIntegrationsProps) => {
     toast.loading('Redirecionando para Google...', { id: 'google-oauth' });
     try {
       // IMPORTANTE: O redirect_uri deve corresponder EXATAMENTE ao configurado no Google Cloud Console
-      // Google Cloud Console está configurado com: http://localhost:3000/api/auth/google/callback
-      const callbackUrl = apiUrl('/api/auth/google/callback');
+      // Usaremos a origem exata para alinhar ao que o Google espera dinamicamente.
+      const redirectUriExact = window.location.origin + '/api/auth/google/callback';
+      const redirect_to = window.location.origin + window.location.hash; // Voltar para onde estava
       const response = await fetch(
-        apiUrl(`/api/auth/google?services=${selectedGoogleServices.join(',')}&user_id=${user?.id}&redirect_uri=${encodeURIComponent(callbackUrl)}`)
+        apiUrl(`/api/auth/google?services=${selectedGoogleServices.join(',')}&user_id=${user?.id}&redirect_to=${encodeURIComponent(redirect_to)}&redirect_uri=${encodeURIComponent(redirectUriExact)}`)
       );
       if (!response.ok) throw new Error('Falha ao obter URL de autenticação');
       const data = await response.json();

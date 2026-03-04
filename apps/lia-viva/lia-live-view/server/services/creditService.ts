@@ -26,11 +26,11 @@ export const MODEL_MULTIPLIERS: Record<string, number> = {
     'default': 1.0,               // Fallback
 };
 
-// Plan credit allocations
+// Plan credit allocations (v2.0 — sem WhatsApp, dolarizado)
 export const PLAN_CREDITS: Record<string, number> = {
-    start: 1500,
-    plus: 12000,
-    pro: 40000,
+    start: 1000,
+    plus: 5000,
+    pro: 15000,
 };
 
 export interface CreditResult {

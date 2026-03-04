@@ -305,7 +305,7 @@ export const SubscriptionGate: React.FC<SubscriptionGateProps> = ({ children }) 
     if (!hasAccess) {
         const isProd = import.meta.env.PROD;
         const landingBase = import.meta.env.VITE_LANDING_PAGE_URL || (isProd ? 'https://luminnus.ai' : 'http://localhost:8080');
-        const pricingUrl = landingBase + '/pricing';
+        const pricingUrl = landingBase + '/planos';
 
         const signOut = async () => {
             await supabase.auth.signOut();

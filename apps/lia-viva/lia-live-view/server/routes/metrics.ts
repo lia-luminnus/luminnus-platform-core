@@ -115,29 +115,12 @@ router.get('/query', async (req, res) => {
 
     console.log(`🔍 [Metrics] Query recebida: tenant=${tId}, metric=${mKey}, type=${qType}`);
 
-    // Helper: Generate random number in range
-    const rand = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
-    const randFloat = (min: number, max: number) => parseFloat((Math.random() * (max - min) + min).toFixed(2));
-
     let data: any;
 
     switch (qType) {
       case 'alerts': {
-        // Alertas de anomalias e urgências (formato DashboardRenderer)
-        data = [
-          {
-            alert_type: 'error',
-            alert_message: 'Detetei uma queda brusca no checkout hoje (23%).',
-            alert_timestamp: new Date().toISOString(),
-            alert_metadata: { source: 'anomaly', priority: 'high' }
-          },
-          {
-            alert_type: 'warning',
-            alert_message: '3 novos leads do WhatsApp não foram respondidos há mais de 1h.',
-            alert_timestamp: new Date().toISOString(),
-            alert_metadata: { source: 'crm', priority: 'medium' }
-          }
-        ];
+        // Sem alertas para contas novas (ou buscar real do DB depois)
+        data = [];
         break;
       }
 
@@ -171,82 +154,46 @@ router.get('/query', async (req, res) => {
           });
         }
 
-        // Sugestão fallback se não houver nada real
-        if (suggestions.length === 0) {
-          suggestions.push({
-            type: 'insight',
-            title: 'Resumo da análise diária pronto!',
-            description: 'Seu faturamento cresceu 15% em relação à semana passada.',
-            priority: 'medium'
-          });
-        }
-
         data = suggestions;
         break;
       }
 
       case 'kpi':
-        // Frontend (KPICard.tsx) expects: current_value, previous_value, change_percent, trend
         data = [
           {
             metric_key: mKey,
-            current_value: randFloat(20000, 80000),
-            previous_value: randFloat(15000, 70000),
-            change_percent: randFloat(-10, 30),
-            trend: Math.random() > 0.3 ? 'up' : 'down',
+            current_value: 0,
+            previous_value: 0,
+            change_percent: 0,
+            trend: 'up',
             label: mKey
           }
         ];
         break;
 
       case 'breakdown':
-        // Frontend (DonutBreakdown.tsx) expects: Array of { name, value } or { dimension_value, value }
-        data = [
-          { name: 'Produtos', value: rand(5000, 15000) },
-          { name: 'Serviços', value: rand(3000, 10000) },
-          { name: 'Consultoria', value: rand(2000, 7000) },
-          { name: 'Eventos', value: rand(1000, 5000) }
-        ];
+        data = [];
         break;
 
       case 'funnel':
-        // Frontend (Funnel.tsx) expects: stage, value
-        data = [
-          { stage: 'Visitantes', value: 1000 },
-          { stage: 'Leads', value: 300 },
-          { stage: 'MQLs', value: 150 },
-          { stage: 'Oportunidades', value: 60 },
-          { stage: 'Vendas', value: 25 }
-        ];
+        data = [];
         break;
 
       case 'table':
-        // Frontend (TableTransactions.tsx) expects: TransactionRow { id, data: { date, description, type, category, amount } }
-        data = [1, 2, 3, 4, 5].map(i => ({
-          id: `tx-${i}`,
-          data: {
-            date: new Date(Date.now() - i * 86400000).toISOString(),
-            description: `Transação Mock #${i}`,
-            type: Math.random() > 0.5 ? 'in' : 'out',
-            category: 'vendas',
-            amount: randFloat(100, 2000)
-          },
-          created_at: new Date().toISOString()
-        }));
+        data = [];
         break;
 
       case 'timeseries':
       default:
-        // Frontend (LineTimeseries.tsx) expects: period (ISO Date), value, previous_value
-        // Generate last 7 days
+        // Linha do tempo vazia nos últimos 7 dias para evitar erro visual no gráfico
         data = [];
         for (let i = 6; i >= 0; i--) {
           const d = new Date();
           d.setDate(d.getDate() - i);
           data.push({
             period: d.toISOString().split('T')[0], // YYYY-MM-DD
-            value: rand(2000, 6000),
-            previous_value: rand(1500, 5500)
+            value: 0,
+            previous_value: 0
           });
         }
         break;

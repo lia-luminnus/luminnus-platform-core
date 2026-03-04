@@ -499,7 +499,58 @@ async function processarComGeminiBrain({
       messages: [...historyMessages, ...resultsAsMessages]
     });
 
-    finalBrainText = secondTurnResponse.text;
+    // v18.0: MULTI-ACTION LOOP — Processar function_calls do 2º turno
+    // Cenário: Gemini chamou createCalendarEvent no 1º turno, recebeu o link do Meet,
+    // e agora quer chamar sendGmail com esse link no 2º turno.
+    if (secondTurnResponse.function_calls && secondTurnResponse.function_calls.length > 0) {
+      console.log(`🔧 [Orquestrador] 2º turno retornou ${secondTurnResponse.function_calls.length} ferramenta(s) adicional(is)`);
+
+      const secondTurnToolResults: any[] = [];
+      for (const call of secondTurnResponse.function_calls) {
+        try {
+          const args = typeof call.arguments === 'string' ? JSON.parse(call.arguments) : call.arguments;
+          console.log(`🔧 [Orquestrador] Executando (2º turno): ${call.name}`, args);
+          const toolResult = await ToolService.execute(call.name, args, { userId, tenantId, userPrompt: message });
+          secondTurnToolResults.push({ name: call.name, result: toolResult });
+          toolResults.push({ name: call.name, result: toolResult });
+          console.log(`✅ [Orquestrador] ${call.name} executado (2º turno):`, (toolResult as any)?.success ? 'Sucesso' : 'Falha');
+        } catch (err) {
+          console.error(`❌ [Orquestrador] Erro ao executar ${call.name} (2º turno):`, err);
+          secondTurnToolResults.push({ name: call.name, error: String(err) });
+          toolResults.push({ name: call.name, error: String(err) });
+        }
+      }
+
+      // 3º turno: gerar resposta final com TODOS os resultados (1º + 2º turno)
+      console.log(`🔄 [Orquestrador] 3º turno: gerando resposta final com ${toolResults.length} resultado(s) de ferramentas.`);
+      const secondTurnResultsAsMessages = secondTurnToolResults.map(tr => {
+        let contentString = '';
+        try {
+          contentString = typeof tr.result === 'string' ? tr.result : JSON.stringify(tr.result || tr.error);
+        } catch (jsonErr) {
+          contentString = '[Objeto Complexo / Erro de Serialização]';
+        }
+        return { role: 'tool', name: tr.name, content: contentString };
+      });
+
+      const thirdTurnMessages = [
+        ...historyMessages,
+        ...resultsAsMessages,
+        { role: 'assistant', content: secondTurnResponse.text || '' },
+        ...secondTurnResultsAsMessages
+      ];
+
+      const thirdTurnResponse = await runGemini(message, {
+        ...context,
+        messages: thirdTurnMessages,
+        toolMode: 'NONE' // Forçar apenas texto no 3º turno para evitar loop infinito
+      });
+
+      finalBrainText = thirdTurnResponse.text;
+      console.log(`✅ [Orquestrador] 3º turno concluído. Texto final: ${finalBrainText?.length || 0} caracteres`);
+    } else {
+      finalBrainText = secondTurnResponse.text;
+    }
   }
 
   // v17.0: FALLBACK CRÍTICO - Garantir que content nunca seja vazio
@@ -801,15 +852,70 @@ async function processarComGeminiVision({
     });
 
     try {
-      const followUp = await chat.sendMessage("Finalize a resposta agora fornecendo o link real e confirmando a execução.");
-      try {
-        finalText = followUp.response.text() || '';
-      } catch (textError: any) {
-        console.warn('⚠️ [Vision] Erro ao extrair texto do segundo turno:', textError?.message);
-        // Tentar extrair texto das partes
-        const textParts = followUp.response.candidates?.[0]?.content?.parts?.filter((p: any) => p.text);
-        if (textParts && textParts.length > 0) {
-          finalText = textParts.map((p: any) => p.text).join(' ');
+      const followUp = await chat.sendMessage("Finalize a resposta agora fornecendo o link real e confirmando a execução. Se ainda houver ações pendentes (como enviar e-mail), execute-as agora.");
+
+      // v18.0: MULTI-ACTION LOOP — Verificar se o 2º turno do Vision retornou novas ferramentas
+      const followUpCalls = followUp.response.candidates?.[0]?.content?.parts?.filter((p: any) => p.functionCall);
+
+      if (followUpCalls && followUpCalls.length > 0) {
+        console.log(`🔧 [Vision] 2º turno retornou ${followUpCalls.length} ferramenta(s) adicional(is)`);
+
+        const secondTurnToolResults: any[] = [];
+        for (const part of followUpCalls) {
+          const call = part.functionCall;
+          try {
+            console.log(`🔧 [Vision] Executando (2º turno): ${call.name}`, call.args);
+            const toolResult = await ToolService.execute(call.name, call.args, { userId, tenantId, userPrompt: message });
+            secondTurnToolResults.push({ name: call.name, result: toolResult });
+            toolResults.push({ name: call.name, result: toolResult });
+            console.log(`✅ [Vision] ${call.name} executado (2º turno):`, (toolResult as any)?.success ? 'Sucesso' : 'Falha');
+          } catch (err) {
+            console.error(`❌ [Vision] Erro ao executar ${call.name} (2º turno):`, err);
+            secondTurnToolResults.push({ name: call.name, error: String(err) });
+            toolResults.push({ name: call.name, error: String(err) });
+          }
+        }
+
+        // 3º turno: gerar resposta final com todos os resultados
+        console.log(`🔄 [Vision] 3º turno: gerando resposta final com ${toolResults.length} resultado(s).`);
+        const thirdTurnChat = model.startChat({
+          history: [
+            ...contents,
+            { role: 'user', parts: currentParts },
+            { role: 'model', parts: response.candidates?.[0]?.content?.parts || [] },
+            {
+              role: 'function',
+              parts: toolResults.map(tr => {
+                let responseObj = tr.result || { error: tr.error };
+                if (typeof responseObj === 'string') responseObj = { result: responseObj };
+                return { functionResponse: { name: tr.name, response: responseObj } };
+              })
+            }
+          ]
+        });
+
+        try {
+          const thirdTurn = await thirdTurnChat.sendMessage('Confirme todas as ações executadas e forneça os links reais.');
+          try {
+            finalText = thirdTurn.response.text() || '';
+          } catch (textError: any) {
+            const textParts = thirdTurn.response.candidates?.[0]?.content?.parts?.filter((p: any) => p.text);
+            if (textParts && textParts.length > 0) finalText = textParts.map((p: any) => p.text).join(' ');
+          }
+          console.log(`✅ [Vision] 3º turno concluído. Texto final: ${finalText?.length || 0} caracteres`);
+        } catch (thirdErr: any) {
+          console.error('❌ [Vision] Erro no 3º turno:', thirdErr);
+        }
+      } else {
+        // Sem ferramentas adicionais - extrair texto normalmente
+        try {
+          finalText = followUp.response.text() || '';
+        } catch (textError: any) {
+          console.warn('⚠️ [Vision] Erro ao extrair texto do segundo turno:', textError?.message);
+          const textParts = followUp.response.candidates?.[0]?.content?.parts?.filter((p: any) => p.text);
+          if (textParts && textParts.length > 0) {
+            finalText = textParts.map((p: any) => p.text).join(' ');
+          }
         }
       }
 
@@ -922,8 +1028,17 @@ Pedido do usuário: ${userRequest || message}`;
       }
     }
 
-    if (toolResults.some(tr => tr.error)) {
-      finalText = 'Consegui receber o anexo, mas tive falha ao executar uma ação auxiliar. Posso analisar somente o conteúdo visual/textual se você quiser tentar de novo agora.';
+    const erroNaTool = toolResults.find(tr => tr.error || tr.result?.error || tr.result?.success === false);
+    if (erroNaTool) {
+      const msgErro = erroNaTool.error || erroNaTool.result?.error || erroNaTool.result?.message || 'Falha desconhecida';
+
+      // Se a IA não gerou texto útil além do fallback
+      if (!text || text.trim().length === 0 || finalText.includes('dificuldades técnicas')) {
+        finalText = `Tive um problema ao executar a ação solicitada (${erroNaTool.name}): ${msgErro}`;
+      } else {
+        // Se a IA gerou texto, adicionamos o erro no final
+        finalText += `\n\n⚠️ **Aviso da Ferramenta**: Tentei executar a ação mas encontrei um problema: ${msgErro}`;
+      }
     }
   }
 

@@ -21,6 +21,7 @@ export const MODULE_REGISTRY: Record<ModuleId, ModuleDefinition> = {
   medical_records: { id: 'medical_records', translationKey: 'medicalRecords', icon: 'medical_services', path: '/records' },
   sales: { id: 'sales', translationKey: 'sales', icon: 'point_of_sale', path: '/sales' },
   reports: { id: 'reports', translationKey: 'reports', icon: 'bar_chart', path: '/reports' },
+  // WhatsApp Agent — oculto do lançamento (código mantido, removido dos presets)
   whatsapp_agent: { id: 'whatsapp_agent', translationKey: 'whatsappAgent', icon: 'chat', path: '/whatsapp' },
 
   // Core System
@@ -32,55 +33,56 @@ export const MODULE_REGISTRY: Record<ModuleId, ModuleDefinition> = {
 
 // 2. Presets: Defines which modules are active by default for each profession
 // Keys match the normalized segment_keys used in Onboarding and database
+// v2.0: whatsapp_agent = LIA (Treinamento) — hub multi-canal (WhatsApp oculto dentro do componente)
 export const CATEGORY_PRESETS: Record<string, ModuleId[]> = {
   // Serviços Técnicos
-  services_technical: ['dashboard', 'integrations', 'lia', 'calendar', 'crm', 'files', 'financial', 'automations', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  services_technical: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'calendar', 'crm', 'plan', 'settings', 'support'],
 
   // Profissionais Liberais
-  professionals: ['dashboard', 'integrations', 'lia', 'crm', 'calendar', 'files', 'financial', 'automations', 'whatsapp_agent', 'reports', 'plan', 'settings', 'support'],
+  professionals: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
 
   // Saúde & Bem-Estar
-  health_wellbeing: ['dashboard', 'integrations', 'lia', 'calendar', 'medical_records', 'financial', 'files', 'crm', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  health_wellbeing: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'calendar', 'crm', 'plan', 'settings', 'support'],
 
   // Imobiliária & Construção
-  real_estate_construction: ['dashboard', 'integrations', 'lia', 'crm', 'properties', 'calendar', 'files', 'financial', 'automations', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  real_estate_construction: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
 
   // Comércio & Lojas
-  commerce_retail: ['dashboard', 'integrations', 'lia', 'stock', 'sales', 'financial', 'automations', 'team', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  commerce_retail: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
 
   // Alimentação & Restaurantes
-  food_restaurants: ['dashboard', 'integrations', 'lia', 'stock', 'sales', 'financial', 'team', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  food_restaurants: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
 
   // Transporte & Logística
-  transport_logistics: ['dashboard', 'integrations', 'lia', 'logistics', 'stock', 'financial', 'team', 'automations', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  transport_logistics: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
 
   // Tecnologia & Software
-  tech_software: ['dashboard', 'integrations', 'lia', 'automations', 'team', 'files', 'crm', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  tech_software: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
 
   // Conteúdo & Criativos
-  content_creatives: ['dashboard', 'integrations', 'lia', 'files', 'crm', 'calendar', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  content_creatives: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
 
   // Serviços Empresariais
-  business_services: ['dashboard', 'integrations', 'lia', 'crm', 'financial', 'reports', 'whatsapp_agent', 'files', 'team', 'automations', 'plan', 'settings', 'support'],
+  business_services: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
 
   // Educação & Treinamento
-  education_training: ['dashboard', 'integrations', 'lia', 'calendar', 'files', 'crm', 'financial', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  education_training: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'calendar', 'crm', 'plan', 'settings', 'support'],
 
   // Outros (Personalizado)
-  custom_other: ['dashboard', 'integrations', 'lia', 'crm', 'calendar', 'files', 'financial', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  custom_other: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
 
   // Legacy keys (backward compatibility)
-  technical_services: ['dashboard', 'integrations', 'lia', 'calendar', 'crm', 'files', 'financial', 'automations', 'whatsapp_agent', 'plan', 'settings', 'support'],
-  liberal_professionals: ['dashboard', 'integrations', 'lia', 'crm', 'calendar', 'files', 'financial', 'automations', 'whatsapp_agent', 'reports', 'plan', 'settings', 'support'],
-  health_wellness: ['dashboard', 'integrations', 'lia', 'calendar', 'medical_records', 'financial', 'files', 'crm', 'whatsapp_agent', 'plan', 'settings', 'support'],
-  real_estate: ['dashboard', 'integrations', 'lia', 'crm', 'properties', 'calendar', 'files', 'financial', 'automations', 'whatsapp_agent', 'plan', 'settings', 'support'],
-  retail: ['dashboard', 'integrations', 'lia', 'stock', 'sales', 'financial', 'automations', 'team', 'whatsapp_agent', 'plan', 'settings', 'support'],
-  food: ['dashboard', 'integrations', 'lia', 'stock', 'sales', 'financial', 'team', 'whatsapp_agent', 'plan', 'settings', 'support'],
-  logistics: ['dashboard', 'integrations', 'lia', 'logistics', 'stock', 'financial', 'team', 'automations', 'whatsapp_agent', 'plan', 'settings', 'support'],
-  tech: ['dashboard', 'integrations', 'lia', 'automations', 'team', 'files', 'crm', 'whatsapp_agent', 'plan', 'settings', 'support'],
-  creative: ['dashboard', 'integrations', 'lia', 'files', 'crm', 'calendar', 'whatsapp_agent', 'plan', 'settings', 'support'],
-  education: ['dashboard', 'integrations', 'lia', 'calendar', 'files', 'crm', 'financial', 'whatsapp_agent', 'plan', 'settings', 'support'],
-  other: ['dashboard', 'integrations', 'lia', 'crm', 'calendar', 'files', 'financial', 'whatsapp_agent', 'plan', 'settings', 'support'],
+  technical_services: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'calendar', 'crm', 'plan', 'settings', 'support'],
+  liberal_professionals: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
+  health_wellness: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'calendar', 'crm', 'plan', 'settings', 'support'],
+  real_estate: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
+  retail: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
+  food: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
+  logistics: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
+  tech: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
+  creative: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
+  education: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'calendar', 'crm', 'plan', 'settings', 'support'],
+  other: ['dashboard', 'integrations', 'lia', 'whatsapp_agent', 'crm', 'calendar', 'plan', 'settings', 'support'],
 };
 
 // Helper to get ordered module definitions based on a list of IDs
@@ -97,12 +99,12 @@ export const getModules = (activeIds: ModuleId[]): ModuleDefinition[] => {
   const uniqueMap = new Map<ModuleId, ModuleDefinition>();
   [...active, ...coreModules].forEach(m => uniqueMap.set(m.id, m));
 
-  // Re-sort based on a preferred order (optional, but keeps sidebar tidy)
+  // Re-sort based on a preferred order
   const preferredOrder: ModuleId[] = [
-    'dashboard', 'integrations', 'crm', 'lia', 'calendar', 'files',
+    'dashboard', 'integrations', 'crm', 'lia', 'whatsapp_agent', 'calendar', 'files',
     'stock', 'sales', 'properties', 'medical_records', 'logistics',
     'automations', 'financial', 'reports', 'team',
-    'settings', 'plan', 'support', 'whatsapp_agent'
+    'settings', 'plan', 'support'
   ];
 
   return preferredOrder

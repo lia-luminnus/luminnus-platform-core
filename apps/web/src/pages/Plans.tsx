@@ -16,7 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import UnifiedHeader from "@/components/UnifiedHeader";
 import Footer from "@/components/Footer";
 
-const Plans = () => {
+const Plans = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const { plans, loading } = usePlans();
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [isAnnual, setIsAnnual] = useState(true);
@@ -181,7 +181,7 @@ const Plans = () => {
 
     // Calculate 12x price (with discount)
     const numericMonthly = parseFloat(plan.price.replace(/[^0-9.,]/g, '').replace(',', '.'));
-    const monthlyCommitPrice = `€${Math.round(numericMonthly * (1 - plan.discount / 100))}`;
+    const monthlyCommitPrice = `$${Math.round(numericMonthly * (1 - plan.discount / 100))}`;
 
     return {
       planName: plan.name,
@@ -196,7 +196,7 @@ const Plans = () => {
 
   return (
     <div className="min-h-screen bg-[#0B0B0F]">
-      <UnifiedHeader />
+      {!isEmbedded && <UnifiedHeader />}
 
       <section id="planos" className="py-12 lg:py-20 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-[#0B0B0F] via-primary/5 to-[#0B0B0F]" />
@@ -212,7 +212,7 @@ const Plans = () => {
             </h1>
 
             <p className="text-xl lg:text-2xl text-white/70 max-w-3xl mx-auto">
-              Encontre a solução perfeita para automatizar seu atendimento com a Lia
+              Nunca mais perca um lead. A LIA atende, qualifica e agenda — 24h por dia.
             </p>
           </div>
 
@@ -287,7 +287,7 @@ const Plans = () => {
                                   backgroundClip: 'text'
                                 }}
                               >
-                                {isAnnual ? `€${monthlyEquivalent}` : plan.price}
+                                {isAnnual ? `$${monthlyEquivalent}` : plan.price}
                               </p>
                               {isAnnual && plan.discount > 0 && (
                                 <span className="px-2 py-1 text-sm font-bold rounded-full bg-gradient-to-r from-[#7C3AED] to-[#FF2E9E] text-white shadow-md transform -rotate-12">
@@ -305,12 +305,7 @@ const Plans = () => {
                               Plano anual em 12x (fidelidade 12 meses)
                             </span>
                             {(() => {
-                              const savingsMap: Record<string, string> = {
-                                'Start': '€36',
-                                'Plus': '€600',
-                                'Pro': '€5.400'
-                              };
-                              const savings = savingsMap[plan.name] || '20%';
+                              const savings = plan.annualSavings || `${plan.discount}%`;
                               return (
                                 <span className="block text-sm text-green-400 font-bold">
                                   Economize {savings}/ano
@@ -470,7 +465,7 @@ const Plans = () => {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#FF2E9E]/10 rounded-full blur-[150px] -z-10" />
       </section>
 
-      <Footer />
+      {!isEmbedded && <Footer />}
     </div>
   );
 };

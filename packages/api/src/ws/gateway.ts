@@ -48,22 +48,10 @@ export function setupWebSocket(server: HTTPServer): IOServer {
             }
         });
 
-        socket.on('text-message', async (data) => {
-            const { text, conversationId, userId } = data;
-            const client = clients.get(clientId);
-
-            console.log(`[Socket.IO] Message from ${clientId}:`, text);
-
-            // Resposta via LiaService (Gemini)
-            const { LiaService } = await import('../services/liaService.js');
-            const responseText = await LiaService.getResponse(text, conversationId || client?.conversationId, userId || client?.userId);
-
-            socket.emit('lia-transcript', {
-                text: responseText,
-                conversationId: conversationId || client?.conversationId,
-                status: 'done'
-            });
-        });
+        // DESABILITADO: O lia-live-view/realtime.js é o handler principal de mensagens.
+        // Ele tem tools, MiniMax routing, typing indicators, e ciclo agêntico.
+        // Este gateway NÃO deve processar mensagens de chat — apenas conexão/registro.
+        // socket.on('text-message', async (data) => { ... });
 
         socket.on('disconnect', () => {
             console.log(`[Socket.IO] Client disconnected: ${clientId}`);

@@ -1,90 +1,70 @@
 /**
  * Stripe Configuration and Price Mapping
  * Maps Stripe price IDs to plan details and commitment info
+ * Currency: USD (dolarizado — Stripe converte automaticamente para moeda local)
  */
 
-// Stripe Price IDs per plan
+// Stripe Price IDs per plan (USD)
 export const STRIPE_PRICES = {
     Start: {
-        monthly: 'price_1Ss0tJRy1wqZ6TIAcjxyXlSY',      // €29/mês (Atualizado de €30)
-        annual_12x: 'price_1Ss1jqRy1wqZ6TIAxG8velbA',   // €26/mês (Atualizado de €27)
-        annual_full: 'price_1SsNb4Ry1wqZ6TIA99p7OD9Z',  // €313/ano
+        monthly: 'price_1T6xy5Ry1wqZ6TIAqMWlPsRx',       // $29/mês
+        annual_12x: 'price_1T6xy6Ry1wqZ6TIAMSKVTvht',     // $312/ano ($26/mês — desconto 10%)
     },
     Plus: {
-        monthly: 'price_1SsNRoRy1wqZ6TIAK5ijPvTe',      // €249/mês
-        annual_12x: 'price_1Ss22aRy1wqZ6TIAiuswrNIa',   // €199/mês (12x)
-        annual_full: 'price_1Ss21RRy1wqZ6TIAsJhnc6ZI',  // €2.390/ano
+        monthly: 'price_1T6xy6Ry1wqZ6TIA2aRMn5IP',        // $99/mês
+        annual_12x: 'price_1T6xy7Ry1wqZ6TIA1ckEOy6e',     // $948/ano ($79/mês — desconto 20%)
     },
     Pro: {
-        monthly: 'price_1Ss27nRy1wqZ6TIAXuXjx0ox',      // €1.499/mês
-        annual_12x: 'price_1Ss289Ry1wqZ6TIAVghulaNw',   // €1.049/mês (12x)
-        annual_full: 'price_1Ss26GRy1wqZ6TIAnHEU2UAG',  // €12.592/ano
+        monthly: 'price_1T6xy8Ry1wqZ6TIA3yWCsIDB',        // $249/mês
+        annual_12x: 'price_1T6xy9Ry1wqZ6TIAavcWvZgw',     // $2.388/ano ($199/mês — desconto 20%)
     },
 } as const;
 
 // Mapping from Price ID to Plan Info
 export const PRICE_TO_PLAN_MAP: Record<string, {
     plan: string;
-    paymentType: 'monthly' | 'annual_12x' | 'annual_full';
+    paymentType: 'monthly' | 'annual_12x';
     commitmentMonths: number;
     displayName: string;
 }> = {
     // Start
-    'price_1Ss0tJRy1wqZ6TIAcjxyXlSY': {
+    'price_1T6xy5Ry1wqZ6TIAqMWlPsRx': {
         plan: 'Start',
         paymentType: 'monthly',
         commitmentMonths: 0,
         displayName: 'Start Mensal',
     },
-    'price_1Ss1jqRy1wqZ6TIAxG8velbA': {
+    'price_1T6xy6Ry1wqZ6TIAMSKVTvht': {
         plan: 'Start',
         paymentType: 'annual_12x',
         commitmentMonths: 12,
-        displayName: 'Start Anual (12x)',
-    },
-    'price_1Ss0rGRy1wqZ6TIAvx5HOD5Z': {
-        plan: 'Start',
-        paymentType: 'annual_full',
-        commitmentMonths: 0,
-        displayName: 'Start Anual (À Vista)',
+        displayName: 'Start Anual',
     },
     // Plus
-    'price_1Ss20JRy1wqZ6TIAKTAA3Cff': {
+    'price_1T6xy6Ry1wqZ6TIA2aRMn5IP': {
         plan: 'Plus',
         paymentType: 'monthly',
         commitmentMonths: 0,
         displayName: 'Plus Mensal',
     },
-    'price_1Ss22aRy1wqZ6TIAiuswrNIa': {
+    'price_1T6xy7Ry1wqZ6TIA1ckEOy6e': {
         plan: 'Plus',
         paymentType: 'annual_12x',
         commitmentMonths: 12,
-        displayName: 'Plus Anual (12x)',
-    },
-    'price_1Ss21RRy1wqZ6TIAsJhnc6ZI': {
-        plan: 'Plus',
-        paymentType: 'annual_full',
-        commitmentMonths: 0,
-        displayName: 'Plus Anual (À Vista)',
+        displayName: 'Plus Anual',
     },
     // Pro
-    'price_1Ss27nRy1wqZ6TIAnHEU2UAG': {
+    'price_1T6xy8Ry1wqZ6TIA3yWCsIDB': {
         plan: 'Pro',
         paymentType: 'monthly',
         commitmentMonths: 0,
         displayName: 'Pro Mensal',
     },
-    'price_1Ss289Ry1wqZ6TIAVghulaNw': {
+    'price_1T6xy9Ry1wqZ6TIAavcWvZgw': {
         plan: 'Pro',
         paymentType: 'annual_12x',
         commitmentMonths: 12,
-        displayName: 'Pro Anual (12x)',
-    },
-    'price_1Ss26GRy1wqZ6TIAnHEU2UAG': {
-        plan: 'Pro',
-        paymentType: 'annual_full',
-        commitmentMonths: 0,
-        displayName: 'Pro Anual (À Vista)',
+        displayName: 'Pro Anual',
     },
 };
 
@@ -117,4 +97,4 @@ export function calculateCommitmentEndDate(priceId: string, startDate = new Date
 }
 
 export type PlanName = keyof typeof STRIPE_PRICES;
-export type PaymentType = 'monthly' | 'annual_12x' | 'annual_full';
+export type PaymentType = 'monthly' | 'annual_12x';

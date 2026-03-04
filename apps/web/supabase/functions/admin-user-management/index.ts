@@ -84,6 +84,12 @@ Deno.serve(async (req: Request) => {
             // 1. Clean up associated data first to avoid FK errors
             await adminClient.from("tenant_members").delete().eq("user_id", userId);
 
+            // Delete subscriptions
+            await adminClient.from("subscriptions").delete().eq("user_id", userId);
+
+            // Delete messages and conversations potentially linked
+            await adminClient.from("conversations").delete().eq("user_id", userId);
+
             // 2. Delete from profiles
             const { error: profileError } = await adminClient
                 .from("profiles")
@@ -95,7 +101,7 @@ Deno.serve(async (req: Request) => {
                 // Continue anyway, it might not exist
             }
 
-            // 2. Delete from auth.users using Admin API
+            // 3. Delete from auth.users using Admin API
             const { error: authError } = await adminClient.auth.admin.deleteUser(userId);
 
             if (authError) {
@@ -106,17 +112,18 @@ Deno.serve(async (req: Request) => {
             }
 
             return new Response(
-                JSON.stringify({ success: true, message: "User deleted successfully" }),
+                JSON.stringify({ success: true, message: "User deleted completely from Supabase" }),
                 { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
         } else if (action === "reset") {
-            // Reset user onboarding
+            // Reset user onboarding and remove any active plan
             const { error: resetError } = await adminClient
                 .from("profiles")
                 .update({
                     onboarding_completed: false,
                     segment: null,
                     modules: null,
+                    plan_type: 'free' // Force plan to free so billing starts fresh
                 })
                 .eq("id", userId);
 
@@ -130,8 +137,11 @@ Deno.serve(async (req: Request) => {
             // Clean up tenant_members if exists
             await adminClient.from("tenant_members").delete().eq("user_id", userId);
 
+            // Delete subscriptions to wipe any purchased products
+            await adminClient.from("subscriptions").delete().eq("user_id", userId);
+
             return new Response(
-                JSON.stringify({ success: true, message: "User reset successfully" }),
+                JSON.stringify({ success: true, message: "User reset successfully with plan cleared" }),
                 { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
         } else {

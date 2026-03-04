@@ -149,21 +149,21 @@ export class FileService {
             let existingScope: string | undefined;
             let existingId: string | undefined;
             let existingFolderId: string | null | undefined;
-            
+
             if (meta.id) {
                 const { data: existing } = await supabaseClient
                     .from('files')
                     .select('id, scope, folder_id')
                     .eq('id', meta.id)
                     .single();
-                
+
                 if (existing) {
                     existingScope = existing.scope;
                     existingId = existing.id;
                     existingFolderId = existing.folder_id;
                 }
             }
-            
+
             if (!existingId && meta.storage_path) {
                 const { data: existingByPath } = await supabaseClient
                     .from('files')
@@ -171,7 +171,7 @@ export class FileService {
                     .eq('storage_path', meta.storage_path)
                     .eq('tenant_id', meta.tenant_id)
                     .single();
-                
+
                 if (existingByPath) {
                     existingScope = existingByPath.scope;
                     existingId = existingByPath.id;
@@ -238,9 +238,6 @@ export class FileService {
         }
     }
 
-    /**
-     * Busca arquivos de um tenant específico
-     */
     static async getFilesByTenant(tenantId: string, category?: string) {
         try {
             let query = supabaseClient
@@ -270,6 +267,56 @@ export class FileService {
             return data || [];
         } catch (error) {
             console.error('[FileService] Erro ao buscar arquivos:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Busca avançada de arquivos para uso pela LIA
+     */
+    static async searchFiles(tenantId: string, filters: { query?: string; startDate?: string; endDate?: string; category?: string; limit?: number }) {
+        try {
+            let query = supabaseClient
+                .from('files')
+                .select('*')
+                .eq('tenant_id', tenantId)
+                .order('created_at', { ascending: false });
+
+            if (filters.query) {
+                query = query.ilike('file_name', `%${filters.query}%`);
+            }
+
+            if (filters.startDate) {
+                query = query.gte('created_at', filters.startDate);
+            }
+
+            if (filters.endDate) {
+                query = query.lte('created_at', filters.endDate);
+            }
+
+            if (filters.category && filters.category !== 'all') {
+                const mimePatterns: Record<string, string[]> = {
+                    documents: ['pdf', 'word', 'document'],
+                    images: ['image/'],
+                    spreadsheets: ['excel', 'spreadsheet'],
+                    presentations: ['powerpoint', 'presentation'],
+                };
+                const patterns = mimePatterns[filters.category] || [filters.category];
+                query = query.or(patterns.map(p => `file_type.ilike.%${p}%`).join(','));
+            }
+
+            if (filters.limit) {
+                query = query.limit(filters.limit);
+            } else {
+                query = query.limit(50); // Default sanity limit
+            }
+
+            const { data, error } = await query;
+            if (error) throw error;
+
+            return data || [];
+        } catch (error) {
+            console.error('[FileService] Erro na busca avançada de arquivos:', error);
             return [];
         }
     }

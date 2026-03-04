@@ -17,7 +17,7 @@ const LiaAtendimento = () => {
   });
 
   const features = [
-    { icon: MessageSquare, text: "Atende por WhatsApp, chat, voz ou e-mail" },
+    { icon: MessageSquare, text: "Atende por Telegram, chat web, voz ou e-mail" },
     { icon: Zap, text: "Responde FAQs e faz onboarding interativo" },
     { icon: Calendar, text: "Agenda compromissos com Google Calendar" },
     { icon: Database, text: "Integra com CRMs (HubSpot, RD Station, Pipedrive)" },
@@ -32,7 +32,7 @@ const LiaAtendimento = () => {
     },
     {
       q: "Quais integrações a Lia possui?",
-      a: "Conecto nativamente com WhatsApp, CRMs (RD Station, HubSpot), Google Calendar e muito mais via API. Automação de ponta a ponta! 🔗"
+      a: "Conecto nativamente com Telegram, CRMs (RD Station, HubSpot), Google Calendar e muito mais via API. Automação de ponta a ponta! 🔗"
     },
     {
       q: "A Lia funciona 24 horas?",
@@ -56,7 +56,7 @@ const LiaAtendimento = () => {
   };
 
   return (
-    <section id="lia" className="py-20 lg:py-32 relative overflow-hidden bg-gradient-to-b from-[#0B0B0F] to-[#0D0D15]">
+    <section id="como-funciona" className="py-20 lg:py-32 relative overflow-hidden bg-gradient-to-b from-[#0B0B0F] to-[#0D0D15]">
       {/* Background Decorativo */}
       <div className="absolute top-1/4 -left-20 w-96 h-96 bg-[#7C3AED]/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-[#FF2E9E]/10 rounded-full blur-[120px] pointer-events-none" />
@@ -111,7 +111,7 @@ const LiaAtendimento = () => {
           >
             {/* Pills de Categorias */}
             <div className="flex flex-wrap gap-2 mb-8">
-              {["WhatsApp & Chat", "Agendamentos", "Integrações CRM"].map((label, idx) => (
+              {["Chat & Widget", "Agendamentos", "Integrações CRM"].map((label, idx) => (
                 <span key={idx} className="px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/80 text-xs font-medium backdrop-blur-md">
                   {label}
                 </span>

@@ -36,12 +36,17 @@ export class OpenRouterService {
 
         const startTime = Date.now();
 
+        const toolsAvailable = tools && tools.length > 0;
+        const strictToolPrompt = toolsAvailable
+            ? prompt + '\n\nIMPORTANTE: Aja AGORA. Se precisar usar uma ferramenta, chame-a IMEDIATAMENTE. NUNCA diga "vou fazer", "só um instante" ou "criando...". Chame a ferramenta na mesma resposta!'
+            : prompt;
+
         const messages: any[] = [
             ...history.map(msg => ({
                 role: msg.role as 'system' | 'user' | 'assistant',
                 content: msg.content
             })),
-            { role: 'user' as const, content: prompt }
+            { role: 'user' as const, content: strictToolPrompt }
         ];
 
         try {
@@ -49,7 +54,7 @@ export class OpenRouterService {
                 model,
                 messages,
                 temperature: 0.3, // Mais determinístico para análises
-                max_tokens: 4096,
+                max_tokens: 8192,
             };
 
             // OpenRouter suporta tools no formato OpenAI

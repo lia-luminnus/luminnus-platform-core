@@ -37,8 +37,6 @@ const GOOGLE_SERVICES: GoogleService[] = [
     { id: 'drive', name: 'Drive', icon: <Folder className="w-4 h-4 text-yellow-500" />, description: 'Arquivos', planRequired: 'plus' },
     { id: 'sheets', name: 'Sheets', icon: <FileText className="w-4 h-4 text-green-600" />, description: 'Planilhas', planRequired: 'plus' },
     { id: 'docs', name: 'Docs', icon: <FileText className="w-4 h-4 text-blue-600" />, description: 'Documentos', planRequired: 'plus' },
-    { id: 'slides', name: 'Slides', icon: <Globe className="w-4 h-4 text-orange-500" />, description: 'Apresentações', planRequired: 'plus' },
-    { id: 'maps', name: 'Maps', icon: <Map className="w-4 h-4 text-green-500" />, description: 'Rotas', planRequired: 'plus' },
 ];
 
 interface IntegrationDef {
@@ -65,15 +63,16 @@ const INTEGRATIONS_LIST: IntegrationDef[] = [
         permissions: ['Calendar'],
         isComposite: true
     },
-    {
-        id: 'whatsapp',
-        name: 'WhatsApp Business',
-        description: 'Atendimento inteligente e proativo via WhatsApp oficial.',
-        icon: <MessageCircle className="text-green-500" />,
-        category: 'communication',
-        planRequired: 'start',
-        permissions: ['Enviar mensagens', 'Ler conversas']
-    },
+    // WhatsApp — oculto do lançamento (código mantido)
+    // {
+    //     id: 'whatsapp',
+    //     name: 'WhatsApp Business',
+    //     description: 'Atendimento inteligente e proativo via WhatsApp oficial.',
+    //     icon: <MessageCircle className="text-green-500" />,
+    //     category: 'communication',
+    //     planRequired: 'start',
+    //     permissions: ['Enviar mensagens', 'Ler conversas']
+    // },
     {
         id: 'telegram_manager',
         name: 'Telegram E-Manager',
@@ -259,10 +258,12 @@ const Integrations: React.FC = () => {
     // v2.2: Contagem granular para Google Workspace (cada serviço = 1)
     const calculateActiveCount = () => {
         let count = 0;
+        const processedProviders = new Set<string>();
         userIntegrations.forEach(ui => {
-            if (ui.status === 'active' || ui.status === 'connected') {
+            if ((ui.status === 'active' || ui.status === 'connected') && !processedProviders.has(ui.provider)) {
+                processedProviders.add(ui.provider);
                 if (ui.provider === 'google_workspace' && ui.services && ui.services.length > 0) {
-                    count += ui.services.length;
+                    count += ui.services.filter(s => GOOGLE_SERVICES.some(gs => gs.id === s)).length;
                 } else {
                     count += 1;
                 }
@@ -392,7 +393,8 @@ const Integrations: React.FC = () => {
             const tenantId = isAdmin ? ADMIN_TENANT_ID : (profile?.tenant_id || user?.id || null);
 
             // Passamos redirect_to no state para o unificado (3000) saber para onde voltar
-            const apiUrl = `${getApiUrl()}/api/auth/google?services=${selectedGoogleServices.join(',')}&user_id=${userId}&tenant_id=${tenantId || 'undefined'}&redirect_to=${encodeURIComponent(callbackUrl)}&redirect_uri=${encodeURIComponent(getApiUrl() + '/api/auth/google/callback')}`;
+            const redirectUriExact = window.location.origin + '/api/auth/google/callback';
+            const apiUrl = `${getApiUrl()}/api/auth/google?services=${selectedGoogleServices.join(',')}&user_id=${userId}&tenant_id=${tenantId || 'undefined'}&redirect_to=${encodeURIComponent(callbackUrl)}&redirect_uri=${encodeURIComponent(redirectUriExact)}`;
             console.log('[Integrations] Iniciando OAuth:', apiUrl);
 
             const response = await fetch(apiUrl);
@@ -516,7 +518,7 @@ const Integrations: React.FC = () => {
                                             {connected ? (
                                                 <div className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-black uppercase tracking-tighter">
                                                     {item.id === 'google_workspace'
-                                                        ? `${userIntegrations.find(ui => ui.provider === 'google_workspace')?.services?.length || 0} Serviços`
+                                                        ? `${userIntegrations.find(ui => ui.provider === 'google_workspace')?.services?.filter(s => GOOGLE_SERVICES.some(gs => gs.id === s)).length || 0} Serviços`
                                                         : 'Ativo'
                                                     }
                                                 </div>

@@ -9,6 +9,7 @@ import { getOpenAIVoice } from '../config/openai-voices.js';
 import { ensureSession } from '../server.js';
 import { getLiaGreeting } from '@luminnus/lia-runtime';
 import { CreditService } from '../services/creditService.js';
+import { emitEvent } from '../services/eventBusService.js';
 
 export function setupChatRoutes(app: Express, openai: OpenAI) {
   const functions = ToolService.getTools();
@@ -126,6 +127,18 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
           console.log(`🔧 [Chat] Executando: ${call.name}`);
           const args = typeof call.arguments === 'string' ? JSON.parse(call.arguments || '{}') : call.arguments;
 
+          // 📢 Emitir evento SOCKET de Início de Ferramenta para o UI
+          try {
+            emitEvent({
+              type: 'tool_execution_start' as any,
+              tenantId: finalTenantId,
+              conversationId: conversationId,
+              payload: { toolName: call.name, args: Object.keys(args) }
+            }, { persistEvents: false, broadcastEvents: true });
+          } catch (e) {
+            console.warn('⚠️ Falha ao avisar frontend do início da ferramenta', e);
+          }
+
           let function_result: any;
           try {
             function_result = await ToolService.execute(call.name, args, {
@@ -139,15 +152,47 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
             if (!function_result || function_result.error) {
               throw new Error(function_result?.error || 'Retorno vazio da ferramenta');
             }
+
+            // 📢 Emitir evento SOCKET de Fim de Ferramenta
+            try {
+              emitEvent({
+                type: 'tool_execution_end' as any,
+                tenantId: finalTenantId,
+                conversationId: conversationId,
+                payload: { toolName: call.name, success: true }
+              }, { persistEvents: false, broadcastEvents: true });
+            } catch (e) { }
+
           } catch (toolError: any) {
             console.error(`❌ Erro na ferramenta ${call.name}:`, toolError.message);
-            // ANTI-LOOP GUARDRAIL: Falhou + por quê + plano B
-            replyText = `Falhou ao executar ${call.name}. Motivo: ${toolError.message}. Vou tentar uma alternativa automática na próxima tentativa.`;
+
+            // 📢 Emitir evento SOCKET de Fim de Ferramenta (ERRO)
+            try {
+              emitEvent({
+                type: 'tool_execution_end' as any,
+                tenantId: finalTenantId,
+                conversationId: conversationId,
+                payload: { toolName: call.name, success: false, error: toolError.message }
+              }, { persistEvents: false, broadcastEvents: true });
+            } catch (e) { }
+
+            // ANTI-LOOP GUARDRAIL: falha direta sem travar em A/B
+            let userFriendlyMsg = toolError.message;
+            if (String(userFriendlyMsg).includes('invalid_grant')) {
+              userFriendlyMsg = 'Sua conexão com o Google expirou ou é inválida. Por favor, vá nas configurações da LIA, desconecte e conecte o Google Workspace novamente.';
+            }
+
+            // Preservar o texto parcial da IA e adicionar o erro
+            replyText = (replyText ? replyText + '\n\n' : '') + `⚠️ **Erro ao executar ${call.name}**: ${userFriendlyMsg}`;
+
+            forceFinalReplyFromTools = replyText;
+            criticalActionHandled = true;
             function_calls = []; // Abortar loop agêntico
             break;
           }
 
           // TRATAMENTO CRÍTICO: Ferramentas de execução devem responder com verdade factual
+          // v18.0: NÃO interromper o loop imediatamente — coletar resultado e continuar para outras ferramentas do batch
           if (['sendGmail', 'createCalendarEvent', 'updateCalendarEvent', 'deleteCalendarEvent'].includes(call.name)) {
             const toolSuccess = !!function_result?.success;
             const toolMessage = function_result?.message || '';
@@ -155,19 +200,19 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
             const meetLink = function_result?.meetLink || '';
 
             if (toolSuccess) {
-              const confirmations: string[] = [toolMessage];
+              const confirmations: string[] = [forceFinalReplyFromTools || replyText, toolMessage];
               if (calendarLink) confirmations.push(`Link do evento: ${calendarLink}`);
               if (meetLink) confirmations.push(`Link do Meet: ${meetLink}`);
-              forceFinalReplyFromTools = confirmations.filter(Boolean).join('\n');
+              forceFinalReplyFromTools = confirmations.filter(Boolean).join('\n\n');
             } else {
-              forceFinalReplyFromTools = toolMessage || `Não consegui concluir ${call.name} nesta tentativa.`;
+              forceFinalReplyFromTools = (forceFinalReplyFromTools || replyText ? (forceFinalReplyFromTools || replyText) + '\n\n' : '') + (toolMessage || `⚠️ Não consegui concluir a ação ${call.name}.`);
             }
 
-            messages.push({ role: 'assistant', content: null, function_call: call });
+            messages.push({ role: 'assistant', content: replyText, function_call: call });
             messages.push({ role: 'function', name: call.name, content: JSON.stringify(function_result) });
-            function_calls = [];
             criticalActionHandled = true;
-            break;
+            // v18.0: NÃO break aqui — continuar para executar as demais ferramentas do batch (ex: sendGmail após createCalendarEvent)
+            continue;
           }
 
           // TRATAMENTO: generateImage (Retorno Imediato)
@@ -195,7 +240,7 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
               message: function_result.message
             };
             // Adicionar ao histórico para a IA saber que solicitou a ação
-            messages.push({ role: 'assistant', content: null, function_call: call });
+            messages.push({ role: 'assistant', content: replyText, function_call: call });
             messages.push({ role: 'function', name: call.name, content: JSON.stringify(function_result) });
             break;
           }
@@ -204,15 +249,43 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
           // v4.9 - Previne que o segundo call da IA reformate e perca os URLs
           if ((call.name === 'listGmailMessages' || call.name === 'searchGmail') && function_result?.message) {
             console.log(`📧 [Chat] Gmail tool detectado - usando resposta pré-formatada`);
-            replyText = function_result.message; // Usar a mensagem já formatada com links
+            replyText = (replyText ? replyText + '\n\n' : '') + function_result.message; // Usar a mensagem já formatada com links
             function_calls = []; // Encerrar o loop agêntico - não precisa de segundo call
-            messages.push({ role: 'assistant', content: null, function_call: call });
+            messages.push({ role: 'assistant', content: replyText, function_call: call });
             messages.push({ role: 'function', name: call.name, content: JSON.stringify(function_result) });
             break;
           }
 
+          // TRATAMENTO: Google Workspace Tools (Sheets, Docs, Slides)
+          // v9.0 - Preservar mensagem e link das ferramentas de criação/edição do Google
+          const isGoogleWorkspaceTool = [
+            'createProFinancialSheet', 'createGoogleDoc', 'createGoogleSheet',
+            'createGoogleSlide', 'updateGoogleSheet', 'createGooglePresentation'
+          ].includes(call.name);
+
+          if (isGoogleWorkspaceTool && function_result?.message) {
+            console.log(`📊 [Chat] Google Workspace tool detectado: ${call.name} - usando resposta da ferramenta`);
+            const toolSuccess = !!function_result.success;
+            const toolMessage = function_result.message || '';
+            const toolLink = function_result.link || '';
+
+            if (toolSuccess) {
+              const parts: string[] = [replyText, toolMessage];
+              if (toolLink) parts.push(`📎 [Abrir no Google](${toolLink})`);
+              forceFinalReplyFromTools = parts.filter(Boolean).join('\n\n');
+            } else {
+              forceFinalReplyFromTools = (replyText ? replyText + '\n\n' : '') + (toolMessage || `⚠️ Não consegui concluir a ação ${call.name}.`);
+            }
+
+            messages.push({ role: 'assistant', content: replyText, function_call: call });
+            messages.push({ role: 'function', name: call.name, content: JSON.stringify(function_result) });
+            function_calls = [];
+            criticalActionHandled = true;
+            break;
+          }
+
           // Adicionar resultado ao histórico para o próximo turno
-          messages.push({ role: 'assistant', content: null, function_call: call });
+          messages.push({ role: 'assistant', content: replyText, function_call: call });
           messages.push({ role: 'function', name: call.name, content: JSON.stringify(function_result) });
           turnResults.push(function_result);
         }

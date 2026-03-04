@@ -221,17 +221,67 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
       const { ToolService } = await import("../services/toolService.js");
       const functions = ToolService.getTools();
 
-      // v7.0: PROTOCOLO LIA EXECUTA - Gemini 2.0 Flash assume o Cérebro Principal
-      const geminiResponse = await runGemini(enrichedPrompt, {
-        conversationId,
-        functions: functions.map(f => f),
-        messages,
-        systemInstruction: messages[0].content, // Garante que a data/hora atual (contida na system msg) seja respeitada
-        temperature: 0.2 // Rigidez para execução de ferramentas
-      });
+      // v9.2: Roteamento inteligente - MiniMax para CRIAÇÃO e EDIÇÃO de planilhas/docs
+      // Análises de arquivos (veja erros, analise, etc.) ficam no Gemini que tem acesso nativo ao arquivo
+      const actionKeywords = [
+        // Criação
+        'crie', 'cria', 'criar', 'gere', 'gera', 'gerar', 'faça', 'faz', 'monte', 'montar',
+        // Edição
+        'edite', 'edita', 'editar', 'adicione', 'adiciona', 'adicionar', 'altere', 'altera', 'alterar',
+        'formate', 'formata', 'formatar', 'atualize', 'atualiza', 'atualizar', 'melhore', 'melhora',
+        'melhorar', 'coloque', 'coloca', 'colocar', 'modifique', 'insira', 'inserir', 'gráfico', 'grafico'
+      ];
+      const toolKeywords = ['planilha', 'sheet', 'sheets', 'google docs', 'google sheets',
+        'google slides', 'spreadsheet', 'apresentação', 'slide', 'mesma planilha', 'nessa planilha'];
+      const lowerPrompt = enrichedPrompt.toLowerCase();
+      const wantsAction = actionKeywords.some(k => lowerPrompt.includes(k));
+      const mentionsTool = toolKeywords.some(k => lowerPrompt.includes(k));
+      const isComplex = wantsAction && mentionsTool;
 
-      let finalReply = geminiResponse.text;
-      let turnCalls = geminiResponse.function_calls || [];
+      const toolsAvailable = functions && functions.length > 0;
+      const strictToolEnrichedPrompt = toolsAvailable
+        ? enrichedPrompt + '\n\nIMPORTANTE: Aja AGORA. Se precisar usar uma ferramenta, chame-a IMEDIATAMENTE. NUNCA diga "vou fazer", "só um instante" ou "criando...". Chame a ferramenta na mesma resposta!'
+        : enrichedPrompt;
+
+      let finalReply, turnCalls;
+
+      if (isComplex) {
+        try {
+          const { OpenRouterService } = await import("../services/openRouterService.js");
+          if (OpenRouterService.isConfigured()) {
+            console.log('🧠 [Realtime] Roteando para MiniMax 2.5 (tarefa complexa detectada)');
+            const miniMaxResponse = await OpenRouterService.chat(
+              strictToolEnrichedPrompt,
+              messages,
+              'minimax/minimax-m2.5',
+              functions
+            );
+            finalReply = miniMaxResponse.text;
+            // Mapear function_calls do formato OpenRouter (args como string) para formato do ciclo agêntico (args como objeto)
+            turnCalls = (miniMaxResponse.function_calls || []).map(fc => ({
+              name: fc.name,
+              args: typeof fc.arguments === 'string' ? JSON.parse(fc.arguments) : (fc.arguments || fc.args || {})
+            }));
+          } else {
+            throw new Error('OpenRouter não configurado');
+          }
+        } catch (miniMaxErr) {
+          console.warn(`⚠️ [Realtime] MiniMax falhou, usando Gemini: ${miniMaxErr.message}`);
+          const geminiResponse = await runGemini(strictToolEnrichedPrompt, {
+            conversationId, functions: functions.map(f => f), messages,
+            systemInstruction: messages[0].content, temperature: 0.2
+          });
+          finalReply = geminiResponse.text;
+          turnCalls = geminiResponse.function_calls || [];
+        }
+      } else {
+        const geminiResponse = await runGemini(strictToolEnrichedPrompt, {
+          conversationId, functions: functions.map(f => f), messages,
+          systemInstruction: messages[0].content, temperature: 0.2
+        });
+        finalReply = geminiResponse.text;
+        turnCalls = geminiResponse.function_calls || [];
+      }
 
       // v4.0 Ciclo Agêntico para Voz
       let turnCount = 0;
@@ -239,6 +289,20 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
       let finalDashboardAction = null;
       let finalImagePayload = null;
       let forceFinalReplyFromTools = null;
+
+      // WORKAROUND GEMINI SDK BUG: Gemini achata arrays complexos e cria tools fantasmas
+      turnCalls.forEach(call => {
+        if (call.name === 'UpdategooglesheetOperations') {
+          console.warn('🐛 [Realtime] Interceptando tool fantasma do Gemini: UpdategooglesheetOperations -> updateGoogleSheet');
+          call.name = 'updateGoogleSheet';
+          try {
+            const parsedArgs = typeof call.arguments === 'string' ? JSON.parse(call.arguments) : (call.arguments || {});
+            // O args fantasma é o próprio objeto da operação (ex: { updateRange: {...} })
+            call.arguments = JSON.stringify({ operations: [parsedArgs] });
+            if (call.args) call.args = { operations: [parsedArgs] };
+          } catch (e) { }
+        }
+      });
 
       while (turnCalls.length > 0 && turnCount < MAX_TURNS) {
         turnCount++;
@@ -248,7 +312,8 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
 
         for (const call of turnCalls) {
           console.log(`🔧 [Realtime] Executando: ${call.name}`);
-          const args = typeof call.arguments === 'string' ? JSON.parse(call.arguments || "{}") : call.arguments;
+          const rawArgs = call.arguments || call.args || {};
+          const args = typeof rawArgs === 'string' ? JSON.parse(rawArgs || "{}") : rawArgs;
 
           let function_result;
           try {
@@ -265,8 +330,18 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
             }
           } catch (toolError) {
             console.error(`❌ [Realtime] Erro na ferramenta ${call.name}:`, toolError.message);
+
             // ANTI-LOOP GUARDRAIL: falha direta sem travar em A/B
-            finalReply = `Falhou ao executar ${call.name}. Motivo: ${toolError.message}. Vou tentar uma alternativa automática na próxima tentativa.`;
+            let userFriendlyMsg = toolError.message;
+            if (String(userFriendlyMsg).includes('invalid_grant')) {
+              userFriendlyMsg = 'Sua conexão com o Google expirou ou é inválida. Por favor, vá nas configurações da LIA, desconecte e conecte o Google Workspace novamente.';
+            }
+
+            // Preservar o texto parcial da IA e adicionar o erro
+            finalReply = (finalReply ? finalReply + '\n\n' : '') + `⚠️ **Erro ao executar ${call.name}**: ${userFriendlyMsg}`;
+
+            forceFinalReplyFromTools = finalReply;
+            criticalActionHandled = true;
             turnCalls = []; // Abortar loop agêntico
             break;
           }
@@ -279,15 +354,15 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
             const meetLink = function_result?.meetLink || "";
 
             if (toolSuccess) {
-              const confirmations = [toolMessage];
+              const confirmations = [finalReply, toolMessage]; // Incluir texto parcial se houver
               if (calendarLink) confirmations.push(`Link do evento: ${calendarLink}`);
               if (meetLink) confirmations.push(`Link do Meet: ${meetLink}`);
-              forceFinalReplyFromTools = confirmations.filter(Boolean).join("\n");
+              forceFinalReplyFromTools = confirmations.filter(Boolean).join("\n\n");
             } else {
-              forceFinalReplyFromTools = toolMessage || `Não consegui concluir ${call.name} nesta tentativa.`;
+              forceFinalReplyFromTools = (finalReply ? finalReply + '\n\n' : '') + (toolMessage || `⚠️ Não consegui concluir a ação ${call.name}.`);
             }
 
-            messages.push({ role: "assistant", content: null, function_call: call });
+            messages.push({ role: "assistant", content: finalReply, function_call: call });
             messages.push({ role: "function", name: call.name, content: JSON.stringify(function_result) });
             turnCalls = [];
             criticalActionHandled = true;
@@ -318,7 +393,7 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
               message: function_result.message
             };
             // Historico
-            messages.push({ role: "assistant", content: null, function_call: call });
+            messages.push({ role: "assistant", content: finalReply, function_call: call });
             messages.push({ role: "function", name: call.name, content: JSON.stringify(function_result) });
             break;
           }
@@ -327,15 +402,43 @@ async function runChatWithTools(conversationId, userMessage, contextOptions = {}
           // v4.9 - Previne que o segundo call do GPT reformate e perca os URLs
           if ((call.name === 'listGmailMessages' || call.name === 'searchGmail') && function_result?.message) {
             console.log(`📧 [Realtime] Gmail tool detectado - usando resposta pré-formatada`);
-            finalReply = function_result.message; // Usar a mensagem já formatada com links
+            finalReply = (finalReply ? finalReply + '\n\n' : '') + function_result.message; // Usar a mensagem já formatada com links
             turnCalls = []; // Encerrar o loop agêntico - não precisa de segundo call
-            messages.push({ role: "assistant", content: null, function_call: call });
+            messages.push({ role: "assistant", content: finalReply, function_call: call });
             messages.push({ role: "function", name: call.name, content: JSON.stringify(function_result) });
             break;
           }
 
-          // Historico para o proximo turno
-          messages.push({ role: "assistant", content: null, function_call: call });
+          // TRATAMENTO: Google Workspace Tools (Sheets, Docs, Slides)
+          // v9.0 - Preservar mensagem e link das ferramentas de criação/edição do Google
+          const isGoogleWorkspaceTool = [
+            'createProFinancialSheet', 'createGoogleDoc', 'createGoogleSheet',
+            'createGoogleSlide', 'updateGoogleSheet', 'createGooglePresentation'
+          ].includes(call.name);
+
+          if (isGoogleWorkspaceTool && function_result?.message) {
+            console.log(`📊 [Realtime] Google Workspace tool detectado: ${call.name} - usando resposta da ferramenta`);
+            const toolSuccess = !!function_result.success;
+            const toolMessage = function_result.message || '';
+            const toolLink = function_result.link || '';
+
+            if (toolSuccess) {
+              const parts = [finalReply, toolMessage];
+              if (toolLink) parts.push(`📎 [Abrir no Google](${toolLink})`);
+              forceFinalReplyFromTools = parts.filter(Boolean).join('\n\n');
+            } else {
+              forceFinalReplyFromTools = (finalReply ? finalReply + '\n\n' : '') + (toolMessage || `⚠️ Não consegui concluir a ação ${call.name}.`);
+            }
+
+            messages.push({ role: "assistant", content: finalReply, function_call: call });
+            messages.push({ role: "function", name: call.name, content: JSON.stringify(function_result) });
+            turnCalls = [];
+            criticalActionHandled = true;
+            break;
+          }
+
+          // Historico para o proximo turno (passando finalReply para preservar contexto)
+          messages.push({ role: "assistant", content: finalReply, function_call: call });
           messages.push({ role: "function", name: call.name, content: JSON.stringify(function_result) });
         }
 

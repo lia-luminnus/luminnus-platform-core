@@ -365,7 +365,7 @@ const MyAccount = () => {
                     <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                       {[
                         'Atendimento Ilimitado',
-                        'Integração com WhatsApp',
+                        'Integração com Telegram',
                         'Inteligência Cognitiva LIA',
                         'Dashboards em Tempo Real'
                       ].map((feature, i) => (
@@ -417,7 +417,7 @@ const MyAccount = () => {
                     {[
                       { title: 'IA Viva 24/7', icon: Bot, color: 'text-purple-400' },
                       { title: 'Voz Contextual', icon: Mail, color: 'text-blue-400' },
-                      { title: 'WhatsApp Web', icon: Save, color: 'text-green-400' },
+                      { title: 'Web Widget', icon: Save, color: 'text-purple-400' },
                       { title: 'Insights Reais', icon: Edit2, color: 'text-yellow-400' }
                     ].map((item, i) => (
                       <div key={i} className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/5 hover:border-white/10 transition-all">

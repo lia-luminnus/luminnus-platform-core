@@ -1,27 +1,29 @@
 import UnifiedHeader from "@/components/UnifiedHeader";
 import Hero from "@/components/Hero";
-import AboutLuminnus from "@/components/AboutLuminnus";
-import LiaStatistics from "@/components/LiaStatistics";
-import LiaPositioning from "@/components/LiaPositioning";
-import LiaAtendimento from "@/components/LiaAtendimento";
+import ProblemSection from "@/components/ProblemSection";
+import HowItWorks from "@/components/HowItWorks";
 import LiaSimulator from "@/components/LiaSimulator";
-import Solutions from "@/components/Solutions";
-import FuturePersonas from "@/components/FuturePersonas";
+import TargetAudience from "@/components/TargetAudience";
+import CtaFinal from "@/components/CtaFinal";
 import Footer from "@/components/Footer";
 import FloatingChatButton from "@/components/FloatingChatButton";
 
 const Index = () => {
   return (
-    <div className="min-h-screen bg-background transition-colors duration-300">
+    <div className="min-h-screen bg-background transition-colors duration-300 overflow-x-hidden">
       <UnifiedHeader />
+      {/* 1. Hero — Problema + CTA */}
       <Hero />
-      <AboutLuminnus />
-      <LiaStatistics />
-      <LiaPositioning />
-      <LiaAtendimento />
+      {/* 2. ProblemSection — Bater na dor da perda de leads */}
+      <ProblemSection />
+      {/* 3. HowItWorks — 3 passos simples da solução */}
+      <HowItWorks />
+      {/* 4. Simulador — Demo interativa */}
       <LiaSimulator />
-      <Solutions />
-      <FuturePersonas />
+      {/* 5. Público-Alvo — Segmentos atendidos */}
+      <TargetAudience />
+      {/* 6. CtaFinal — Urgência e conversão */}
+      <CtaFinal />
       <Footer />
       <FloatingChatButton />
     </div>

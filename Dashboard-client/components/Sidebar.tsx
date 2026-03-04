@@ -91,13 +91,6 @@ const Sidebar: React.FC = () => {
 
   const CHANNEL_INDICATORS = [
     {
-      key: 'whatsapp',
-      label: 'WhatsApp',
-      icon: '💬',
-      connected: channels.whatsapp,
-      route: '/integrations/whatsapp',
-    },
-    {
       key: 'telegram',
       label: 'Telegram',
       icon: '✈️',
@@ -178,8 +171,8 @@ const Sidebar: React.FC = () => {
             onClick={() => navigate(ch.route)}
             title={`${ch.label}: ${ch.connected ? 'Conectado' : 'Desconectado'}`}
             className={`flex items-center gap-2 rounded-xl transition-all duration-200 hover:bg-white/5 ${isSidebarCollapsed
-                ? 'justify-center p-2'
-                : 'justify-start px-3 py-1.5 w-full'
+              ? 'justify-center p-2'
+              : 'justify-start px-3 py-1.5 w-full'
               }`}
           >
             {/* Status Dot */}

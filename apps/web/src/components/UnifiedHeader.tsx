@@ -4,7 +4,6 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUserPlan } from "@/hooks/useUserPlan";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import AccountMenu from "@/components/AccountMenu";
@@ -48,33 +47,14 @@ const UnifiedHeader = () => {
     setMobileMenuOpen(false);
   };
 
-  const handleSolutionsClick = () => {
+  const handleHowItWorksClick = () => {
     const currentPath = window.location.pathname;
     if (currentPath === '/') {
-      scrollToSection("solucoes");
+      scrollToSection("como-funciona");
     } else {
       navigate('/');
       setTimeout(() => {
-        const element = document.getElementById("solucoes");
-        if (element) {
-          element.scrollIntoView({
-            behavior: "smooth",
-            block: "start"
-          });
-        }
-      }, 100);
-    }
-    setMobileMenuOpen(false);
-  };
-
-  const handleContactClick = () => {
-    const currentPath = window.location.pathname;
-    if (currentPath === '/') {
-      scrollToSection("contato");
-    } else {
-      navigate('/');
-      setTimeout(() => {
-        const element = document.getElementById("contato");
+        const element = document.getElementById("como-funciona");
         if (element) {
           element.scrollIntoView({
             behavior: "smooth",
@@ -118,10 +98,10 @@ const UnifiedHeader = () => {
                 {t('nav_inicio')}
               </button>
               <button
-                onClick={handleSolutionsClick}
+                onClick={handleHowItWorksClick}
                 className="text-white hover:text-accent transition-all font-medium drop-shadow-md"
               >
-                {t('nav_solucoes')}
+                {t('nav_how_it_works')}
               </button>
               <Link
                 to="/planos"
@@ -130,29 +110,30 @@ const UnifiedHeader = () => {
               >
                 {t('nav_planos')}
               </Link>
-              <button
-                onClick={handleContactClick}
-                className="text-white hover:text-accent transition-all font-medium drop-shadow-md"
-              >
-                {t('nav_contato')}
-              </button>
             </nav>
           </div>
 
           {/* Action Buttons - Desktop */}
           <div className="hidden md:flex items-center gap-3">
-            <ThemeToggle />
             <LanguageSwitcher />
 
             {user ? (
               <AccountMenu />
             ) : (
-              <Link
-                to="/auth"
-                className="bg-gradient-to-r from-[#6A00FF] to-[#00C2FF] text-white font-semibold px-5 py-2 rounded-md shadow-md hover:shadow-lg hover:scale-105 transition-all duration-300"
-              >
-                {t('btn_login')}
-              </Link>
+              <div className="flex items-center gap-3">
+                <Link
+                  to="/auth"
+                  className="text-white font-medium hover:text-accent transition-colors px-2"
+                >
+                  {t('btn_login')}
+                </Link>
+                <Link
+                  to="/planos"
+                  className="bg-gradient-to-r from-[#FF2E9E] to-[#F97316] text-white font-semibold px-5 py-2 rounded-full shadow-lg hover:shadow-[#FF2E9E]/25 hover:scale-105 transition-all duration-300"
+                >
+                  {t('btn_test_free_nav')}
+                </Link>
+              </div>
             )}
           </div>
 
@@ -175,10 +156,10 @@ const UnifiedHeader = () => {
                     {t('nav_inicio')}
                   </button>
                   <button
-                    onClick={handleSolutionsClick}
+                    onClick={handleHowItWorksClick}
                     className="text-foreground hover:text-accent transition-colors font-medium text-left py-2"
                   >
-                    {t('nav_solucoes')}
+                    {t('nav_how_it_works')}
                   </button>
                   <Link
                     to="/planos"
@@ -188,18 +169,11 @@ const UnifiedHeader = () => {
                   >
                     {t('nav_planos')}
                   </Link>
-                  <button
-                    onClick={handleContactClick}
-                    className="text-foreground hover:text-accent transition-colors font-medium text-left py-2"
-                  >
-                    {t('nav_contato')}
-                  </button>
                 </div>
 
                 {/* Mobile Actions */}
                 <div className="flex flex-col gap-3 pt-4 border-t border-border">
-                  <div className="flex items-center justify-between">
-                    <ThemeToggle />
+                  <div className="flex items-center justify-end">
                     <LanguageSwitcher />
                   </div>
 
@@ -233,13 +207,22 @@ const UnifiedHeader = () => {
                       </button>
                     </>
                   ) : (
-                    <Link
-                      to="/auth"
-                      className="bg-gradient-to-r from-[#6A00FF] to-[#00C2FF] text-white font-semibold px-5 py-3 rounded-md shadow-md hover:shadow-lg transition-all duration-300 text-center"
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      {t('btn_login')}
-                    </Link>
+                    <div className="flex flex-col gap-3">
+                      <Link
+                        to="/auth"
+                        className="bg-white/10 hover:bg-white/20 text-foreground font-semibold px-5 py-3 rounded-md shadow-md hover:shadow-lg transition-all duration-300 text-center border border-border"
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        {t('btn_login')}
+                      </Link>
+                      <Link
+                        to="/planos"
+                        className="bg-gradient-to-r from-[#FF2E9E] to-[#F97316] text-white font-semibold px-5 py-3 rounded-md shadow-md hover:shadow-lg transition-all duration-300 text-center"
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        {t('btn_test_free_nav')}
+                      </Link>
+                    </div>
                   )}
                 </div>
               </nav>

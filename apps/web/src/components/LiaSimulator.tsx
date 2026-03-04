@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface FormData {
   businessType: string;
@@ -15,6 +16,7 @@ interface Results {
 }
 
 const LiaSimulator = () => {
+  const { t } = useLanguage();
   const [formData, setFormData] = useState<FormData>({
     businessType: "Profissional Autônomo",
     employees: "1 pessoa",
@@ -68,10 +70,10 @@ const LiaSimulator = () => {
         <div className="max-w-4xl mx-auto">
           <div className="text-center space-y-4 mb-12 animate-fade-in">
             <h2 className="text-4xl lg:text-6xl font-bold bg-gradient-to-r from-[#7C3AED] via-[#FF2E9E] to-[#22D3EE] bg-clip-text text-transparent">
-              💡 Simule seus Resultados com a LIA
+              {t('sim_title')}
             </h2>
             <p className="text-lg lg:text-xl text-white/70">
-              Descubra quanto tempo, dinheiro e produtividade sua empresa pode ganhar automatizando com inteligência artificial.
+              {t('sim_subtitle')}
             </p>
           </div>
 
@@ -79,48 +81,48 @@ const LiaSimulator = () => {
             <form className="space-y-6 mb-10" onSubmit={(e) => e.preventDefault()}>
               <div>
                 <label className="block text-sm font-medium text-white/80 mb-2">
-                  Tipo de negócio:
+                  {t('sim_label_biz')}
                 </label>
                 <select
                   value={formData.businessType}
                   onChange={(e) => handleInputChange("businessType", e.target.value)}
                   className="w-full bg-[#1C1C1C] text-white p-4 rounded-lg border border-[#22D3EE]/20 focus:border-[#22D3EE]/50 focus:ring-2 focus:ring-[#22D3EE]/20 transition-all outline-none"
                 >
-                  <option>Profissional Autônomo</option>
-                  <option>Pequena Empresa</option>
-                  <option>Média Empresa</option>
-                  <option>Grande Empresa</option>
+                  <option value="Profissional Autônomo">{t('sim_opt_biz1')}</option>
+                  <option value="Pequena Empresa">{t('sim_opt_biz2')}</option>
+                  <option value="Média Empresa">{t('sim_opt_biz3')}</option>
+                  <option value="Grande Empresa">{t('sim_opt_biz4')}</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-white/80 mb-2">
-                  Número de colaboradores:
+                  {t('sim_label_emp')}
                 </label>
                 <select
                   value={formData.employees}
                   onChange={(e) => handleInputChange("employees", e.target.value)}
                   className="w-full bg-[#1C1C1C] text-white p-4 rounded-lg border border-[#22D3EE]/20 focus:border-[#22D3EE]/50 focus:ring-2 focus:ring-[#22D3EE]/20 transition-all outline-none"
                 >
-                  <option>1 pessoa</option>
-                  <option>2 a 5 pessoas</option>
-                  <option>6 a 15 pessoas</option>
-                  <option>Mais de 15 pessoas</option>
+                  <option value="1 pessoa">{t('sim_opt_emp1')}</option>
+                  <option value="2 a 5 pessoas">{t('sim_opt_emp2')}</option>
+                  <option value="6 a 15 pessoas">{t('sim_opt_emp3')}</option>
+                  <option value="Mais de 15 pessoas">{t('sim_opt_emp4')}</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-white/80 mb-2">
-                  Horas semanais gastas com atendimento e e-mails:
+                  {t('sim_label_hours')}
                 </label>
                 <select
                   value={formData.weeklyHours}
                   onChange={(e) => handleInputChange("weeklyHours", e.target.value)}
                   className="w-full bg-[#1C1C1C] text-white p-4 rounded-lg border border-[#22D3EE]/20 focus:border-[#22D3EE]/50 focus:ring-2 focus:ring-[#22D3EE]/20 transition-all outline-none"
                 >
-                  <option>Até 10h</option>
-                  <option>Entre 10h e 30h</option>
-                  <option>Mais de 30h</option>
+                  <option value="Até 10h">{t('sim_opt_hours1')}</option>
+                  <option value="Entre 10h e 30h">{t('sim_opt_hours2')}</option>
+                  <option value="Mais de 30h">{t('sim_opt_hours3')}</option>
                 </select>
               </div>
 
@@ -129,7 +131,7 @@ const LiaSimulator = () => {
                 onClick={calculateResults}
                 className="w-full bg-gradient-to-r from-[#7C3AED] to-[#22D3EE] hover:shadow-[0_0_30px_rgba(124,58,237,0.5)] py-6 text-lg font-semibold border-0 transition-all hover:scale-[1.02]"
               >
-                Calcular Resultados
+                {t('sim_btn_calc')}
               </Button>
             </form>
 
@@ -137,10 +139,10 @@ const LiaSimulator = () => {
               <div className="animate-fade-in">
                 <div className="text-center mb-8">
                   <h3 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-[#22D3EE] to-[#7C3AED] bg-clip-text text-transparent mb-2">
-                    📊 Resultados Estimados
+                    {t('sim_res_title')}
                   </h3>
                   <p className="text-white/60">
-                    Com base nas informações inseridas, veja o impacto que a LIA pode gerar no seu negócio.
+                    {t('sim_res_subtitle')}
                   </p>
                 </div>
 
@@ -150,9 +152,9 @@ const LiaSimulator = () => {
                       <circle cx="25" cy="25" r="22" stroke="#22D3EE" strokeWidth="3" fill="none" />
                     </svg>
                     <h4 className="text-[#22D3EE] text-xl lg:text-2xl font-bold text-center">
-                      +{results.timeSaved}h/semana
+                      +{results.timeSaved}{t('sim_res_time')}
                     </h4>
-                    <p className="text-white/60 text-sm text-center mt-2">Tempo economizado</p>
+                    <p className="text-white/60 text-sm text-center mt-2">{t('sim_res_time_label')}</p>
                   </div>
 
                   <div className="bg-[#0E0E13] p-6 rounded-xl border border-[#22D3EE]/20 shadow-[0_0_20px_rgba(124,58,237,0.1)] hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(124,58,237,0.2)] transition-all">
@@ -160,9 +162,9 @@ const LiaSimulator = () => {
                       <rect x="10" y="10" width="30" height="30" rx="6" stroke="#22D3EE" strokeWidth="3" fill="none" />
                     </svg>
                     <h4 className="text-[#22D3EE] text-xl lg:text-2xl font-bold text-center">
-                      €{results.costReduction}/mês
+                      €{results.costReduction}{t('sim_res_cost')}
                     </h4>
-                    <p className="text-white/60 text-sm text-center mt-2">Redução de custos</p>
+                    <p className="text-white/60 text-sm text-center mt-2">{t('sim_res_cost_label')}</p>
                   </div>
 
                   <div className="bg-[#0E0E13] p-6 rounded-xl border border-[#22D3EE]/20 shadow-[0_0_20px_rgba(124,58,237,0.1)] hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(124,58,237,0.2)] transition-all">
@@ -172,13 +174,13 @@ const LiaSimulator = () => {
                     <h4 className="text-[#22D3EE] text-xl lg:text-2xl font-bold text-center">
                       +{results.productivityIncrease}%
                     </h4>
-                    <p className="text-white/60 text-sm text-center mt-2">Aumento de produtividade</p>
+                    <p className="text-white/60 text-sm text-center mt-2">{t('sim_res_prod_label')}</p>
                   </div>
                 </div>
 
                 <Link to="/planos">
                   <Button className="w-full bg-gradient-to-r from-[#7C3AED] to-[#22D3EE] hover:shadow-[0_0_30px_rgba(124,58,237,0.6)] py-6 text-lg font-semibold border-0 transition-all hover:scale-[1.02]">
-                    Ver Planos Recomendados →
+                    {t('sim_btn_plans')}
                   </Button>
                 </Link>
               </div>
