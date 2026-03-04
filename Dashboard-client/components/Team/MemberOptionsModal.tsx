@@ -75,10 +75,10 @@ export const MemberOptionsModal: React.FC<Props> = ({ isOpen, onClose, memberId 
                         <select
                             value={selectedRole}
                             onChange={(e) => setSelectedRole(e.target.value as TeamRole)}
-                            className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                            className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-primary"
                         >
                             {AVAILABLE_ROLES.map(r => (
-                                <option key={r} value={r}>{r}</option>
+                                <option key={r} value={r} className="bg-white dark:bg-[#0A0F1A] text-gray-800 dark:text-white">{r}</option>
                             ))}
                         </select>
                     </div>

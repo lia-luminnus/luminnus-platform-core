@@ -49,11 +49,13 @@ const WhatsAppConfig: React.FC<WhatsAppConfigProps> = ({ onSave, channel = 'what
     const [isRecommending, setIsRecommending] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [playbooks, setPlaybooks] = useState<any[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const defaultPlaybooks = [
-        {
-            name: 'Qualificação Lead',
-            content: `Objetivo: Identificar e qualificar leads promissores.
+    const CHANNEL_DEFAULT_PLAYBOOKS: Record<string, typeof playbooks> = {
+        whatsapp: [
+            {
+                name: 'Qualificação Lead',
+                content: `Objetivo: Identificar e qualificar leads promissores.
 
 REGRAS:
 1. Sempre pergunte o nome da empresa e cargo do contato.
@@ -68,10 +70,10 @@ PERGUNTAS ESSENCIAIS:
 - Qual seu principal desafio hoje?
 - Você já utiliza alguma solução similar?
 - Qual o tamanho da sua equipe?`
-        },
-        {
-            name: 'Suporte Técnico',
-            content: `Objetivo: Resolver problemas técnicos de forma eficiente.
+            },
+            {
+                name: 'Suporte Técnico',
+                content: `Objetivo: Resolver problemas técnicos de forma eficiente.
 
 REGRAS:
 1. Sempre solicite o ID do cliente ou e-mail de cadastro.
@@ -85,10 +87,10 @@ FLUXO DE ATENDIMENTO:
 - Saudação → Identificação → Diagnóstico → Solução → Confirmação
 - Tempo máximo por etapa: 3 minutos
 - Se não resolver em 10 min → transferir para especialista`
-        },
-        {
-            name: 'Agendamento',
-            content: `Objetivo: Agendar reuniões e compromissos de forma eficiente.
+            },
+            {
+                name: 'Agendamento',
+                content: `Objetivo: Agendar reuniões e compromissos de forma eficiente.
 
 REGRAS:
 1. Sempre confirme nome completo e telefone de contato.
@@ -108,10 +110,10 @@ APÓS AGENDAR:
 - Confirmar dados coletados
 - Informar endereço/link da reunião
 - Perguntar se há algo mais`
-        },
-        {
-            name: 'Onboarding Cliente',
-            content: `Objetivo: Facilitar os primeiros passos do cliente no produto/serviço.
+            },
+            {
+                name: 'Onboarding Cliente',
+                content: `Objetivo: Facilitar os primeiros passos do cliente no produto/serviço.
 
 REGRAS:
 1. Boas-vindas calorosas e personalizadas.
@@ -122,10 +124,10 @@ REGRAS:
 
 FLUXO:
 - Boas-vindas → Verificação de Acesso → Guia Rápido → Dúvidas → Próximos Passos`
-        },
-        {
-            name: 'Pesquisa NPS / Feedback',
-            content: `Objetivo: Coletar feedback e medir satisfação do cliente.
+            },
+            {
+                name: 'Pesquisa NPS / Feedback',
+                content: `Objetivo: Coletar feedback e medir satisfação do cliente.
 
 REGRAS:
 1. Pergunte: "De 0 a 10, o quanto você recomendaria nossa empresa?"
@@ -133,10 +135,10 @@ REGRAS:
 3. Se 7 ou 8 (Passivo) → Pergunte o que falta para ser nota 10.
 4. Se 0 a 6 (Detrator) → Desculpe-se e abra um ticket prioritário.
 5. Registre a resposta no CRM imediatamente.`
-        },
-        {
-            name: 'Recuperação de Vendas',
-            content: `Objetivo: Converter leads que abandonaram o carrinho ou pararam de responder.
+            },
+            {
+                name: 'Recuperação de Vendas',
+                content: `Objetivo: Converter leads que abandonaram o carrinho ou pararam de responder.
 
 REGRAS:
 1. Tom de voz empático: "Percebi que você não concluiu..."
@@ -144,10 +146,10 @@ REGRAS:
 3. Pergunte se houve alguma dúvida técnica no fechamento.
 4. Destaque 2 benefícios principais que o cliente vai perder.
 5. Crie senso de urgência (últimas unidades/vagas).`
-        },
-        {
-            name: 'FAQ / Informações',
-            content: `Objetivo: Responder dúvidas frequentes de forma direta.
+            },
+            {
+                name: 'FAQ / Informações',
+                content: `Objetivo: Responder dúvidas frequentes de forma direta.
 
 REGRAS:
 1. Mantenha as respostas curtas (máximo 4 linhas).
@@ -155,10 +157,87 @@ REGRAS:
 3. Se a dúvida for complexa → ofereça falar com humano.
 4. Use Bullet Points para facilitar a leitura no celular.
 5. Confirme se a dúvida foi sanada antes de encerrar.`
-        }
-    ];
+            }
+        ],
+        telegram: [
+            {
+                name: 'Relatórios do Dia',
+                content: `Objetivo: Fornecer resumos e métricas da empresa para a equipe interna.
 
-    const fileInputRef = useRef<HTMLInputElement>(null);
+REGRAS:
+1. Respostas objetivas, em formato de bullet points ou tabelas simples.
+2. Forneça os KPIs principais solicitados (Vendas, Leads, Tickets).
+3. Se os dados não estiverem disponíveis, informe claramente a limitação.
+4. NÃO invente números. Se não souber a métrica, diga que precisa consultar o Dashboard Luminnus.
+
+EXEMPLO DE RESPOSTA METRICA:
+📊 Resumo Financeiro
+- Faturamento do dia: R$ X
+- Novos clientes: Y
+- Assinaturas canceladas: Z`
+            },
+            {
+                name: 'Automações e Comandos',
+                content: `Objetivo: Auxiliar a equipe na execução de ações rotineiras no sistema.
+
+REGRAS:
+1. Confirme ações críticas antes de simular a execução ("Tem certeza que deseja [ação]?").
+2. Explique os fluxos com clareza.
+3. Peça a entrada exata dos dados (ID, E-mail) se for realizar buscas ou aprovações.`
+            },
+            {
+                name: 'Base de Conhecimento Luminnus',
+                content: `Objetivo: Ser o ajudante técnico/suporte para os funcionários.
+
+REGRAS:
+1. Entenda o fluxo e os recursos do sistema da empresa.
+2. Oriente o membro da equipe sobre como usar módulos do Luminnus (CRM, Automações, LIA).
+3. Seja didático, usando exemplos práticos.
+4. Para problemas complexos, direcione onde abrir ticket técnico interno.`
+            }
+        ],
+        web_widget: [
+            {
+                name: 'Conversão de Leads do Site',
+                content: `Objetivo: Engajar visitantes do site e transformá-los em leads (capturar contato).
+
+REGRAS:
+1. Seja amigável, rápido e convide o visitante a interagir. Ex: "Olá! Posso ajudar você a encontrar o que procura no nosso site?"
+2. Se o visitante demonstrar interesse num serviço/produto, peça SEMPRE o e-mail ou WhatsApp para enviar as informações detalhadas.
+3. Foco em benefícios: Destaque rápido porque sua solução resolve o problema do lead.
+4. Limite o tamanho da resposta. No celular (onde o widget aparece) textos longos espantam.
+
+INFORMAÇÕES A CAPTURAR (Cruciais):
+- Nome ou Empresa
+- E-mail de Trabalho
+- Celular / WhatsApp
+- Maior desafio atual`
+            },
+            {
+                name: 'Atendimento de Carrinho',
+                content: `Objetivo: Ajudar clientes com dúvidas antes da compra (Tira-Teima).
+
+REGRAS:
+1. Esclareça dúvidas sobre frete, prazo de entrega, garantias e devoluções.
+2. Destaque formas de pagamento seguras.
+3. Tente quebrar objeções ("Se comprar hoje, tem envio prioritário").
+4. Se perguntar sobre código promocional, avise onde ele(a) encontra ou se existe promoção ativa.
+5. Se for um problema técnico na página de Checkout, oriente a limpar o cache ou tentar outro navegador, e colete o erro.`
+            },
+            {
+                name: 'FAQ Rápido (Site)',
+                content: `Objetivo: Sanar as dúvidas de primeira mão de forma ágil para não perder o visitante.
+
+REGRAS:
+1. Respostas em no máximo 1-2 frases ou tópicos curtos.
+2. Direcione com links (se souber) para as páginas corretas do site: "Preços", "Sobre Nós", "Contato".
+3. Evite parágrafos densos.
+4. Termine frequentemente com: "Consegui responder sua dúvida? Posso ajudar com mais algo?"`
+            }
+        ]
+    };
+
+    const currentDefaultPlaybooks = CHANNEL_DEFAULT_PLAYBOOKS[channel] || CHANNEL_DEFAULT_PLAYBOOKS.whatsapp;
 
     // Carregar configurações iniciais
     useEffect(() => {
@@ -301,7 +380,7 @@ REGRAS:
 
         // Se a lista estiver vazia (primeiro salvamento), carregar defaults primeiro para não perdê-los
         if (updatedPlaybooks.length === 0) {
-            updatedPlaybooks = JSON.parse(JSON.stringify(defaultPlaybooks));
+            updatedPlaybooks = JSON.parse(JSON.stringify(currentDefaultPlaybooks));
         }
 
         if (editingPlaybook?.id === 'new') {
@@ -319,7 +398,7 @@ REGRAS:
 
     const deletePlaybook = (name: string) => {
         if (window.confirm(`Deseja realmente excluir o playbook "${name}"?`)) {
-            const sourceList = playbooks.length > 0 ? playbooks : JSON.parse(JSON.stringify(defaultPlaybooks));
+            const sourceList = playbooks.length > 0 ? playbooks : JSON.parse(JSON.stringify(currentDefaultPlaybooks));
             const updated = sourceList.filter((p: any) => p.name !== name);
             setPlaybooks(updated);
         }
@@ -375,44 +454,46 @@ REGRAS:
                         </div>
                     </div>
 
-                    {/* A2) Handoff Rules */}
-                    <div className="space-y-6 relative z-20">
-                        <div className="flex items-center gap-2 mb-1.5">
-                            <span className="material-symbols-outlined text-brand-primary text-lg">hail</span>
-                            <h4 className="font-black text-[11px] uppercase tracking-widest text-gray-500">Regras de Handoff</h4>
-                        </div>
+                    {/* A2) Handoff Rules - Apenas para WhatsApp e Telegram */}
+                    {channel !== 'web_widget' && (
+                        <div className="space-y-6 relative z-20">
+                            <div className="flex items-center gap-2 mb-1.5">
+                                <span className="material-symbols-outlined text-brand-primary text-lg">hail</span>
+                                <h4 className="font-black text-[11px] uppercase tracking-widest text-gray-500">Regras de Handoff</h4>
+                            </div>
 
-                        <div className="glass-panel bg-white p-4 rounded-2xl border border-gray-300 dark:border-white/10 dark:bg-white/5 shadow-sm space-y-1.5">
-                            {[
-                                { id: 'sensitiveWords', label: 'Palavras Sensíveis' },
-                                { id: 'angryCustomer', label: 'Cliente Irritado (Sentimento)' },
-                                { id: 'legalRequest', label: 'Pedido Jurídico / Reclamação' }
-                            ].map((rule) => (
-                                <label key={rule.id} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 transition-all cursor-pointer group">
-                                    <span className="text-xs font-bold text-gray-600 dark:text-gray-300 group-hover:text-brand-primary transition-colors">{rule.label}</span>
-                                    <div className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            className="sr-only peer"
-                                            checked={(config.handoff_rules as any)[rule.id]}
-                                            onChange={(e) => setConfig({
-                                                ...config,
-                                                handoff_rules: {
-                                                    ...(config.handoff_rules as any),
-                                                    [rule.id]: e.target.checked
-                                                }
-                                            })}
-                                        />
-                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-brand-primary"></div>
-                                    </div>
-                                </label>
-                            ))}
+                            <div className="glass-panel bg-white p-4 rounded-2xl border border-gray-300 dark:border-white/10 dark:bg-white/5 shadow-sm space-y-1.5">
+                                {[
+                                    { id: 'sensitiveWords', label: 'Palavras Sensíveis' },
+                                    { id: 'angryCustomer', label: 'Cliente Irritado (Sentimento)' },
+                                    { id: 'legalRequest', label: 'Pedido Jurídico / Reclamação' }
+                                ].map((rule) => (
+                                    <label key={rule.id} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 transition-all cursor-pointer group">
+                                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 group-hover:text-brand-primary transition-colors">{rule.label}</span>
+                                        <div className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                className="sr-only peer"
+                                                checked={(config.handoff_rules as any)[rule.id]}
+                                                onChange={(e) => setConfig({
+                                                    ...config,
+                                                    handoff_rules: {
+                                                        ...config.handoff_rules,
+                                                        [rule.id]: e.target.checked
+                                                    }
+                                                })}
+                                            />
+                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-brand-primary"></div>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
 
                 {/* A3) Playbooks - MVP Preview */}
-                <div className="space-y-6">
+                < div className="space-y-6" >
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-brand-primary text-lg">auto_stories</span>
@@ -421,7 +502,7 @@ REGRAS:
                         <button
                             onClick={() => {
                                 if (window.confirm('Deseja restaurar todos os playbooks para os valores padrão? Esta ação não pode ser desfeita.')) {
-                                    setPlaybooks(JSON.parse(JSON.stringify(defaultPlaybooks)));
+                                    setPlaybooks(JSON.parse(JSON.stringify(currentDefaultPlaybooks)));
                                     alert('✅ Templates restaurados! Clique em "Salvar Alterações" para confirmar.');
                                 }
                             }}
@@ -432,7 +513,7 @@ REGRAS:
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {(playbooks.length > 0 ? playbooks : defaultPlaybooks).map((playbook) => (
+                        {(playbooks.length > 0 ? playbooks : currentDefaultPlaybooks).map((playbook) => (
                             <div
                                 key={playbook.name}
                                 className="glass-panel bg-white p-4 rounded-2xl border-2 border-dashed border-gray-300 dark:border-white/20 hover:border-brand-primary/50 transition-all group cursor-pointer relative shadow-sm dark:bg-white/10"
@@ -464,147 +545,149 @@ REGRAS:
                             <span className="font-bold text-[10px] uppercase tracking-widest">Novo Playbook</span>
                         </button>
                     </div>
-                </div>
+                </div >
 
                 {/* Action Buttons */}
-                <div className="flex justify-end gap-3 border-t border-gray-200 dark:border-white/10 pt-6">
+                < div className="flex justify-end gap-3 border-t border-gray-200 dark:border-white/10 pt-6" >
                     <button
                         onClick={handleSaveSettings}
                         className="px-6 py-2.5 bg-brand-primary text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-brand-primary/20 hover:scale-105 active:scale-95 transition-all"
                     >
                         Salvar Alterações
                     </button>
-                </div>
-            </div>
+                </div >
+            </div >
 
             {/* Modal de Edição de Playbook */}
-            {isEditorOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => setIsEditorOpen(false)}
-                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                    />
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                        className="relative w-full max-w-2xl bg-white dark:bg-[#1a1f2e] border border-gray-300 dark:border-white/10 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.3)] overflow-hidden rounded-[32px]"
-                    >
-                        <div className="p-8 border-b border-gray-100 dark:border-white/5 flex items-center justify-between bg-gray-50/30 dark:bg-white/5">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-2xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
-                                    <span className="material-symbols-outlined text-2xl">auto_stories</span>
+            {
+                isEditorOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setIsEditorOpen(false)}
+                            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            className="relative w-full max-w-2xl bg-white dark:bg-[#1a1f2e] border border-gray-300 dark:border-white/10 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.3)] overflow-hidden rounded-[32px]"
+                        >
+                            <div className="p-8 border-b border-gray-100 dark:border-white/5 flex items-center justify-between bg-gray-50/30 dark:bg-white/5">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-2xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
+                                        <span className="material-symbols-outlined text-2xl">auto_stories</span>
+                                    </div>
+                                    <div className="flex-1">
+                                        <input
+                                            type="text"
+                                            className="bg-transparent border-none p-0 text-xl font-black tracking-tight outline-none w-full focus:ring-0 text-gray-900 dark:text-white"
+                                            value={playbookName}
+                                            onChange={(e) => setPlaybookName(e.target.value)}
+                                            placeholder="Nome do Playbook"
+                                        />
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Configurando Regras do Agente</p>
+                                    </div>
                                 </div>
-                                <div className="flex-1">
-                                    <input
-                                        type="text"
-                                        className="bg-transparent border-none p-0 text-xl font-black tracking-tight outline-none w-full focus:ring-0 text-gray-900 dark:text-white"
-                                        value={playbookName}
-                                        onChange={(e) => setPlaybookName(e.target.value)}
-                                        placeholder="Nome do Playbook"
-                                    />
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Configurando Regras do Agente</p>
-                                </div>
+                                <button
+                                    onClick={() => setIsEditorOpen(false)}
+                                    className="w-10 h-10 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 flex items-center justify-center text-gray-400 transition-all"
+                                >
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
                             </div>
-                            <button
-                                onClick={() => setIsEditorOpen(false)}
-                                className="w-10 h-10 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 flex items-center justify-center text-gray-400 transition-all"
-                            >
-                                <span className="material-symbols-outlined">close</span>
-                            </button>
-                        </div>
 
-                        <div className="p-8 space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Modelo Base</label>
-                                    <CustomSelect
-                                        value=""
-                                        onChange={(selectedValue) => {
-                                            const template = defaultPlaybooks.find(t => t.name === selectedValue);
-                                            if (template) {
-                                                const hasContent = playbookContent.trim().length > 0;
-                                                if (!hasContent || window.confirm('Trocar o modelo irá sobrescrever seu texto atual. Continuar?')) {
-                                                    setPlaybookContent(template.content);
-                                                    setPlaybookName(template.name);
+                            <div className="p-8 space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Modelo Base</label>
+                                        <CustomSelect
+                                            value=""
+                                            onChange={(selectedValue) => {
+                                                const template = currentDefaultPlaybooks.find(t => t.name === selectedValue);
+                                                if (template) {
+                                                    const hasContent = playbookContent.trim().length > 0;
+                                                    if (!hasContent || window.confirm('Trocar o modelo irá sobrescrever seu texto atual. Continuar?')) {
+                                                        setPlaybookContent(template.content);
+                                                        setPlaybookName(template.name);
+                                                    }
                                                 }
-                                            }
-                                        }}
-                                        options={defaultPlaybooks.map(t => ({ label: t.name, value: t.name }))}
-                                        variant="glass"
-                                        placeholder="Selecionar modelo..."
+                                            }}
+                                            options={currentDefaultPlaybooks.map(t => ({ label: t.name, value: t.name }))}
+                                            variant="glass"
+                                            placeholder="Selecionar modelo..."
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Contexto Sugerido</label>
+                                        <div className="px-4 py-2 bg-brand-primary/5 rounded-xl border border-brand-primary/10">
+                                            <p className="text-[10px] font-bold text-brand-primary">{config.objective} / {config.tone}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Regras e Instruções</label>
+                                    <textarea
+                                        className="w-full h-48 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-6 text-sm font-medium focus:ring-2 focus:ring-brand-primary/50 outline-none transition-all no-scrollbar resize-none"
+                                        value={playbookContent}
+                                        onChange={(e) => setPlaybookContent(e.target.value)}
+                                        placeholder="Descreva como o agente deve se comportar neste cenário..."
                                     />
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Contexto Sugerido</label>
-                                    <div className="px-4 py-2 bg-brand-primary/5 rounded-xl border border-brand-primary/10">
-                                        <p className="text-[10px] font-bold text-brand-primary">{config.objective} / {config.tone}</p>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div
+                                        onClick={() => !isUploading && fileInputRef.current?.click()}
+                                        className={`p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 flex items-center gap-3 cursor-pointer hover:bg-brand-primary/5 transition-all ${isUploading ? 'opacity-50 cursor-wait' : ''}`}
+                                    >
+                                        <input
+                                            type="file"
+                                            ref={fileInputRef}
+                                            className="hidden"
+                                            accept=".pdf,.docx,.doc,.txt,.xlsx,.xls"
+                                            onChange={handleFileUpload}
+                                        />
+                                        <span className="material-symbols-outlined text-brand-primary animate-pulse">upload_file</span>
+                                        <div>
+                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Conhecimento</p>
+                                            <p className="text-[11px] font-bold">{isUploading ? 'Analisando...' : 'Carregar Documento'}</p>
+                                        </div>
+                                    </div>
+                                    <div
+                                        onClick={handleRecommend}
+                                        className={`p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 flex items-center gap-3 cursor-pointer hover:bg-brand-primary/5 transition-all ${isRecommending ? 'opacity-50 cursor-wait' : ''}`}
+                                    >
+                                        <span className="material-symbols-outlined text-brand-primary">auto_awesome</span>
+                                        <div>
+                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">IA Recomendação</p>
+                                            <p className="text-[11px] font-bold">{isRecommending ? 'Gerando...' : 'Sugerir com IA'}</p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Regras e Instruções</label>
-                                <textarea
-                                    className="w-full h-48 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-6 text-sm font-medium focus:ring-2 focus:ring-brand-primary/50 outline-none transition-all no-scrollbar resize-none"
-                                    value={playbookContent}
-                                    onChange={(e) => setPlaybookContent(e.target.value)}
-                                    placeholder="Descreva como o agente deve se comportar neste cenário..."
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div
-                                    onClick={() => !isUploading && fileInputRef.current?.click()}
-                                    className={`p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 flex items-center gap-3 cursor-pointer hover:bg-brand-primary/5 transition-all ${isUploading ? 'opacity-50 cursor-wait' : ''}`}
+                            <div className="p-6 bg-gray-50 dark:bg-white/5 border-t border-gray-100 dark:border-white/10 flex justify-end gap-3">
+                                <button
+                                    onClick={() => setIsEditorOpen(false)}
+                                    className="px-6 py-2.5 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 dark:hover:text-white transition-all"
                                 >
-                                    <input
-                                        type="file"
-                                        ref={fileInputRef}
-                                        className="hidden"
-                                        accept=".pdf,.docx,.doc,.txt,.xlsx,.xls"
-                                        onChange={handleFileUpload}
-                                    />
-                                    <span className="material-symbols-outlined text-brand-primary animate-pulse">upload_file</span>
-                                    <div>
-                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Conhecimento</p>
-                                        <p className="text-[11px] font-bold">{isUploading ? 'Analisando...' : 'Carregar Documento'}</p>
-                                    </div>
-                                </div>
-                                <div
-                                    onClick={handleRecommend}
-                                    className={`p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/5 flex items-center gap-3 cursor-pointer hover:bg-brand-primary/5 transition-all ${isRecommending ? 'opacity-50 cursor-wait' : ''}`}
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={savePlaybookChanges}
+                                    className="px-8 py-2.5 bg-brand-primary text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-brand-primary/20 hover:scale-105 active:scale-95 transition-all"
                                 >
-                                    <span className="material-symbols-outlined text-brand-primary">auto_awesome</span>
-                                    <div>
-                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">IA Recomendação</p>
-                                        <p className="text-[11px] font-bold">{isRecommending ? 'Gerando...' : 'Sugerir com IA'}</p>
-                                    </div>
-                                </div>
+                                    Salvar Playbook
+                                </button>
                             </div>
-                        </div>
-
-                        <div className="p-6 bg-gray-50 dark:bg-white/5 border-t border-gray-100 dark:border-white/10 flex justify-end gap-3">
-                            <button
-                                onClick={() => setIsEditorOpen(false)}
-                                className="px-6 py-2.5 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 dark:hover:text-white transition-all"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={savePlaybookChanges}
-                                className="px-8 py-2.5 bg-brand-primary text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-brand-primary/20 hover:scale-105 active:scale-95 transition-all"
-                            >
-                                Salvar Playbook
-                            </button>
-                        </div>
-                    </motion.div>
-                </div>
-            )}
-        </div>
+                        </motion.div>
+                    </div>
+                )
+            }
+        </div >
     );
 };
 

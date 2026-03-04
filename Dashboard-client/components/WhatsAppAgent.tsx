@@ -213,7 +213,7 @@ const WhatsAppAgentContent: React.FC = () => {
         }
     };
 
-    const tabs = [
+    const allTabs = [
         { id: 'config', label: t('waConfig'), icon: 'settings_suggest' },
         { id: 'inbox', label: t('waInbox'), icon: 'inbox' },
         { id: 'kanban', label: t('waPipeline'), icon: 'view_kanban' },
@@ -221,6 +221,17 @@ const WhatsAppAgentContent: React.FC = () => {
         { id: 'briefings', label: t('waBriefings'), icon: 'schedule_send' },
         { id: 'summaries', label: t('waSummaries'), icon: 'description' }
     ];
+
+    const tabs = allTabs.filter(tab => {
+        if (activeChannel === 'whatsapp') return true; // WhatsApp tem tudo
+        if (activeChannel === 'web_widget') {
+            return ['config', 'inbox', 'kanban'].includes(tab.id); // Web foca em venda/conversão
+        }
+        if (activeChannel === 'telegram') {
+            return ['config', 'inbox'].includes(tab.id); // Telegram foca em operações internas (node)
+        }
+        return false;
+    });
 
     const isOnline = status?.connected === true || ['online', 'active', 'connected'].includes(status?.status);
 

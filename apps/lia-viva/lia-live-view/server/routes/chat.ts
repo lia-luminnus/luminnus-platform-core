@@ -17,13 +17,14 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
   // Handler principal de chat (reutilizável para /chat e /api/chat)
   const chatHandler = async (req: any, res: any) => {
     try {
-      const { message, conversationId, mode, personality, userId, tenantId, liaMode, messageId, files } = req.body;
+      const { message, conversationId, mode, personality, userId, tenantId, liaMode, messageId, files, playbookRules: clientPlaybookRules } = req.body;
 
       console.log('\n========== 💬 NOVA REQUISIÇÃO CHAT ==========');
       console.log(`📝 Mensagem: ${message?.substring(0, 100)}`);
       console.log(`🆔 Conversa: ${conversationId || 'N/A'}`);
       console.log(`🔧 LIA Mode: ${liaMode || 'NORMAL'}`);
       console.log(`📎 Arquivos: ${files ? files.length : 0}`);
+      console.log(`📋 Playbook Rules (do cliente): ${clientPlaybookRules ? 'SIM (' + clientPlaybookRules.length + ' chars)' : 'NÃO'}`);
       console.log('============================================\n');
 
       const finalUserId = userId || '00000000-0000-0000-0000-000000000001';
@@ -61,8 +62,74 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
       const admin_diagnostic_mode = req.body.admin_diagnostic_mode === true || liaMode === 'DIAGNOSTIC';
       const basePersona = getLiaGreeting(admin_diagnostic_mode);
 
+      // 3.0.1 Carregar playbooks/regras do agente
+      // PRIORIDADE 1: Regras enviadas diretamente pelo frontend (web widget)
+      // PRIORIDADE 2: Carregar do Supabase pelo tenant_id + channel
+      let playbookContext = '';
+
+      if (clientPlaybookRules && clientPlaybookRules.trim()) {
+        // Frontend já enviou as regras — usar diretamente
+        playbookContext = `\n\n===== CONTEXTO DO AGENTE (PLAYBOOKS CONFIGURADOS) =====
+
+REGRAS E INFORMAÇÕES DA EMPRESA (SIGA ESTRITAMENTE):
+${clientPlaybookRules}
+
+IMPORTANTE: Você DEVE usar as informações acima como sua identidade e base de conhecimento.
+Quando perguntarem sobre produtos, promoções, preços, horários ou qualquer informação da empresa, RESPONDA usando os dados acima.
+Quando perguntarem quem você é, responda de acordo com as regras configuradas.
+NÃO diga "não tenho acesso" a informações que estão nos playbooks acima.
+NÃO se apresente como "Luminnus" ou "assistente genérico" — use APENAS o nome e contexto configurados acima.
+===== FIM DO CONTEXTO DO AGENTE =====`;
+
+        console.log(`[Chat] 📋 Playbook recebido do frontend (${clientPlaybookRules.length} chars)`);
+      } else {
+        // Fallback: carregar do Supabase
+        try {
+          const { supabase: supabaseClient } = await import('../config/supabase.js');
+          const { data: agentSettings } = await supabaseClient
+            .from('whatsapp_agent_settings')
+            .select('profile_json, playbooks_json')
+            .eq('tenant_id', finalTenantId)
+            .eq('channel', 'web_widget')
+            .maybeSingle();
+
+          if (agentSettings) {
+            const agentProfile = agentSettings.profile_json || {};
+            const playbooksList = agentSettings.playbooks_json || [];
+            const agentName = agentProfile.agent_name || '';
+            const agentMode = agentProfile.objective || '';
+            const agentLanguage = agentProfile.language || 'pt-BR';
+
+            const allPlaybooksContent = playbooksList
+              .filter((p: any) => p.content)
+              .map((p: any) => `### ${p.name}:\n${p.content}`)
+              .join('\n\n');
+
+            if (agentName || allPlaybooksContent) {
+              playbookContext = `\n\n===== CONTEXTO DO AGENTE (PLAYBOOKS CONFIGURADOS) =====
+${agentName ? `Você é ${agentName}.` : ''}
+${agentMode ? `Modo de operação: ${agentMode}` : ''}
+${agentLanguage ? `Idioma: ${agentLanguage}` : ''}
+
+REGRAS E INFORMAÇÕES DA EMPRESA (SIGA ESTRITAMENTE):
+${allPlaybooksContent}
+
+IMPORTANTE: Você DEVE usar as informações acima como sua identidade e base de conhecimento.
+Quando perguntarem sobre produtos, promoções, preços, horários ou qualquer informação da empresa, RESPONDA usando os dados acima.
+NÃO diga "não tenho acesso" a informações que estão nos playbooks acima.
+NÃO se apresente como "Luminnus" ou "assistente genérico" — use APENAS o nome e contexto configurados acima.
+===== FIM DO CONTEXTO DO AGENTE =====`;
+
+              console.log(`[Chat] 📋 Playbook carregado do Supabase para tenant ${finalTenantId}: ${agentName || 'sem nome'}, ${playbooksList.length} playbook(s)`);
+            }
+          }
+        } catch (err: any) {
+          console.warn('[Chat] ⚠️ Erro ao carregar playbooks do Supabase:', err.message);
+        }
+      }
+
       const now = new Date();
-      const finalSystemInstruction = `${basePersona}\n\n${context.systemInstruction || ''}\n\n[Data atual do sistema: ${now.toISOString()}]\n${session.userLocation ? `[Localização Atual: ${session.userLocation}]` : ''}`;
+      const finalSystemInstruction = `${basePersona}${playbookContext}\n\n${context.systemInstruction || ''}\n\n[Data atual do sistema: ${now.toISOString()}]\n${session.userLocation ? `[Localização Atual: ${session.userLocation}]` : ''}`;
 
       const messages = [
         { role: "system" as const, content: finalSystemInstruction },
@@ -451,6 +518,62 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
       res.json({ audio: audioBuffer?.toString('base64') });
     } catch (error) {
       res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // ===== GOOGLE CALENDAR SYNC FOR DASHBOARD =====
+  app.get('/api/google/calendar/events', async (req: any, res: any) => {
+    try {
+      const userId = req.query.userId || req.headers['x-user-id'];
+      const tenantId = req.query.tenantId || req.headers['x-tenant-id'];
+
+      if (!userId || !tenantId) {
+        return res.status(400).json({ success: false, error: 'userId e tenantId são obrigatórios' });
+      }
+
+      // Get events for the current month (expandable via query params)
+      const now = new Date();
+      const timeMin = req.query.timeMin || new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const timeMax = req.query.timeMax || new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59).toISOString();
+
+      const { listCalendarEvents } = await import('../tools/googleWorkspace.js');
+      const result = await listCalendarEvents(userId, tenantId, timeMin, timeMax);
+
+      if (!result.success) {
+        return res.status(500).json({ success: false, error: result.error || result.message });
+      }
+
+      // Transform events to match the frontend CalendarEvent format
+      const calendarEvents = (result.events || []).map((ev: any, idx: number) => {
+        const startDate = new Date(ev.start);
+        const dateStr = startDate.toISOString().split('T')[0]; // YYYY-MM-DD
+        const timeStr = startDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+        return {
+          id: ev.id || `google-${idx}`,
+          title: ev.title || 'Sem título',
+          date: dateStr,
+          time: timeStr,
+          type: 'meeting',
+          description: ev.description || '',
+          link: ev.link,
+          source: 'google'
+        };
+      });
+
+      res.json({ success: true, events: calendarEvents, count: calendarEvents.length });
+    } catch (error: any) {
+      console.error('[CalendarSync] Erro:', error.message);
+      // If Google auth not connected, return empty with a helpful message
+      if (error.message?.includes('token') || error.message?.includes('auth') || error.message?.includes('credentials')) {
+        return res.json({
+          success: true,
+          events: [],
+          count: 0,
+          warning: 'Google Calendar não conectado. Conecte sua conta Google pelo chat da LIA.'
+        });
+      }
+      res.status(500).json({ success: false, error: error.message });
     }
   });
 }

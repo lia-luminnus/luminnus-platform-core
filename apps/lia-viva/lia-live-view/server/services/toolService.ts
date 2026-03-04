@@ -245,13 +245,16 @@ export class ToolService {
             },
             {
                 name: 'createGoogleSheet',
-                description: 'Cria uma planilha SIMPLES.',
+                description: `Cria uma planilha no Google Sheets. IMPORTANTE: Sempre use headers completos e profissionais.
+Para gastos/despesas use no MÍNIMO estes headers: ['Data', 'Categoria', 'Descrição', 'Valor (€)', 'Tipo', 'Forma de Pagamento', 'Observações']
+Para qualquer planilha: inclua TODOS os dados relevantes que o usuario mencionou em rows, nunca deixe dados faltando.
+Sempre organize os dados por data (mais recente primeiro) e use categorias claras.`,
                 parameters: {
                     type: 'object',
                     properties: {
                         title: { type: 'string' },
-                        headers: { type: 'array', items: { type: 'string' } },
-                        rows: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
+                        headers: { type: 'array', items: { type: 'string' }, description: 'Headers da planilha. Use headers completos e profissionais, nunca headers genéricos com apenas 2-3 colunas.' },
+                        rows: { type: 'array', items: { type: 'array', items: { type: 'string' } }, description: 'Linhas de dados. OBRIGATÓRIO: incluir TODOS os dados mencionados pelo usuario, não omitir nenhum.' },
                         aiPrompt: { type: 'string', description: 'Instrução mestre para o Gemini dentro do Google Sheets.' }
                     },
                     required: ['title', 'headers', 'rows']
@@ -545,12 +548,38 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
             },
             {
                 name: 'getFinancialRecords',
-                description: 'Recupera dados financeiros (despesas, receitas, recibos processados) do usuário armazenados na memória.',
+                description: 'Recupera dados financeiros (despesas, receitas, recibos processados) do usuário armazenados na memória de longo prazo.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        period: { type: 'string', enum: ['this_week', 'this_month', 'last_month', 'this_year', 'all'], default: 'this_month' }
+                        period: { type: 'string', enum: ['this_week', 'this_month', 'last_month', 'this_year', 'all'], default: 'all' },
+                        category: { type: 'string', description: 'Filtrar por categoria específica (ex: gasóleo, supermercado, transporte)' }
                     }
+                }
+            },
+            {
+                name: 'saveToLongTermMemory',
+                description: `Salva informações importantes na memória de longo prazo do usuário. OBRIGATÓRIO usar quando o usuário:
+- Mencionar QUALQUER gasto, despesa, receita ou valor financeiro
+- Pedir para guardar, registrar, lembrar ou anotar algo
+- Fornecer dados que precisam ser consultados depois
+Categorias financeiras: financial_expense, financial_income
+Outras: reminder, preference, note, contact`,
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        key: { type: 'string', description: 'Chave descritiva (ex: "gasto_gasoleo_2026-03-04", "lembrete_aniversario_fabi")' },
+                        value: {
+                            type: 'object',
+                            description: 'Dados estruturados. Para gastos: { descricao, valor, moeda, categoria, data, tipo: "despesa"|"receita" }'
+                        },
+                        category: {
+                            type: 'string',
+                            enum: ['financial_expense', 'financial_income', 'reminder', 'preference', 'note', 'contact', 'general'],
+                            description: 'Categoria da memória. Use financial_expense para gastos e financial_income para receitas.'
+                        }
+                    },
+                    required: ['key', 'value', 'category']
                 }
             },
             {
@@ -1679,14 +1708,44 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                     });
                     return { success: true, count: files.length, data: files };
                 }
-                case 'getFinancialRecords': {
-                    // Busca as memórias importantes que sejam da categoria financial_expense ou related
+                case 'saveToLongTermMemory': {
                     const { supabase } = await import('../config/supabase.js');
-                    if (!supabase) return { error: 'Supabase não inicializado' };
+                    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
 
-                    // Definindo a janela de tempo baseada no período
+                    const memoryData = {
+                        user_id: userId,
+                        tenant_id: tenantId,
+                        key: args.key || `memory_${Date.now()}`,
+                        value: typeof args.value === 'object' ? args.value : { text: args.value },
+                        category: args.category || 'general',
+                        source: 'lia_chat',
+                        metadata: { saved_via: 'tool_call', timestamp: new Date().toISOString() }
+                    };
+
+                    const { data, error } = await supabase
+                        .from('long_term_memory')
+                        .insert(memoryData)
+                        .select('id, key, category')
+                        .single();
+
+                    if (error) {
+                        console.error('[ToolService] Erro ao salvar memória:', error);
+                        return { success: false, error: `Falha ao salvar na memória: ${error.message}` };
+                    }
+
+                    console.log(`✅ [ToolService] Memória salva: ${data.key} (${data.category})`);
+                    return {
+                        success: true,
+                        message: `Registrado com sucesso: "${args.key}" na categoria ${args.category}`,
+                        id: data.id
+                    };
+                }
+                case 'getFinancialRecords': {
+                    const { supabase } = await import('../config/supabase.js');
+                    if (!supabase) return { success: false, error: 'Supabase não inicializado' };
+
                     const now = new Date();
-                    let startDate = new Date(0); // all
+                    let startDate = new Date(0); // all by default
 
                     if (args.period === 'this_week') {
                         startDate = new Date(now);
@@ -1695,26 +1754,29 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
                     } else if (args.period === 'last_month') {
                         startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-                        now.setDate(0); // Último dia do mês passado
+                        const endMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+                        // Use endMonth for last_month queries
                     } else if (args.period === 'this_year') {
                         startDate = new Date(now.getFullYear(), 0, 1);
                     }
 
-                    const { data, error } = await supabase
+                    let query = supabase
                         .from('long_term_memory')
                         .select('key, value, created_at, category')
                         .eq('user_id', userId)
                         .gte('created_at', startDate.toISOString())
-                        .lte('created_at', now.toISOString())
                         .in('category', ['financial_expense', 'financial_income', 'finance', 'work'])
                         .order('created_at', { ascending: false });
 
+                    const { data, error } = await query;
+
                     if (error) {
-                        return { success: false, error: 'Falha ao buscar registros financeiros.' };
+                        console.error('[ToolService] Erro ao buscar registros financeiros:', error);
+                        return { success: false, error: `Falha ao buscar registros: ${error.message}` };
                     }
 
-                    // Tentar filtrar os que realmente se parecem com registros financeiros e parsear
-                    const records = (data || []).map(row => {
+                    // Parse values and optionally filter by subcategory
+                    let records = (data || []).map(row => {
                         let parsedValue = row.value;
                         try {
                             if (typeof row.value === 'string') parsedValue = JSON.parse(row.value);
@@ -1722,7 +1784,38 @@ Retorna lista de eventos com IDs que podem ser usados em updateCalendarEvent ou 
                         return { ...row, value: parsedValue };
                     });
 
-                    return { success: true, count: records.length, data: records };
+                    // Filter by category keyword if provided
+                    if (args.category) {
+                        const catLower = args.category.toLowerCase();
+                        records = records.filter(r => {
+                            const val = typeof r.value === 'object' ? JSON.stringify(r.value).toLowerCase() : String(r.value).toLowerCase();
+                            const key = r.key.toLowerCase();
+                            return val.includes(catLower) || key.includes(catLower);
+                        });
+                    }
+
+                    // Calculate totals for convenience
+                    let totalExpenses = 0;
+                    let totalIncome = 0;
+                    records.forEach(r => {
+                        const val = r.value;
+                        const amount = typeof val === 'object' ? (val.valor || val.amount || 0) : 0;
+                        const numAmount = parseFloat(String(amount)) || 0;
+                        if (r.category === 'financial_expense') totalExpenses += numAmount;
+                        if (r.category === 'financial_income') totalIncome += numAmount;
+                    });
+
+                    return {
+                        success: true,
+                        count: records.length,
+                        data: records,
+                        summary: {
+                            total_expenses: totalExpenses,
+                            total_income: totalIncome,
+                            balance: totalIncome - totalExpenses,
+                            period: args.period || 'all'
+                        }
+                    };
                 }
                 case 'getProactiveInsights': {
                     const { ProactiveInsightsService } = await import('./proactiveInsightsService.js');

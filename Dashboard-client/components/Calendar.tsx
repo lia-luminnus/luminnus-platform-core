@@ -1,7 +1,8 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useCallback } from 'react';
 import Header from './Header';
 import { CalendarEvent } from '../types';
 import { LanguageContext } from '../contexts/LanguageContext';
+import { useDashboardAuth } from '../contexts/DashboardAuthContext';
 
 // Helpers
 const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
@@ -13,19 +14,18 @@ const currentYear = today.getFullYear();
 const currentMonth = today.getMonth();
 const format = (y: number, m: number, d: number) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
-const initialEvents: CalendarEvent[] = [
-    { id: '1', title: 'Abertura de Projeto', date: format(currentYear, currentMonth, 9), time: '10:00 AM', type: 'meeting', description: 'Reunião inicial para alinhar objetivos do projeto Lia Viva.' },
-    { id: '2', title: 'Reunião com Cliente', date: format(currentYear, currentMonth, 15), time: '11:00 AM', type: 'meeting', description: 'Discussão sobre o cronograma de implementação.' },
-    { id: '3', title: 'Entrega de Projeto', date: format(currentYear, currentMonth, 16), time: '05:00 PM', type: 'deadline', description: 'Prazo final para envio dos arquivos do motor híbrido.' },
-    { id: '4', title: 'Revisão de Design', date: format(currentYear, currentMonth, 16), time: '02:00 PM', type: 'review', description: 'Feedback sobre os novos cards da Dashboard.' },
-    { id: '5', title: 'Sincronização de Vendas', date: format(today.getFullYear(), today.getMonth(), today.getDate() + 1), time: '09:00 AM', type: 'meeting', description: 'Alinhamento matinal.' },
-    { id: '6', title: 'Check-in de Infraestrutura', date: format(today.getFullYear(), today.getMonth(), today.getDate() + 2), time: '02:00 PM', type: 'review', description: 'Verificação dos servidores Render.' },
-];
+const initialEvents: CalendarEvent[] = [];
 
 import toast from 'react-hot-toast';
 
 const Calendar: React.FC = () => {
     const { t, language } = useContext(LanguageContext);
+    const { user, isAdmin, profile } = useDashboardAuth();
+
+    const ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+    const tenantId = isAdmin ? ADMIN_TENANT_ID : (profile?.tenant_id || user?.id || null);
+    const userId = user?.id || null;
+    const API_URL = import.meta.env.VITE_API_URL || 'https://luminnus-platform-core.onrender.com';
 
     const [currentDate, setCurrentDate] = useState(new Date());
     const [events, setEvents] = useState<CalendarEvent[]>(initialEvents);
@@ -34,6 +34,7 @@ const Calendar: React.FC = () => {
     const [isSyncing, setIsSyncing] = useState(false);
     const [view, setView] = useState<'month' | 'year'>('month');
     const [searchTerm, setSearchTerm] = useState('');
+    const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
 
     const filteredEvents = events.filter(ev =>
         ev.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -71,15 +72,54 @@ const Calendar: React.FC = () => {
         return () => clearInterval(interval);
     }, [events]);
 
-    const handleSync = async () => {
+    const handleSync = useCallback(async () => {
+        if (!userId || !tenantId) {
+            toast.error('Faça login para sincronizar com o Google Calendar.');
+            return;
+        }
+
         setIsSyncing(true);
         toast.loading('Sincronizando com Google Calendar...', { id: 'sync' });
 
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        try {
+            const now = new Date();
+            const timeMin = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+            const timeMax = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59).toISOString();
 
-        setIsSyncing(false);
-        toast.success('Calendário sincronizado com sucesso!', { id: 'sync' });
-    };
+            const response = await fetch(
+                `${API_URL}/api/google/calendar/events?userId=${userId}&tenantId=${tenantId}&timeMin=${timeMin}&timeMax=${timeMax}`
+            );
+
+            const data = await response.json();
+
+            if (data.success && data.events?.length > 0) {
+                // Merge Google events with any locally-created events (keep local ones that don't overlap)
+                const googleEventIds = new Set(data.events.map((e: any) => e.id));
+                const localOnlyEvents = events.filter(e => !googleEventIds.has(e.id) && !(e as any).source);
+
+                setEvents([...data.events, ...localOnlyEvents]);
+                setLastSyncTime(new Date().toLocaleTimeString('pt-BR'));
+                toast.success(`${data.count} evento(s) sincronizado(s) com sucesso!`, { id: 'sync' });
+            } else if (data.warning) {
+                toast.error(data.warning, { id: 'sync', duration: 5000 });
+            } else {
+                setLastSyncTime(new Date().toLocaleTimeString('pt-BR'));
+                toast.success('Sincronizado! Nenhum evento encontrado neste período.', { id: 'sync' });
+            }
+        } catch (error: any) {
+            console.error('[Calendar] Sync error:', error);
+            toast.error('Erro ao sincronizar. Verifique sua conexão com o Google.', { id: 'sync' });
+        } finally {
+            setIsSyncing(false);
+        }
+    }, [userId, tenantId, API_URL, events]);
+
+    // Auto-sync on mount
+    useEffect(() => {
+        if (userId && tenantId) {
+            handleSync();
+        }
+    }, [userId, tenantId]);
 
     const [currentEvent, setCurrentEvent] = useState<Partial<CalendarEvent>>({
         date: format(today.getFullYear(), today.getMonth(), today.getDate()),

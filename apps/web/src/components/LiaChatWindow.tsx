@@ -26,6 +26,8 @@ const LiaChatWindow = ({ onClose }: LiaChatWindowProps) => {
   const [micAtivo, setMicAtivo] = useState(false);
   const [transcricaoTemp, setTranscricaoTemp] = useState('');
   const [isRealtimeActive, setIsRealtimeActive] = useState(false);
+  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [playbookRules, setPlaybookRules] = useState<string>('');
   const { user } = useAuth();
   const { toast } = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -36,28 +38,83 @@ const LiaChatWindow = ({ onClose }: LiaChatWindowProps) => {
     'O que a Lia pode fazer?'
   ];
 
-  // Criar ou recuperar conversa
+  // Criar ou recuperar conversa + carregar tenant/agente
   useEffect(() => {
     const initConversation = async () => {
       if (!user) return;
 
-      // Criar nova conversa
-      const { data, error } = await supabase
+      // 1. Buscar o perfil do usuário para obter o tenant_id
+      let userTenantId = user.id; // fallback: userId
+      try {
+        const { data: profile } = await (supabase as any)
+          .from('profiles')
+          .select('tenant_id')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (profile?.tenant_id) {
+          userTenantId = profile.tenant_id;
+        }
+      } catch (err) {
+        console.warn('[ChatWindow] Erro ao buscar perfil:', err);
+      }
+      setTenantId(userTenantId);
+
+      // 2. Buscar configurações do agente para personalizar a saudação
+      let agentName = 'Lia';
+      let companyName = '';
+      try {
+        const { data: settings } = await (supabase as any)
+          .from('whatsapp_agent_settings')
+          .select('profile_json, playbooks_json')
+          .eq('tenant_id', userTenantId)
+          .eq('channel', 'web_widget')
+          .maybeSingle();
+
+        if (settings?.profile_json) {
+          agentName = (settings.profile_json as any).agent_name || 'Lia';
+        }
+        // Build full playbook rules text for the LLM
+        if (settings?.playbooks_json && Array.isArray(settings.playbooks_json)) {
+          const allRules = settings.playbooks_json
+            .filter((p: any) => p.content)
+            .map((p: any) => `### ${p.name}:\n${p.content}`)
+            .join('\n\n');
+          if (allRules) {
+            setPlaybookRules(allRules);
+            console.log('[ChatWindow] ✅ Playbook rules loaded:', allRules.substring(0, 100) + '...');
+          }
+
+          const firstPlaybook = settings.playbooks_json[0];
+          if (firstPlaybook?.content) {
+            const nameMatch = (firstPlaybook.content as string).match(/Nome:\s*(.+)/i);
+            if (nameMatch) companyName = nameMatch[1].trim();
+          }
+        }
+      } catch (err) {
+        console.warn('[ChatWindow] Erro ao buscar agent settings:', err);
+      }
+
+      // 3. Criar nova conversa
+      const { data, error } = await (supabase as any)
         .from('conversations')
         .insert({ user_id: user.id })
         .select()
         .single();
 
-      if (!error && data) {
-        setConversationId(data.id);
+      if (!error && (data as any)) {
+        setConversationId((data as any).id);
 
         // Nome do usuário para saudação personalizada
         const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'usuário';
 
-        // Mensagem de boas-vindas personalizada
+        // Mensagem de boas-vindas contextualizada
+        const greeting = companyName
+          ? `Olá, ${userName}! 😊 Bem-vindo(a) à ${companyName}! Sou ${agentName === 'Lia' ? 'a Lia' : agentName}, como posso te ajudar hoje?`
+          : `Olá, ${userName}! 😊 Sou ${agentName === 'Lia' ? 'a Lia' : agentName}, como posso te ajudar hoje?`;
+
         setMessages([{
-          role: 'assistant',
-          content: `Olá, ${userName}! Que bom ter você por aqui. 😊\n\nEstou aqui para te ajudar com qualquer dúvida sobre nossos planos e soluções. É só me perguntar!`
+          role: 'assistant' as const,
+          content: greeting
         }]);
       }
     };
@@ -146,15 +203,20 @@ const LiaChatWindow = ({ onClose }: LiaChatWindowProps) => {
     setIsTyping(true);
 
     // Salvar mensagem do usuário
-    await supabase.from('messages').insert({
+    await (supabase as any).from('messages').insert({
       conversation_id: conversationId,
       role: 'user',
       content: text
     });
 
     try {
-      // Chamar API da Render
-      const data = await enviarMensagemLIA(text);
+      // Chamar API da Render com contexto do tenant + playbook rules
+      const data = await enviarMensagemLIA(text, {
+        conversationId: conversationId || undefined,
+        userId: user?.id,
+        tenantId: tenantId || undefined,
+        playbookRules: playbookRules || undefined,
+      });
 
       const assistantMessage: Message = {
         role: 'assistant',
@@ -164,7 +226,7 @@ const LiaChatWindow = ({ onClose }: LiaChatWindowProps) => {
       setMessages(prev => [...prev, assistantMessage]);
 
       // Salvar resposta da IA
-      await supabase.from('messages').insert({
+      await (supabase as any).from('messages').insert({
         conversation_id: conversationId,
         role: 'assistant',
         content: assistantMessage.content

@@ -558,7 +558,13 @@ Detectei que você quer **${effectiveRequest.action.replace('_', ' ')}**. Esta e
         const keywords = [
             'balanço', 'planilha', 'sheet', 'sheets', 'slides', 'slide',
             'google docs', 'google sheets', 'google slides', 'google drive',
-            'relatório', 'spreadsheet', 'apresentação', 'documento'
+            'relatório', 'spreadsheet', 'apresentação', 'documento',
+            // Financial keywords for better MiniMax routing
+            'gastos', 'despesas', 'receitas', 'financeiro', 'financeira',
+            'gasóleo', 'gasoleo', 'combustível', 'combustivel',
+            'supermercado', 'contas', 'fatura', 'quanto gastei',
+            'quanto já gastei', 'total de gastos', 'controle financeiro',
+            'orçamento', 'orcamento', 'extrato', 'fluxo de caixa'
         ];
         if (keywords.some(k => lower.includes(k))) return true;
         if (/(?:gerar|criar|montar|fazer|analisar|extrair|processar|organizar|estruturar|comparar|cruzar)\s/i.test(prompt)) {

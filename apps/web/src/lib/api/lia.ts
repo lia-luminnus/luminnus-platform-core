@@ -49,6 +49,8 @@ export interface EnviarMensagemOptions {
   liaMode?: 'NORMAL' | 'DIAGNOSTIC';
   conversationId?: string;
   userId?: string;
+  tenantId?: string;
+  playbookRules?: string;
 }
 
 /**
@@ -65,6 +67,7 @@ export async function enviarMensagemLIA(mensagem: string, options?: EnviarMensag
   console.log(`[LIA API] URL configurada: ${apiUrl}`);
   console.log(`[LIA API] Enviando mensagem:`, mensagem);
   console.log(`[LIA API] Modo: ${options?.liaMode || 'NORMAL'}`);
+  console.log(`[LIA API] TenantId: ${options?.tenantId || 'N/A'}`);
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -81,6 +84,8 @@ export async function enviarMensagemLIA(mensagem: string, options?: EnviarMensag
           liaMode: options?.liaMode || 'NORMAL',
           conversationId: options?.conversationId,
           userId: options?.userId,
+          tenantId: options?.tenantId,
+          playbookRules: options?.playbookRules,
         }),
         signal: controller.signal
       });
