@@ -1,7 +1,8 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 import PrivateRoute from "@/components/PrivateRoute";
 import { Loader2 } from "lucide-react";
+import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 
 // Loading component for lazy routes
 const PageLoader = () => (
@@ -27,6 +28,17 @@ const AuthCallback = lazy(() => import("@/pages/AuthCallback"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
 const Discovery = lazy(() => import("@/pages/Discovery"));
 const DashboardRedirect = lazy(() => import("@/components/DashboardRedirect"));
+const AccountFrozen = lazy(() => import("@/pages/AccountFrozen"));
+
+/**
+ * FrozenGuard — redirects frozen accounts to /conta-congelada
+ */
+const FrozenGuard = ({ children }: { children: React.ReactNode }) => {
+  const { isFrozen, status } = useSubscriptionStatus();
+  if (status === 'loading') return <PageLoader />;
+  if (isFrozen) return <Navigate to="/conta-congelada" replace />;
+  return <>{children}</>;
+};
 
 /**
  * AppRoutes Component
@@ -50,10 +62,11 @@ const AppRoutes = () => {
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/oauth-callback" element={<OAuthCallback />} />
         <Route path="/auth-callback" element={<AuthCallback />} />
-        <Route path="/dashboard" element={<DashboardRedirect />} />
+        <Route path="/dashboard" element={<FrozenGuard><DashboardRedirect /></FrozenGuard>} />
         {/* <Route path="/dashboard/*" element={<Dashboard />} /> */}
-        <Route path="/area-do-cliente" element={<ClientArea />} />
+        <Route path="/area-do-cliente" element={<FrozenGuard><ClientArea /></FrozenGuard>} />
         <Route path="/minha-conta" element={<MyAccount />} />
+        <Route path="/conta-congelada" element={<AccountFrozen />} />
         <Route path="/politica-de-privacidade" element={<PrivacyPolicy />} />
         <Route path="/termos-de-uso" element={<TermsOfService />} />
 

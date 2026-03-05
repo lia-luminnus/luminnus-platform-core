@@ -14,19 +14,11 @@ export class OpenAIService {
     static async chat(prompt: string, history: any[] = [], model: 'gpt-4o-mini' | 'gpt-4o' = 'gpt-4o-mini', tools?: any[]) {
         const startTime = Date.now();
 
-        // Limpar histórico de mensagens do sistema duplicadas e garantir a personalidade na raiz
-        let systemContent = LIA_PERSONALITY_SHORT;
-        const cleanHistory = history.filter(msg => {
-            if (msg.role === 'system') {
-                systemContent += "\n\n" + msg.content;
-                return false;
-            }
-            return true;
-        });
-
+        // ⚠️ CRITICAL UX FIX: Do not override system context!
+        // The router/chat.ts is responsible for providing the SSOT context, playbooks, and identity.
+        // We just pass it along cleanly.
         const messages = [
-            { role: 'system', content: systemContent },
-            ...cleanHistory,
+            ...history,
             { role: 'user', content: prompt || "Olá" }
         ];
 

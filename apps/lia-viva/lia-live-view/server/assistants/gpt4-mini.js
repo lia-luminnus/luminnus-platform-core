@@ -74,18 +74,15 @@ export async function runGpt4Mini(userText, options = {}) {
   });
 
   try {
-    const system = {
-      role: "system",
-      content: LIA_PERSONALITY_SHORT
-    };
-
     // Use mensagens fornecidas ou crie uma nova
-    // NOTA: Se options.messages existir, já contém a mensagem do usuário
-    // Não duplicar adicionando novamente
-    const messages = options.messages || [
-      system,
-      { role: "user", content: userText }
-    ];
+    // NOTA: options.messages já deve conter o system prompt e o user prompt (vindo de chat.ts)
+    let messages = options.messages;
+    if (!messages || messages.length === 0) {
+      messages = [
+        { role: "system", content: LIA_PERSONALITY_SHORT },
+        { role: "user", content: userText }
+      ];
+    }
 
     // Build tools array if functions were provided (convert to tools format)
     let tools = undefined;

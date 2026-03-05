@@ -165,6 +165,114 @@ async function sendWelcomeEmail(
 }
 
 // ============================================
+// Dunning Email Templates
+// ============================================
+type DunningLevel = 'warning' | 'urgent' | 'frozen' | 'reactivated';
+
+async function sendDunningEmail(
+    email: string,
+    level: DunningLevel,
+    planName: string,
+    daysRemaining?: number
+): Promise<boolean> {
+    if (!resendApiKey) {
+        console.error("[Dunning] RESEND_API_KEY not configured");
+        return false;
+    }
+
+    const resendFrom = Deno.env.get("RESEND_FROM") || "Luminnus <lia@luminnus.ai>";
+    const updatePaymentUrl = appBaseUrl + "/minha-conta";
+
+    const templates: Record<DunningLevel, { subject: string; title: string; message: string; buttonText: string; accentColor: string }> = {
+        warning: {
+            subject: "⚠️ Problema com seu pagamento — Luminnus",
+            title: "Houve um problema com seu pagamento",
+            message: `Não conseguimos processar o pagamento do seu plano <strong>${planName}</strong>. Isso pode acontecer por diversos motivos (cartão expirado, limite, etc.).<br><br>Vamos tentar novamente automaticamente nos próximos dias. Para evitar qualquer interrupção, atualize seus dados de pagamento.`,
+            buttonText: "Atualizar Pagamento",
+            accentColor: "#f59e0b"
+        },
+        urgent: {
+            subject: "🔴 Ação necessária — Sua conta pode ser suspensa",
+            title: "Sua conta pode ser suspensa em breve",
+            message: `Ainda não conseguimos processar o pagamento do seu plano <strong>${planName}</strong>.<br><br>Se o pagamento não for regularizado nos próximos <strong>${daysRemaining || 3} dias</strong>, sua conta será temporariamente congelada.<br><br>Atualize seus dados de pagamento agora para evitar a suspensão.`,
+            buttonText: "Regularizar Agora",
+            accentColor: "#ef4444"
+        },
+        frozen: {
+            subject: "🔒 Conta suspensa — Atualize seu pagamento",
+            title: "Sua conta foi temporariamente suspensa",
+            message: `Após várias tentativas, não conseguimos processar o pagamento do seu plano <strong>${planName}</strong>.<br><br>Sua conta foi <strong>congelada</strong> temporariamente. Seus dados estão seguros — basta atualizar o pagamento para reativar imediatamente.<br><br>Nenhum dado foi apagado.`,
+            buttonText: "Reativar Minha Conta",
+            accentColor: "#dc2626"
+        },
+        reactivated: {
+            subject: "✅ Conta reativada — Luminnus",
+            title: "Tudo certo! Sua conta foi reativada",
+            message: `O pagamento do seu plano <strong>${planName}</strong> foi processado com sucesso.<br><br>Sua conta está ativa novamente e todos os seus recursos estão disponíveis.`,
+            buttonText: "Acessar Meu Painel",
+            accentColor: "#22c55e"
+        }
+    };
+
+    const tpl = templates[level];
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0A0F1A; color: #ffffff; margin: 0; padding: 40px 20px;">
+    <div style="max-width: 600px; margin: 0 auto; background: linear-gradient(135deg, #1a1f2e 0%, #0d1117 100%); border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px rgba(0,0,0,0.5);">
+        <div style="height: 4px; background: ${tpl.accentColor};"></div>
+        <div style="text-align: center; padding: 40px 40px 20px;">
+            <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: #ffffff;">${tpl.title}</h1>
+        </div>
+        <div style="padding: 0 40px 20px;">
+            <p style="color: #d1d5db; font-size: 15px; line-height: 1.7;">${tpl.message}</p>
+        </div>
+        <div style="text-align: center; padding: 10px 40px 40px;">
+            <a href="${updatePaymentUrl}" style="display: inline-block; background: ${tpl.accentColor}; color: #ffffff; text-decoration: none; padding: 14px 40px; border-radius: 12px; font-size: 15px; font-weight: 700;">${tpl.buttonText}</a>
+        </div>
+        <div style="text-align: center; padding: 20px 40px; border-top: 1px solid rgba(255,255,255,0.1);">
+            <p style="color: #6b7280; font-size: 12px; margin: 0;">Precisa de ajuda? Responda este e-mail ou entre em contato pelo suporte@luminnus.com.br</p>
+        </div>
+    </div>
+</body>
+</html>
+    `;
+
+    try {
+        const response = await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: {
+                "Authorization": "Bearer " + resendApiKey,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                from: resendFrom,
+                to: [email],
+                subject: tpl.subject,
+                html: htmlContent,
+            }),
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            console.error("[Dunning] Resend error:", error);
+            return false;
+        }
+
+        console.log(`[Dunning] ${level} email sent to ${email}`);
+        return true;
+    } catch (err) {
+        console.error("[Dunning] Email send error:", err);
+        return false;
+    }
+}
+
+// ============================================
 // Main Webhook Handler
 // ============================================
 Deno.serve(async (req) => {
@@ -484,13 +592,29 @@ Deno.serve(async (req) => {
                 });
             }
 
+            // Check if subscription was in dunning before clearing it
+            const { data: existingSubForDunning } = await supabase
+                .from("subscriptions")
+                .select("status, dunning_started_at")
+                .eq("stripe_subscription_id", subscriptionId)
+                .maybeSingle();
+
+            const wasDunning = existingSubForDunning?.status === 'past_due' || existingSubForDunning?.status === 'frozen';
+
             await supabase
                 .from("subscriptions")
                 .update({
                     status: "active",
+                    dunning_started_at: null,
                     updated_at: new Date().toISOString(),
                 })
                 .eq("stripe_subscription_id", subscriptionId);
+
+            // Send reactivation email if subscription was in dunning
+            if (wasDunning && userEmail) {
+                await sendDunningEmail(userEmail, 'reactivated', planInfo?.plan || 'Start');
+                console.log(`[Webhook] ✅ Dunning cleared and reactivation email sent for ${subscriptionId}`);
+            }
 
             await supabase
                 .from("profiles")
@@ -586,15 +710,85 @@ Deno.serve(async (req) => {
         if (event.type === "invoice.payment_failed") {
             const invoice = event.data.object;
             const subscriptionId = invoice.subscription as string;
+            const customerEmail = invoice.customer_email;
 
             if (subscriptionId) {
-                await supabase
+                // Fetch current subscription state
+                const { data: currentSub } = await supabase
                     .from("subscriptions")
-                    .update({
+                    .select("dunning_started_at, status, plan_name")
+                    .eq("stripe_subscription_id", subscriptionId)
+                    .maybeSingle();
+
+                const now = new Date();
+                const isFirstFailure = !currentSub?.dunning_started_at;
+                const planName = currentSub?.plan_name || 'Start';
+
+                // Calculate days since first failure
+                let daysSinceFirstFailure = 0;
+                if (currentSub?.dunning_started_at) {
+                    const dunningStart = new Date(currentSub.dunning_started_at);
+                    daysSinceFirstFailure = Math.floor((now.getTime() - dunningStart.getTime()) / (1000 * 60 * 60 * 24));
+                }
+
+                console.log(`[Dunning] Payment failed for ${subscriptionId} | First failure: ${isFirstFailure} | Days: ${daysSinceFirstFailure}`);
+
+                // ============================================
+                // DUNNING LOGIC — 10-day freeze timeline
+                // ============================================
+                if (daysSinceFirstFailure >= 10) {
+                    // DAY 10+: FREEZE the account
+                    await supabase
+                        .from("subscriptions")
+                        .update({
+                            status: "frozen",
+                            updated_at: now.toISOString(),
+                        })
+                        .eq("stripe_subscription_id", subscriptionId);
+
+                    if (customerEmail) {
+                        await sendDunningEmail(customerEmail, 'frozen', planName);
+                    }
+                    console.log(`[Dunning] 🔒 Account FROZEN for ${subscriptionId} after ${daysSinceFirstFailure} days`);
+
+                } else if (daysSinceFirstFailure >= 7) {
+                    // DAY 7-9: Last warning before freeze
+                    const daysRemaining = 10 - daysSinceFirstFailure;
+                    await supabase
+                        .from("subscriptions")
+                        .update({
+                            status: "past_due",
+                            updated_at: now.toISOString(),
+                        })
+                        .eq("stripe_subscription_id", subscriptionId);
+
+                    if (customerEmail) {
+                        await sendDunningEmail(customerEmail, 'urgent', planName, daysRemaining);
+                    }
+                    console.log(`[Dunning] ⚠️ Urgent warning sent for ${subscriptionId} (${daysRemaining} days until freeze)`);
+
+                } else {
+                    // DAY 0-6: First/early warning
+                    const updateData: Record<string, any> = {
                         status: "past_due",
-                        updated_at: new Date().toISOString(),
-                    })
-                    .eq("stripe_subscription_id", subscriptionId);
+                        updated_at: now.toISOString(),
+                    };
+
+                    // Set dunning_started_at only on first failure
+                    if (isFirstFailure) {
+                        updateData.dunning_started_at = now.toISOString();
+                    }
+
+                    await supabase
+                        .from("subscriptions")
+                        .update(updateData)
+                        .eq("stripe_subscription_id", subscriptionId);
+
+                    if (customerEmail) {
+                        await sendDunningEmail(customerEmail, 'warning', planName);
+                    }
+                    console.log(`[Dunning] 📧 Warning email sent for ${subscriptionId} (day ${daysSinceFirstFailure})`);
+                }
             }
         }
 

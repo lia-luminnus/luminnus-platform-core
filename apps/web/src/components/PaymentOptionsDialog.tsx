@@ -24,7 +24,7 @@ export function PaymentOptionsDialog({
     discount,
     onSelectOption,
 }: PaymentOptionsDialogProps) {
-    const [selectedOption, setSelectedOption] = useState<'annual_full' | 'annual_12x' | null>(null);
+    const [selectedOption, setSelectedOption] = useState<'annual_full' | 'annual_12x' | 'monthly' | null>(null);
     const [showCommitmentWarning, setShowCommitmentWarning] = useState(false);
 
     const handleSelectOption = (option: 'annual_full' | 'annual_12x') => {

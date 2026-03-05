@@ -65,13 +65,13 @@ const LiaChatWindow = ({ onClose }: LiaChatWindowProps) => {
       try {
         const { data: settings } = await (supabase as any)
           .from('whatsapp_agent_settings')
-          .select('profile_json, playbooks_json')
+          .select('agent_name, profile_json, playbooks_json')
           .eq('tenant_id', userTenantId)
           .eq('channel', 'web_widget')
           .maybeSingle();
 
-        if (settings?.profile_json) {
-          agentName = (settings.profile_json as any).agent_name || 'Lia';
+        if (settings) {
+          agentName = settings.agent_name || (settings.profile_json as any)?.agent_name || 'Lia';
         }
         // Build full playbook rules text for the LLM
         if (settings?.playbooks_json && Array.isArray(settings.playbooks_json)) {

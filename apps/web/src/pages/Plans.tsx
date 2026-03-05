@@ -103,7 +103,7 @@ const Plans = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       console.log(`[Plans] Calling Edge Function with:`, {
         priceId,
         userId: user.id,
-        tenantId: membership.tenant_id,
+        tenantId: finalTenantId,
         planName,
         paymentType
       });

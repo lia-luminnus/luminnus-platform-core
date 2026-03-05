@@ -9,14 +9,17 @@ export const STRIPE_PRICES = {
     Start: {
         monthly: 'price_1T6xy5Ry1wqZ6TIAqMWlPsRx',       // $29/mês
         annual_12x: 'price_1T6xy6Ry1wqZ6TIAMSKVTvht',     // $312/ano ($26/mês — desconto 10%)
+        annual_full: 'price_1T6xy6Ry1wqZ6TIAMSKVTvht',    // À vista anual (mesmo price — Stripe cobra 1x/ano)
     },
     Plus: {
         monthly: 'price_1T6xy6Ry1wqZ6TIA2aRMn5IP',        // $99/mês
         annual_12x: 'price_1T6xy7Ry1wqZ6TIA1ckEOy6e',     // $948/ano ($79/mês — desconto 20%)
+        annual_full: 'price_1T6xy7Ry1wqZ6TIA1ckEOy6e',    // À vista anual
     },
     Pro: {
         monthly: 'price_1T6xy8Ry1wqZ6TIA3yWCsIDB',        // $249/mês
         annual_12x: 'price_1T6xy9Ry1wqZ6TIAavcWvZgw',     // $2.388/ano ($199/mês — desconto 20%)
+        annual_full: 'price_1T6xy9Ry1wqZ6TIAavcWvZgw',    // À vista anual
     },
 } as const;
 
@@ -97,4 +100,4 @@ export function calculateCommitmentEndDate(priceId: string, startDate = new Date
 }
 
 export type PlanName = keyof typeof STRIPE_PRICES;
-export type PaymentType = 'monthly' | 'annual_12x';
+export type PaymentType = 'monthly' | 'annual_12x' | 'annual_full';
