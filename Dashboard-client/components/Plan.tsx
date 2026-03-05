@@ -35,6 +35,13 @@ const Plan: React.FC = () => {
    // 🔐 ADMIN PRIVILEGE: Se for admin, mostrar todos os planos e permitir troca livre
    const isAdmin = user?.email === "luminnus.lia.ai@gmail.com";
    const filteredPlans = isAdmin ? plans : plans.filter(p => (PLAN_ORDER[p.name] || 0) >= currentTier);
+   
+
+   const DASHBOARD_STRIPE_PRICES: Record<string, { monthly: string; annual_12x: string }> = {
+      Start: { monthly: 'price_1T6xy5Ry1wqZ6TIAqMWlPsRx', annual_12x: 'price_1T7bcnRy1wqZ6TIAuBJmw6zK' },
+      Plus: { monthly: 'price_1T6xy6Ry1wqZ6TIA2aRMn5IP', annual_12x: 'price_1T7bm5Ry1wqZ6TIAW7gckvlV' },
+      Pro: { monthly: 'price_1T6xy8Ry1wqZ6TIA3yWCsIDB', annual_12x: 'price_1T7bsMRy1wqZ6TIA1OzNWIGL' },
+   };
 
    const handleManage = async () => {
       try {
@@ -71,15 +78,51 @@ const Plan: React.FC = () => {
       }
    };
 
-   const handleSubscribe = (plan: PlanType) => {
+   const handleSubscribe = async (plan: PlanType) => {
       if (plan.customCTA) {
          window.open(plan.customCTA.action, '_blank');
-      } else {
-         toast.success(`Redirecionando para checkout ${plan.name}...`);
-         setTimeout(() => {
-            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-            window.location.href = `${API_URL}/api/stripe/create-checkout?plan=${plan.name.toLowerCase()}&annual=${isAnnual}`;
-         }, 1000);
+         return;
+      }
+
+      if (!user?.id) {
+         toast.error('Usuário não autenticado. Faça login novamente.');
+         return;
+      }
+
+      const paymentType = isAnnual ? 'annual_12x' : 'monthly';
+      const priceId = DASHBOARD_STRIPE_PRICES[plan.name]?.[paymentType];
+
+      if (!priceId) {
+         toast.error('Preço não configurado para este plano.');
+         return;
+      }
+
+      try {
+         toast.loading(`Iniciando checkout ${plan.name}...`, { id: 'checkout-plan' });
+
+         const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+            body: {
+               priceId,
+               userId: user.id,
+               tenantId: profile?.tenant_id || user.id,
+               userEmail: user.email,
+               planName: plan.name,
+               billingType: paymentType,
+               successUrl: `${window.location.origin}/#/plan?checkout=success`,
+               cancelUrl: `${window.location.origin}/#/plan?checkout=canceled`,
+            },
+         });
+
+         if (error) throw error;
+
+         if (data?.url) {
+            window.location.href = data.url;
+         } else {
+            throw new Error('URL de checkout não retornada.');
+         }
+      } catch (err: any) {
+         console.error('[Plan] Erro no upgrade de plano:', err);
+         toast.error('Erro ao iniciar upgrade: ' + (err.message || 'Desconhecido'), { id: 'checkout-plan' });
       }
    };
 
@@ -424,3 +467,5 @@ const Plan: React.FC = () => {
 };
 
 export default Plan;
+
+
