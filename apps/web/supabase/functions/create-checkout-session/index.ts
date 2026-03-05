@@ -19,6 +19,12 @@ interface CheckoutRequest {
     credits?: number; // for recharge metadata
 }
 
+function inferStripeMode(secretKey: string): "live" | "test" | "unknown" {
+    if (secretKey.startsWith("sk_live_")) return "live";
+    if (secretKey.startsWith("sk_test_")) return "test";
+    return "unknown";
+}
+
 function getStripeClient() {
     const secretKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!secretKey) {
@@ -37,8 +43,14 @@ Deno.serve(async (req) => {
     }
 
     try {
+        const secretKey = Deno.env.get("STRIPE_SECRET_KEY");
+        if (!secretKey) {
+            throw new Error("STRIPE_SECRET_KEY não configurada");
+        }
+
         const { priceId, userId, tenantId, userEmail, successUrl, cancelUrl, planName, billingType, mode, credits }: CheckoutRequest = await req.json();
         const stripe = getStripeClient();
+        const stripeMode = inferStripeMode(secretKey);
 
         if (!priceId || !userId) {
             return new Response(
@@ -51,6 +63,28 @@ Deno.serve(async (req) => {
         const isRecharge = checkoutMode === "payment";
 
         console.log(`[Checkout] Creating ${checkoutMode} session for user ${userId}, tenant ${tenantId || "none"}, price ${priceId}`);
+
+        // Validate price ahead of checkout to surface clear test/live mismatch errors
+        let stripePrice: any;
+        try {
+            stripePrice = await stripe.prices.retrieve(priceId);
+        } catch (priceErr) {
+            const details = priceErr instanceof Error ? priceErr.message : "price lookup failed";
+            throw new Error(`Preço Stripe inválido para esta chave (${stripeMode}). priceId=${priceId}. Detalhes: ${details}`);
+        }
+
+        if (!stripePrice?.active) {
+            throw new Error(`Preço Stripe inativo: ${priceId}`);
+        }
+
+        if (stripeMode !== "unknown") {
+            const expectedLiveMode = stripeMode === "live";
+            if (stripePrice.livemode !== expectedLiveMode) {
+                throw new Error(
+                    `Incompatibilidade Stripe: chave em modo ${stripeMode}, mas priceId=${priceId} está em modo ${stripePrice.livemode ? "live" : "test"}.`
+                );
+            }
+        }
 
         // Create or get Stripe customer
         let customerId: string | undefined;

@@ -22,6 +22,28 @@ const Plans = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const [isAnnual, setIsAnnual] = useState(true);
   const [paymentDialogPlan, setPaymentDialogPlan] = useState<string | null>(null);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+  const extractCheckoutError = async (error: unknown) => {
+    const defaultMsg = 'Tente novamente em alguns instantes.';
+    const err = error as any;
+    const context = err?.context;
+
+    if (context && typeof context.text === 'function') {
+      try {
+        const raw = await context.text();
+        if (!raw) return err?.message || defaultMsg;
+        try {
+          const parsed = JSON.parse(raw);
+          return parsed?.error || raw;
+        } catch {
+          return raw;
+        }
+      } catch {
+        return err?.message || defaultMsg;
+      }
+    }
+
+    return err?.message || defaultMsg;
+  };
 
   // Create Stripe Checkout session
   const createCheckoutSession = async (planName: string, paymentType: PaymentType) => {
@@ -87,7 +109,7 @@ const Plans = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
 
       if (error) {
         console.error('Checkout error:', error);
-        const details = (error as any)?.message || 'Tente novamente em alguns instantes.';
+        const details = await extractCheckoutError(error);
         alert(`Erro ao criar sessão de pagamento. ${details}`);
         return;
       }
@@ -434,3 +456,4 @@ const Plans = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
 };
 
 export default Plans;
+
