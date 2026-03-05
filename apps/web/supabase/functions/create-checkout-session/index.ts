@@ -36,6 +36,31 @@ function getStripeClient() {
     });
 }
 
+async function canReuseCustomerForCurrency(
+    stripe: Stripe,
+    customerId: string,
+    targetCurrency: string | null | undefined,
+) {
+    if (!targetCurrency) return true;
+
+    const activeStatuses = new Set(["trialing", "active", "past_due", "unpaid", "incomplete"]);
+    const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: "all",
+        limit: 50,
+    });
+
+    for (const subscription of subscriptions.data) {
+        if (!activeStatuses.has(subscription.status)) continue;
+        const existingCurrency = subscription.items.data[0]?.price?.currency;
+        if (existingCurrency && existingCurrency.toLowerCase() !== targetCurrency.toLowerCase()) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 Deno.serve(async (req) => {
     // Handle CORS preflight requests
     if (req.method === "OPTIONS") {
@@ -97,8 +122,26 @@ Deno.serve(async (req) => {
             });
 
             if (customers.data.length > 0) {
-                customerId = customers.data[0].id;
-                console.log(`[Checkout] Found existing customer: ${customerId}`);
+                const existingCustomerId = customers.data[0].id;
+                const targetCurrency = stripePrice?.currency;
+                const canReuse = await canReuseCustomerForCurrency(stripe, existingCustomerId, targetCurrency);
+
+                if (canReuse) {
+                    customerId = existingCustomerId;
+                    console.log(`[Checkout] Reusing existing customer: ${customerId}`);
+                } else {
+                    const customer = await stripe.customers.create({
+                        email: userEmail,
+                        metadata: {
+                            supabase_user_id: userId,
+                            ...(tenantId ? { supabase_tenant_id: tenantId } : {}),
+                            split_reason: "currency_mismatch",
+                            target_currency: targetCurrency || "unknown",
+                        },
+                    });
+                    customerId = customer.id;
+                    console.log(`[Checkout] Created new customer due to currency mismatch: ${customerId}`);
+                }
             } else {
                 // Create new customer
                 const customer = await stripe.customers.create({
