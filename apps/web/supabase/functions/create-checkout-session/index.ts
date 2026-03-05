@@ -201,7 +201,38 @@ Deno.serve(async (req) => {
         }
 
         // Create Checkout Session
-        const session = await stripe.checkout.sessions.create(sessionParams);
+        let session: any;
+        try {
+            session = await stripe.checkout.sessions.create(sessionParams);
+        } catch (checkoutErr) {
+            const msg = checkoutErr instanceof Error ? checkoutErr.message : String(checkoutErr);
+            const isCurrencyConflict = msg.toLowerCase().includes("cannot combine currencies");
+
+            // Final fallback: force a fresh customer and retry once
+            if (isCurrencyConflict && userEmail) {
+                console.warn("[Checkout] Currency conflict detected. Retrying with fresh customer...");
+
+                const fallbackCustomer = await stripe.customers.create({
+                    email: userEmail,
+                    metadata: {
+                        supabase_user_id: userId,
+                        ...(tenantId ? { supabase_tenant_id: tenantId } : {}),
+                        split_reason: "currency_conflict_retry",
+                        target_currency: stripePrice?.currency || "unknown",
+                    },
+                });
+
+                const retryParams: any = {
+                    ...sessionParams,
+                    customer: fallbackCustomer.id,
+                    customer_email: undefined,
+                };
+
+                session = await stripe.checkout.sessions.create(retryParams);
+            } else {
+                throw checkoutErr;
+            }
+        }
 
         console.log(`[Checkout] Session created: ${session.id} for tenant ${tenantId || "none"}`);
 
@@ -227,3 +258,4 @@ Deno.serve(async (req) => {
         );
     }
 });
+
