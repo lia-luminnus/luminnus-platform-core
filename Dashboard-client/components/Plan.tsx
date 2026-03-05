@@ -35,7 +35,7 @@ const Plan: React.FC = () => {
    // 🔐 ADMIN PRIVILEGE: Se for admin, mostrar todos os planos e permitir troca livre
    const isAdmin = user?.email === "luminnus.lia.ai@gmail.com";
    const filteredPlans = isAdmin ? plans : plans.filter(p => (PLAN_ORDER[p.name] || 0) >= currentTier);
-   
+
 
    const DASHBOARD_STRIPE_PRICES: Record<string, { monthly: string; annual_12x: string }> = {
       Start: { monthly: 'price_1T6xy5Ry1wqZ6TIAqMWlPsRx', annual_12x: 'price_1T7bcnRy1wqZ6TIAuBJmw6zK' },
@@ -66,13 +66,13 @@ const Plan: React.FC = () => {
          toast((t) => (
             <div className="flex flex-col gap-2">
                <span className="font-bold border-b border-white/10 pb-1 mb-1">Aviso de Fidelidade</span>
-               <p className="text-xs text-white/80">Este plano possui contrato de 12 meses. O cancelamento antecipado deve ser tratado diretamente com nossa equipe.</p>
-               <div className="flex gap-2 mt-2">
-                  <button onClick={() => { toast.dismiss(t.id); navigate('/support'); }} className="bg-brand-primary text-white text-[10px] font-black px-4 py-2 rounded-lg hover:scale-105 transition-all shadow-lg shadow-brand-primary/20">Falar com Suporte</button>
-                  <button onClick={() => toast.dismiss(t.id)} className="bg-white/10 text-white/60 text-[10px] font-black px-4 py-2 rounded-lg hover:bg-white/20 transition-all">Fechar</button>
+               <p className="text-xs text-white/80">Seu plano possui contrato de 12 meses. Você pode acessar o portal para atualizar seu cartão e ver faturas, mas o cancelamento deve ser solicitado via suporte.</p>
+               <div className="flex gap-2 mt-2 flex-wrap">
+                  <button onClick={() => { toast.dismiss(t.id); handleManage(); }} className="bg-brand-primary text-white text-[10px] font-black px-4 py-2 rounded-lg hover:scale-105 transition-all shadow-lg shadow-brand-primary/20">Acessar Portal (Faturas/Cartão)</button>
+                  <button onClick={() => { toast.dismiss(t.id); navigate('/support'); }} className="bg-white/10 text-white/80 text-[10px] font-black px-4 py-2 rounded-lg hover:bg-white/20 transition-all">Falar com Suporte</button>
                </div>
             </div>
-         ), { duration: 8000, icon: '🛡️', style: { background: '#1A1A24', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } });
+         ), { duration: 10000, icon: '🛡️', style: { background: '#1A1A24', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } });
       } else {
          handleManage();
       }
