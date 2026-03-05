@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
-export type SubscriptionStatus = 'active' | 'past_due' | 'frozen' | 'canceled' | 'none' | 'loading';
+export type SubscriptionStatus = 'active' | 'past_due' | 'frozen' | 'unpaid' | 'canceled' | 'none' | 'loading';
 
 export function useSubscriptionStatus() {
     const { user } = useAuth();
@@ -21,7 +21,7 @@ export function useSubscriptionStatus() {
                     .from('subscriptions' as any) as any)
                     .select('status, plan_name')
                     .eq('user_id', user.id)
-                    .in('status', ['active', 'past_due', 'frozen', 'incomplete'])
+                    .in('status', ['active', 'past_due', 'frozen', 'unpaid', 'incomplete'])
                     .order('created_at', { ascending: false })
                     .limit(1)
                     .maybeSingle();
@@ -65,5 +65,5 @@ export function useSubscriptionStatus() {
         };
     }, [user]);
 
-    return { status, planName, isFrozen: status === 'frozen' };
+    return { status, planName, isFrozen: status === 'frozen' || status === 'unpaid' };
 }

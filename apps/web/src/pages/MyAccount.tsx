@@ -138,6 +138,7 @@ const MyAccount = () => {
     'active': 'Ativo',
     'past_due': 'Atrasado',
     'frozen': 'Congelado',
+    'unpaid': 'Não Pago',
     'incomplete': 'Incompleto'
   };
 
@@ -150,6 +151,7 @@ const MyAccount = () => {
     'inativo': 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
     'past_due': 'text-orange-400 bg-orange-500/10 border-orange-500/20',
     'frozen': 'text-red-400 bg-red-500/10 border-red-500/20',
+    'unpaid': 'text-red-400 bg-red-500/10 border-red-500/20',
     'incomplete': 'text-blue-400 bg-blue-500/10 border-blue-500/20',
     'cancelado': 'text-red-400 bg-red-500/10 border-red-500/20'
   };
