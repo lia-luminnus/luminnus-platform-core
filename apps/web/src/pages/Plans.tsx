@@ -175,13 +175,10 @@ const Plans = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     const plan = plans.find(p => p.name === paymentDialogPlan);
     if (!plan) return null;
 
-    // Parse prices
-    const monthlyPrice = plan.price;
-    const annualPrice = plan.annualPrice;
-
-    // Calculate 12x price (with discount)
-    const numericMonthly = parseFloat(plan.price.replace(/[^0-9.,]/g, '').replace(',', '.'));
-    const monthlyCommitPrice = `$${Math.round(numericMonthly * (1 - plan.discount / 100))}`;
+    // Parse prices using the precalculated values from usePlans
+    const monthlyPrice = plan.price; // ex: $29
+    const annualPrice = plan.annualTotal || ''; // ex: $313
+    const monthlyCommitPrice = plan.annualPrice; // ex: $26
 
     return {
       planName: plan.name,

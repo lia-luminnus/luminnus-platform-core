@@ -114,24 +114,47 @@ function convertPlanFromDB(dbPlan: PlanFromDB): Plan {
   };
 
   const numericPrice = parsePrice(dbPlan.price);
-  const numericAnnualPrice = dbPlan.annual_price ? parsePrice(dbPlan.annual_price) : numericPrice * 12;
+  const discountPct = dbPlan.discount || 20;
 
-  // Desconto = ((Mensal * 12) - Anual) / (Mensal * 12) * 100
+  let displayAnnual: string;
+  let annualTotalValue: string;
+  let annualSavingsValue: string;
+
+  if (dbPlan.annual_price) {
+    const numAnnual = parsePrice(dbPlan.annual_price);
+    if (numAnnual > numericPrice * 2) {
+      // dbPlan.annual_price é o total anual (ex: 313)
+      displayAnnual = `$${Math.round(numAnnual / 12)}`;
+      annualTotalValue = `$${numAnnual.toLocaleString('pt-BR')}`;
+      annualSavingsValue = `$${Math.round((numericPrice * 12) - numAnnual)}`;
+    } else {
+      // dbPlan.annual_price já é o mensal com desconto (ex: 26)
+      displayAnnual = dbPlan.annual_price;
+      annualTotalValue = `$${Math.round(numAnnual * 12).toLocaleString('pt-BR')}`;
+      annualSavingsValue = `$${Math.round((numericPrice - numAnnual) * 12)}`;
+    }
+  } else {
+    const discountedMonthly = Math.round(numericPrice * (1 - discountPct / 100));
+    displayAnnual = `$${discountedMonthly}`;
+    annualTotalValue = `$${(discountedMonthly * 12).toLocaleString('pt-BR')}`;
+    annualSavingsValue = `$${Math.round((numericPrice - discountedMonthly) * 12)}`;
+  }
+
+  // Desconto calculado para exibição na UI
   const expectedAnnual = numericPrice * 12;
+  const numAnnualForDiscount = dbPlan.annual_price ? parsePrice(dbPlan.annual_price) : numericPrice * 12;
+  const actualAnnualTotal = numAnnualForDiscount > numericPrice * 2 ? numAnnualForDiscount : numAnnualForDiscount * 12;
   const calculatedDiscount = expectedAnnual > 0
-    ? Math.round(((expectedAnnual - numericAnnualPrice) / expectedAnnual) * 100)
+    ? Math.round(((expectedAnnual - actualAnnualTotal) / expectedAnnual) * 100)
     : 0;
-
-  const annualTotal = numericAnnualPrice;
-  const annualSavings = expectedAnnual - numericAnnualPrice;
 
   return {
     id: dbPlan.id,
     name: dbPlan.plan_name,
     price: dbPlan.price,
-    annualPrice: dbPlan.annual_price || `$${Math.round(numericPrice * 12)}`,
-    annualTotal: `$${Math.round(annualTotal).toLocaleString()}`,
-    annualSavings: annualSavings > 0 ? `$${Math.round(annualSavings)}` : undefined,
+    annualPrice: displayAnnual,
+    annualTotal: annualTotalValue,
+    annualSavings: annualSavingsValue,
     period: '/mês',
     description: dbPlan.description,
     features: dbPlan.features || [],

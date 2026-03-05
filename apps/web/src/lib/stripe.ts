@@ -8,25 +8,25 @@
 export const STRIPE_PRICES = {
     Start: {
         monthly: 'price_1T6xy5Ry1wqZ6TIAqMWlPsRx',       // $29/mês
-        annual_12x: 'price_1T6xy6Ry1wqZ6TIAMSKVTvht',     // $312/ano ($26/mês — desconto 10%)
-        annual_full: 'price_1T6xy6Ry1wqZ6TIAMSKVTvht',    // À vista anual (mesmo price — Stripe cobra 1x/ano)
+        annual_12x: 'price_1T7bcnRy1wqZ6TIAuBJmw6zK',     // $26/mês
+        annual_full: 'price_1T7bjERy1wqZ6TIAiywvo7CX',    // À vista anual ($313/ano)
     },
     Plus: {
         monthly: 'price_1T6xy6Ry1wqZ6TIA2aRMn5IP',        // $99/mês
-        annual_12x: 'price_1T6xy7Ry1wqZ6TIA1ckEOy6e',     // $948/ano ($79/mês — desconto 20%)
-        annual_full: 'price_1T6xy7Ry1wqZ6TIA1ckEOy6e',    // À vista anual
+        annual_12x: 'price_1T7bm5Ry1wqZ6TIAW7gckvlV',     // $79/mês
+        annual_full: 'price_1T6xy7Ry1wqZ6TIA1ckEOy6e',    // À vista anual ($948/ano)
     },
     Pro: {
         monthly: 'price_1T6xy8Ry1wqZ6TIA3yWCsIDB',        // $249/mês
-        annual_12x: 'price_1T6xy9Ry1wqZ6TIAavcWvZgw',     // $2.388/ano ($199/mês — desconto 20%)
-        annual_full: 'price_1T6xy9Ry1wqZ6TIAavcWvZgw',    // À vista anual
+        annual_12x: 'price_1T7bsMRy1wqZ6TIA1OzNWIGL',     // $199/mês
+        annual_full: 'price_1T6xy9Ry1wqZ6TIAavcWvZgw',    // À vista anual ($2388/ano)
     },
 } as const;
 
 // Mapping from Price ID to Plan Info
 export const PRICE_TO_PLAN_MAP: Record<string, {
     plan: string;
-    paymentType: 'monthly' | 'annual_12x';
+    paymentType: 'monthly' | 'annual_12x' | 'annual_full';
     commitmentMonths: number;
     displayName: string;
 }> = {
@@ -37,11 +37,17 @@ export const PRICE_TO_PLAN_MAP: Record<string, {
         commitmentMonths: 0,
         displayName: 'Start Mensal',
     },
-    'price_1T6xy6Ry1wqZ6TIAMSKVTvht': {
+    'price_1T7bcnRy1wqZ6TIAuBJmw6zK': {
         plan: 'Start',
         paymentType: 'annual_12x',
         commitmentMonths: 12,
         displayName: 'Start Anual',
+    },
+    'price_1T7bjERy1wqZ6TIAiywvo7CX': {
+        plan: 'Start',
+        paymentType: 'annual_full',
+        commitmentMonths: 12,
+        displayName: 'Start Anual (À vista)',
     },
     // Plus
     'price_1T6xy6Ry1wqZ6TIA2aRMn5IP': {
@@ -50,11 +56,17 @@ export const PRICE_TO_PLAN_MAP: Record<string, {
         commitmentMonths: 0,
         displayName: 'Plus Mensal',
     },
-    'price_1T6xy7Ry1wqZ6TIA1ckEOy6e': {
+    'price_1T7bm5Ry1wqZ6TIAW7gckvlV': {
         plan: 'Plus',
         paymentType: 'annual_12x',
         commitmentMonths: 12,
         displayName: 'Plus Anual',
+    },
+    'price_1T6xy7Ry1wqZ6TIA1ckEOy6e': {
+        plan: 'Plus',
+        paymentType: 'annual_full',
+        commitmentMonths: 12,
+        displayName: 'Plus Anual (À vista)',
     },
     // Pro
     'price_1T6xy8Ry1wqZ6TIA3yWCsIDB': {
@@ -63,11 +75,17 @@ export const PRICE_TO_PLAN_MAP: Record<string, {
         commitmentMonths: 0,
         displayName: 'Pro Mensal',
     },
-    'price_1T6xy9Ry1wqZ6TIAavcWvZgw': {
+    'price_1T7bsMRy1wqZ6TIA1OzNWIGL': {
         plan: 'Pro',
         paymentType: 'annual_12x',
         commitmentMonths: 12,
         displayName: 'Pro Anual',
+    },
+    'price_1T6xy9Ry1wqZ6TIAavcWvZgw': {
+        plan: 'Pro',
+        paymentType: 'annual_full',
+        commitmentMonths: 12,
+        displayName: 'Pro Anual (À vista)',
     },
 };
 
