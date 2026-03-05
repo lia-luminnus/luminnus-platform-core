@@ -50,53 +50,16 @@ const Plans = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
         window.location.href = '/auth?redirect=/planos';
         return;
       }
-
-      // Check for tenant membership
-      let finalTenantId = '';
-      const { data: membership, error: memberError } = await (supabase
+      // Tenant e opcional no checkout: se nao existir membership, seguimos sem bloquear compra
+      let finalTenantId: string | undefined;
+      const { data: memberships } = await (supabase
         .from('tenant_members' as any) as any)
         .select('tenant_id')
         .eq('user_id', user.id)
-        .maybeSingle();
+        .limit(1);
 
-      if (!membership || memberError) {
-        console.log('[Plans] Workspace not found, creating a default one...');
-
-        // 1. Create Tenant
-        const { data: tenant, error: tenantError } = await (supabase
-          .from('tenants' as any) as any)
-          .insert({
-            name: 'Meu Espaço',
-            country: 'Brasil',
-            owner_user_id: user.id
-          })
-          .select()
-          .single();
-
-        if (tenantError || !tenant) {
-          console.error('Error creating tenant:', tenantError);
-          alert('Erro: Não foi possível criar seu Workspace. Tente novamente.');
-          return;
-        }
-
-        // 2. Create Tenant Member (Owner)
-        const { error: memberError2 } = await (supabase
-          .from('tenant_members' as any) as any)
-          .insert({
-            tenant_id: tenant.id,
-            user_id: user.id,
-            role: 'owner'
-          });
-
-        if (memberError2) {
-          console.error('Error creating membership:', memberError2);
-          alert('Erro: Falha ao vincular usuário ao Workspace.');
-          return;
-        }
-
-        finalTenantId = tenant.id;
-      } else {
-        finalTenantId = membership.tenant_id;
+      if (Array.isArray(memberships) && memberships.length > 0) {
+        finalTenantId = memberships[0].tenant_id;
       }
 
       // Create checkout session via Edge Function
@@ -124,7 +87,8 @@ const Plans = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
 
       if (error) {
         console.error('Checkout error:', error);
-        alert('Erro ao criar sessão de pagamento. Tente novamente.');
+        const details = (error as any)?.message || 'Tente novamente em alguns instantes.';
+        alert(`Erro ao criar sessão de pagamento. ${details}`);
         return;
       }
 

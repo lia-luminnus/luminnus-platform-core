@@ -48,18 +48,16 @@ const Plans = () => {
         window.location.href = '/auth?redirect=/planos';
         return;
       }
-
-      // Check for tenant membership
-      const { data: membership, error: memberError } = await (supabase
+      // Tenant e opcional no checkout: evita bloquear a compra por falta de membership
+      let finalTenantId: string | undefined;
+      const { data: memberships } = await (supabase
         .from('tenant_members' as any) as any)
         .select('tenant_id')
         .eq('user_id', user.id)
-        .maybeSingle();
+        .limit(1);
 
-      if (!membership || memberError) {
-        console.error('No tenant membership found or error:', memberError);
-        window.location.href = '/onboarding';
-        return;
+      if (Array.isArray(memberships) && memberships.length > 0) {
+        finalTenantId = memberships[0].tenant_id;
       }
 
       // Create checkout session via Edge Function
@@ -67,7 +65,7 @@ const Plans = () => {
         body: {
           priceId,
           userId: user.id,
-          tenantId: membership.tenant_id,
+          tenantId: finalTenantId,
           userEmail: user.email,
           planName: planName,
           billingType: paymentType,
@@ -78,7 +76,8 @@ const Plans = () => {
 
       if (error) {
         console.error('Checkout error:', error);
-        alert('Erro ao criar sessão de pagamento. Tente novamente.');
+        const details = (error as any)?.message || 'Tente novamente em alguns instantes.';
+        alert(`Erro ao criar sessão de pagamento. ${details}`);
         return;
       }
 

@@ -1,10 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Stripe from "npm:stripe@17.7.0";
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
-    apiVersion: "2024-12-18.acacia",
-});
-
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -13,14 +9,25 @@ const corsHeaders = {
 interface CheckoutRequest {
     priceId: string;
     userId: string;
-    tenantId: string;
+    tenantId?: string;
     userEmail?: string;
     successUrl: string;
     cancelUrl: string;
     planName?: string;
     billingType?: string;
-    mode?: 'subscription' | 'payment'; // payment = recharge
+    mode?: "subscription" | "payment"; // payment = recharge
     credits?: number; // for recharge metadata
+}
+
+function getStripeClient() {
+    const secretKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!secretKey) {
+        throw new Error("STRIPE_SECRET_KEY não configurada");
+    }
+
+    return new Stripe(secretKey, {
+        apiVersion: "2024-12-18.acacia",
+    });
 }
 
 Deno.serve(async (req) => {
@@ -31,18 +38,19 @@ Deno.serve(async (req) => {
 
     try {
         const { priceId, userId, tenantId, userEmail, successUrl, cancelUrl, planName, billingType, mode, credits }: CheckoutRequest = await req.json();
+        const stripe = getStripeClient();
 
-        if (!priceId || !userId || !tenantId) {
+        if (!priceId || !userId) {
             return new Response(
-                JSON.stringify({ error: "Missing required fields: priceId, userId and tenantId" }),
+                JSON.stringify({ error: "Missing required fields: priceId and userId" }),
                 { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
         }
 
-        const checkoutMode = mode || 'subscription';
-        const isRecharge = checkoutMode === 'payment';
+        const checkoutMode = mode || "subscription";
+        const isRecharge = checkoutMode === "payment";
 
-        console.log(`[Checkout] Creating ${checkoutMode} session for user ${userId}, tenant ${tenantId}, price ${priceId}`);
+        console.log(`[Checkout] Creating ${checkoutMode} session for user ${userId}, tenant ${tenantId || "none"}, price ${priceId}`);
 
         // Create or get Stripe customer
         let customerId: string | undefined;
@@ -63,7 +71,7 @@ Deno.serve(async (req) => {
                     email: userEmail,
                     metadata: {
                         supabase_user_id: userId,
-                        supabase_tenant_id: tenantId,
+                        ...(tenantId ? { supabase_tenant_id: tenantId } : {}),
                     },
                 });
                 customerId = customer.id;
@@ -71,21 +79,23 @@ Deno.serve(async (req) => {
             }
         }
 
+        const metadata: Record<string, string> = {
+            supabase_user_id: userId,
+            ...(tenantId ? { supabase_tenant_id: tenantId } : {}),
+            ...(isRecharge ? { type: "recharge", credits: String(credits || 0) } : {}),
+        };
+
         // Build session params based on mode
         const sessionParams: any = {
             mode: checkoutMode,
             payment_method_types: ["card"],
-            customer: customerId,
-            customer_email: customerId ? undefined : userEmail,
+            ...(customerId ? { customer: customerId } : {}),
+            ...(!customerId && userEmail ? { customer_email: userEmail } : {}),
             client_reference_id: userId,
             line_items: [{ price: priceId, quantity: 1 }],
             success_url: successUrl,
             cancel_url: cancelUrl,
-            metadata: {
-                supabase_user_id: userId,
-                supabase_tenant_id: tenantId,
-                ...(isRecharge ? { type: 'recharge', credits: String(credits || 0) } : {}),
-            },
+            metadata,
             locale: "pt-BR",
         };
 
@@ -94,8 +104,8 @@ Deno.serve(async (req) => {
             sessionParams.payment_intent_data = {
                 metadata: {
                     supabase_user_id: userId,
-                    supabase_tenant_id: tenantId,
-                    type: 'recharge',
+                    ...(tenantId ? { supabase_tenant_id: tenantId } : {}),
+                    type: "recharge",
                     credits: String(credits || 0),
                 },
             };
@@ -104,7 +114,7 @@ Deno.serve(async (req) => {
             sessionParams.subscription_data = {
                 metadata: {
                     supabase_user_id: userId,
-                    supabase_tenant_id: tenantId,
+                    ...(tenantId ? { supabase_tenant_id: tenantId } : {}),
                     plan: planName || "unknown",
                     billing_type: billingType || "unknown",
                 },
@@ -116,7 +126,7 @@ Deno.serve(async (req) => {
         // Create Checkout Session
         const session = await stripe.checkout.sessions.create(sessionParams);
 
-        console.log(`[Checkout] Session created: ${session.id} for tenant ${tenantId}`);
+        console.log(`[Checkout] Session created: ${session.id} for tenant ${tenantId || "none"}`);
 
         return new Response(
             JSON.stringify({
@@ -130,8 +140,9 @@ Deno.serve(async (req) => {
         );
     } catch (err) {
         console.error("[Checkout] Error:", err);
+        const errorMessage = err instanceof Error ? err.message : "Erro desconhecido ao criar checkout";
         return new Response(
-            JSON.stringify({ error: err.message }),
+            JSON.stringify({ error: errorMessage }),
             {
                 status: 500,
                 headers: { ...corsHeaders, "Content-Type": "application/json" }
