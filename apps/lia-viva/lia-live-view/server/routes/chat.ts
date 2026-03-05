@@ -66,9 +66,11 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
       // PRIORIDADE 1: Regras enviadas diretamente pelo frontend (web widget)
       // PRIORIDADE 2: Carregar do Supabase pelo tenant_id + channel
       let playbookContext = '';
+      let useBasePersona = true;
 
       if (clientPlaybookRules && clientPlaybookRules.trim()) {
         // Frontend já enviou as regras — usar diretamente
+        useBasePersona = false;
         playbookContext = `\n\n===== CONTEXTO DO AGENTE (PLAYBOOKS CONFIGURADOS) =====
 
 REGRAS E INFORMAÇÕES DA EMPRESA (SIGA ESTRITAMENTE):
@@ -88,7 +90,7 @@ NÃO se apresente como "Luminnus" ou "assistente genérico" — use APENAS o nom
           const { supabase: supabaseClient } = await import('../config/supabase.js');
           const { data: agentSettings } = await supabaseClient
             .from('whatsapp_agent_settings')
-            .select('profile_json, playbooks_json')
+            .select('agent_name, profile_json, playbooks_json')
             .eq('tenant_id', finalTenantId)
             .eq('channel', 'web_widget')
             .maybeSingle();
@@ -96,7 +98,7 @@ NÃO se apresente como "Luminnus" ou "assistente genérico" — use APENAS o nom
           if (agentSettings) {
             const agentProfile = agentSettings.profile_json || {};
             const playbooksList = agentSettings.playbooks_json || [];
-            const agentName = agentProfile.agent_name || '';
+            const agentName = agentSettings.agent_name || agentProfile.agent_name || '';
             const agentMode = agentProfile.objective || '';
             const agentLanguage = agentProfile.language || 'pt-BR';
 
@@ -106,18 +108,19 @@ NÃO se apresente como "Luminnus" ou "assistente genérico" — use APENAS o nom
               .join('\n\n');
 
             if (agentName || allPlaybooksContent) {
+              useBasePersona = false;
               playbookContext = `\n\n===== CONTEXTO DO AGENTE (PLAYBOOKS CONFIGURADOS) =====
-${agentName ? `Você é ${agentName}.` : ''}
+${agentName ? `Você é ${agentName}. Assume esta identidade completamente e não mencione ser uma IA da Luminnus.` : ''}
 ${agentMode ? `Modo de operação: ${agentMode}` : ''}
 ${agentLanguage ? `Idioma: ${agentLanguage}` : ''}
 
 REGRAS E INFORMAÇÕES DA EMPRESA (SIGA ESTRITAMENTE):
 ${allPlaybooksContent}
 
-IMPORTANTE: Você DEVE usar as informações acima como sua identidade e base de conhecimento.
+IMPORTANTE: Você DEVE usar as informações acima como sua única identidade e base de conhecimento.
 Quando perguntarem sobre produtos, promoções, preços, horários ou qualquer informação da empresa, RESPONDA usando os dados acima.
 NÃO diga "não tenho acesso" a informações que estão nos playbooks acima.
-NÃO se apresente como "Luminnus" ou "assistente genérico" — use APENAS o nome e contexto configurados acima.
+NÃO se apresente como "Lia da Luminnus" ou "assistente genérico" — use APENAS o nome e contexto configurados acima.
 ===== FIM DO CONTEXTO DO AGENTE =====`;
 
               console.log(`[Chat] 📋 Playbook carregado do Supabase para tenant ${finalTenantId}: ${agentName || 'sem nome'}, ${playbooksList.length} playbook(s)`);
@@ -129,7 +132,7 @@ NÃO se apresente como "Luminnus" ou "assistente genérico" — use APENAS o nom
       }
 
       const now = new Date();
-      const finalSystemInstruction = `${basePersona}${playbookContext}\n\n${context.systemInstruction || ''}\n\n[Data atual do sistema: ${now.toISOString()}]\n${session.userLocation ? `[Localização Atual: ${session.userLocation}]` : ''}`;
+      const finalSystemInstruction = `${useBasePersona ? basePersona : ''}${playbookContext}\n\n${context.systemInstruction || ''}\n\n[Data atual do sistema: ${now.toISOString()}]\n${session.userLocation ? `[Localização Atual: ${session.userLocation}]` : ''}`;
 
       const messages = [
         { role: "system" as const, content: finalSystemInstruction },
