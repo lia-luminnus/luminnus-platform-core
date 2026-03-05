@@ -38,20 +38,19 @@ const Plan: React.FC = () => {
 
    const handleManage = async () => {
       try {
-         const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-         const { data: { session } } = await supabase.auth.getSession();
-         const response = await fetch(`${API_URL}/api/stripe/create-portal-session`, {
-            method: 'POST',
-            headers: {
-               'Content-Type': 'application/json',
-               'Authorization': `Bearer ${session?.access_token}`
-            }
-         });
-         const { url } = await response.json();
-         if (url) window.location.href = url;
-         else toast.error('Não foi possível abrir o portal de gerenciamento.');
-      } catch (err) {
-         toast.error('Erro ao conectar com o serviço de pagamentos.');
+         toast.loading('Abrindo portal de gerenciamento...', { id: 'portal' });
+         const { data, error } = await supabase.functions.invoke('create-portal-session');
+
+         if (error) throw error;
+
+         if (data?.url) {
+            window.location.href = data.url;
+         } else {
+            throw new Error('URL não retornada');
+         }
+      } catch (err: any) {
+         console.error('[Plan] Erro ao abrir portal:', err);
+         toast.error('Erro ao abrir gerenciamento: ' + (err.message || 'Desconhecido'), { id: 'portal' });
       }
    };
 
@@ -386,7 +385,7 @@ const Plan: React.FC = () => {
                            <tr key={row.id} className="hover:bg-white/5 transition-colors group">
                               <td className="p-6 font-bold text-white/60 group-hover:text-white">{new Date(row.created_at).toLocaleDateString('pt-BR')}</td>
                               <td className="p-6 font-black text-white">{row.description || 'Assinatura LUMINNUS'}</td>
-                              <td className="p-6 font-black text-white/60">{row.amount_paid.toLocaleString('pt-BR', { style: 'currency', currency: row.currency || 'EUR' })}</td>
+                              <td className="p-6 font-black text-white/60">{row.amount_paid.toLocaleString('pt-BR', { style: 'currency', currency: (row.currency || 'EUR').toUpperCase() })}</td>
                               <td className="p-6">
                                  <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full font-black uppercase tracking-tighter text-[9px] ${row.status === 'paid' ? 'bg-green-500/10 text-green-500' : 'bg-orange-500/10 text-orange-400'
                                     }`}>

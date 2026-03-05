@@ -664,6 +664,42 @@ Deno.serve(async (req) => {
             } else {
                 console.error("[Webhook] ❌ Failed to send welcome email to " + userEmail);
             }
+
+            // v6.5: Record invoice in DB for payment history
+            try {
+                // Get tenant_id for the user
+                const { data: profile } = await supabase
+                    .from("profiles")
+                    .select("tenant_id")
+                    .eq("id", userId)
+                    .maybeSingle();
+
+                const tenantId = profile?.tenant_id;
+
+                const { error: invError } = await supabase.from("invoices").upsert({
+                    id: invoice.id,
+                    tenant_id: tenantId,
+                    customer_id: invoice.customer as string,
+                    subscription_id: subscriptionId,
+                    amount_paid: invoice.amount_paid,
+                    currency: invoice.currency,
+                    status: invoice.status,
+                    invoice_pdf: invoice.invoice_pdf,
+                    hosted_invoice_url: invoice.hosted_invoice_url,
+                    description: invoice.description || `Plano ${planInfo?.plan || 'Luminnus'}`,
+                    metadata: invoice.metadata,
+                    created_at: new Date(invoice.created * 1000).toISOString(),
+                    updated_at: new Date().toISOString(),
+                });
+
+                if (invError) {
+                    console.error("[Webhook] Error recording invoice:", invError);
+                } else {
+                    console.log("[Webhook] Invoice recorded: " + invoice.id);
+                }
+            } catch (invRecordErr) {
+                console.error("[Webhook] Exception recording invoice:", invRecordErr);
+            }
         }
 
         if (event.type === "customer.subscription.updated") {
