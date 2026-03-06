@@ -32,16 +32,90 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
         }
 
         // If it's a regular message, check if this chat ID is bound to an active E-Manager user
-        const { data: linkData, error: linkError } = await supabase
+        const { data: linkData } = await supabase
             .from('user_integrations')
             .select('user_id')
             .eq('provider', 'telegram_manager')
             .eq('status', 'active')
-            .contains('config_json', { telegram_chat_id: String(chatId) })
+            .contains('config', { telegram_chat_id: String(chatId) })
             .single();
 
         if (linkData?.user_id) {
             console.log(`[Telegram Webhook] Received message from known manager: ${linkData.user_id}`);
+
+            // Resolve tenant real do usuário (fallback para user_id)
+            let resolvedTenantId = linkData.user_id;
+            try {
+                const { data: userProfile } = await supabase
+                    .from('profiles')
+                    .select('tenant_id')
+                    .eq('id', linkData.user_id)
+                    .maybeSingle();
+                if (userProfile?.tenant_id) resolvedTenantId = userProfile.tenant_id;
+            } catch (profileErr: any) {
+                console.warn('[Telegram Webhook] Falha ao resolver tenant_id do perfil:', profileErr.message);
+            }
+
+            // Montar contexto explícito de Telegram para Edge Function
+            let telegramPlaybookRules = '';
+            try {
+                let agentSettings: any = null;
+                const byChannel = await supabase
+                    .from('whatsapp_agent_settings')
+                    .select('agent_name, profile_json, playbooks_json, knowledge_items_json')
+                    .eq('tenant_id', resolvedTenantId)
+                    .eq('channel', 'telegram')
+                    .maybeSingle();
+
+                if (byChannel.data) {
+                    agentSettings = byChannel.data;
+                } else {
+                    const fallbackSettings = await supabase
+                        .from('whatsapp_agent_settings')
+                        .select('agent_name, profile_json, playbooks_json, knowledge_items_json')
+                        .eq('tenant_id', resolvedTenantId)
+                        .maybeSingle();
+                    agentSettings = fallbackSettings.data;
+                }
+
+                if (agentSettings) {
+                    const profile = agentSettings.profile_json || {};
+                    const playbooks = Array.isArray(agentSettings.playbooks_json) ? agentSettings.playbooks_json : [];
+                    const knowledgeItems = Array.isArray(agentSettings.knowledge_items_json) ? agentSettings.knowledge_items_json : [];
+
+                    const playbooksText = playbooks
+                        .filter((p: any) => p?.content)
+                        .map((p: any, idx: number) => `Playbook ${idx + 1} - ${p?.name || 'Sem nome'}:\n${p.content}`)
+                        .join('\n\n');
+
+                    const knowledgeText = knowledgeItems
+                        .map((k: any, idx: number) => {
+                            const label = k?.name || k?.title || k?.type || `Item ${idx + 1}`;
+                            const content = k?.content || k?.text || k?.value || '';
+                            return content ? `${label}: ${content}` : '';
+                        })
+                        .filter(Boolean)
+                        .join('\n');
+
+                    telegramPlaybookRules = [
+                        'CONTEXTO OFICIAL DO CANAL TELEGRAM (E-MANAGER):',
+                        `AgentName: ${agentSettings.agent_name || profile.agent_name || 'Atendimento'}`,
+                        `CompanyName: ${profile.company_name || ''}`,
+                        `BusinessSegment: ${profile.business_segment || profile.segment || ''}`,
+                        `Tone: ${profile.tone || profile.tone_of_voice || ''}`,
+                        `PrimaryGoal: ${profile.primary_goal || profile.objective || ''}`,
+                        `Language: ${profile.language || 'pt-BR'}`,
+                        playbooksText ? `\nPLAYBOOKS:\n${playbooksText}` : '',
+                        knowledgeText ? `\nKNOWLEDGE:\n${knowledgeText}` : '',
+                        profile?.faq_content ? `\nFAQ:\n${profile.faq_content}` : '',
+                        profile?.products_services_content ? `\nPRODUTOS_SERVIÇOS:\n${profile.products_services_content}` : '',
+                        profile?.sales_policy_content ? `\nPOLÍTICAS_COMERCIAIS:\n${profile.sales_policy_content}` : '',
+                        profile?.support_policy_content ? `\nPOLÍTICAS_SUPORTE:\n${profile.support_policy_content}` : ''
+                    ].filter(Boolean).join('\n');
+                }
+            } catch (settingsErr: any) {
+                console.warn('[Telegram Webhook] Falha ao carregar settings Telegram do tenant:', settingsErr.message);
+            }
 
             // Forward the message to the LIA cognitive engine (lia-chat Edge Function)
             try {
@@ -49,7 +123,7 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
                 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '';
 
                 // Using a unique conversation ID per user for Telegram context
-                const conversationId = `telegram_admin_${linkData.user_id}`;
+                const conversationId = `telegram_admin_${resolvedTenantId}_${linkData.user_id}`;
 
                 const liaResponse = await fetch(`${supabaseUrl}/functions/v1/lia-chat`, {
                     method: 'POST',
@@ -60,6 +134,10 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
                     body: JSON.stringify({
                         message: text,
                         conversationId: conversationId,
+                        userId: linkData.user_id,
+                        tenantId: resolvedTenantId,
+                        channel: 'telegram',
+                        playbookRules: telegramPlaybookRules,
                         isAdmin: true // Telegram E-Manager is strictly for admins
                     })
                 });

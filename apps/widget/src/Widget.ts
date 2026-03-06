@@ -155,6 +155,7 @@ export class LiaWidget {
                     liaMode: 'NORMAL',
                     userId: sessionId,
                     tenantId: this.workspaceId,
+                    channel: 'web_widget',
                     conversationId: `widget-${this.workspaceId}-${sessionId}`
                 }),
             });
@@ -227,3 +228,4 @@ export class LiaWidget {
         document.body.appendChild(this.container);
     }
 }
+

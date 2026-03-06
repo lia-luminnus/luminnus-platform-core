@@ -8,6 +8,7 @@ import { OutputContracts } from '../services/outputContracts.js';
 import { getOpenAIVoice } from '../config/openai-voices.js';
 import { ensureSession } from '../server.js';
 import { getLiaGreeting } from '@luminnus/lia-runtime';
+import { LIA_FULL_PERSONALITY, DASHBOARD_CONTROL_PROMPT } from '@luminnus/shared';
 import { CreditService } from '../services/creditService.js';
 import { emitEvent } from '../services/eventBusService.js';
 
@@ -17,7 +18,7 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
   // Handler principal de chat (reutilizável para /chat e /api/chat)
   const chatHandler = async (req: any, res: any) => {
     try {
-      const { message, conversationId, mode, personality, userId, tenantId, liaMode, messageId, files, playbookRules: clientPlaybookRules } = req.body;
+      const { message, conversationId, mode, personality, userId, tenantId, channel, liaMode, messageId, files, playbookRules: clientPlaybookRules } = req.body;
 
       console.log('\n========== 💬 NOVA REQUISIÇÃO CHAT ==========');
       console.log(`📝 Mensagem: ${message?.substring(0, 100)}`);
@@ -62,78 +63,187 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
       const admin_diagnostic_mode = req.body.admin_diagnostic_mode === true || liaMode === 'DIAGNOSTIC';
       const basePersona = getLiaGreeting(admin_diagnostic_mode);
 
-      // 3.0.1 Carregar playbooks/regras do agente
-      // PRIORIDADE 1: Regras enviadas diretamente pelo frontend (web widget)
-      // PRIORIDADE 2: Carregar do Supabase pelo tenant_id + channel
-      let playbookContext = '';
-      let useBasePersona = true;
+      const finalChannel = (channel || 'web_widget').toString();
+      const toArray = (value: any): any[] => Array.isArray(value) ? value : [];
+      const toText = (value: any): string => typeof value === 'string' ? value.trim() : '';
+      const safeField = (value: any, fallback = 'não informado') => {
+        const txt = toText(value);
+        return txt || fallback;
+      };
+
+      let hasTenantContext = false;
+      let tenantMasterPrompt = '';
+      let playbooksBlock = '';
+      let faqDocsProductsBlock = '';
+      let tenantStructuredBlock = '';
 
       if (clientPlaybookRules && clientPlaybookRules.trim()) {
-        // Frontend já enviou as regras — usar diretamente
-        useBasePersona = false;
-        playbookContext = `\n\n===== CONTEXTO DO AGENTE (PLAYBOOKS CONFIGURADOS) =====
-
-REGRAS E INFORMAÇÕES DA EMPRESA (SIGA ESTRITAMENTE):
-${clientPlaybookRules}
-
-IMPORTANTE: Você DEVE usar as informações acima como sua identidade e base de conhecimento.
-Quando perguntarem sobre produtos, promoções, preços, horários ou qualquer informação da empresa, RESPONDA usando os dados acima.
-Quando perguntarem quem você é, responda de acordo com as regras configuradas.
-NÃO diga "não tenho acesso" a informações que estão nos playbooks acima.
-NÃO se apresente como "Luminnus" ou "assistente genérico" — use APENAS o nome e contexto configurados acima.
-===== FIM DO CONTEXTO DO AGENTE =====`;
-
+        hasTenantContext = true;
+        playbooksBlock = `Playbooks recebidos do frontend (${finalChannel}):\n${clientPlaybookRules.trim()}`;
         console.log(`[Chat] 📋 Playbook recebido do frontend (${clientPlaybookRules.length} chars)`);
-      } else {
-        // Fallback: carregar do Supabase
-        try {
-          const { supabase: supabaseClient } = await import('../config/supabase.js');
-          const { data: agentSettings } = await supabaseClient
-            .from('whatsapp_agent_settings')
-            .select('agent_name, profile_json, playbooks_json')
-            .eq('tenant_id', finalTenantId)
-            .eq('channel', 'web_widget')
-            .maybeSingle();
+      }
 
-          if (agentSettings) {
-            const agentProfile = agentSettings.profile_json || {};
-            const playbooksList = agentSettings.playbooks_json || [];
-            const agentName = agentSettings.agent_name || agentProfile.agent_name || '';
-            const agentMode = agentProfile.objective || '';
-            const agentLanguage = agentProfile.language || 'pt-BR';
+      try {
+        const { supabase: supabaseClient } = await import('../config/supabase.js');
 
-            const allPlaybooksContent = playbooksList
-              .filter((p: any) => p.content)
-              .map((p: any) => `### ${p.name}:\n${p.content}`)
-              .join('\n\n');
+        let agentSettings: any = null;
+        const byChannel = await supabaseClient
+          .from('whatsapp_agent_settings')
+          .select('agent_name, profile_json, playbooks_json, knowledge_items_json, segment_key')
+          .eq('tenant_id', finalTenantId)
+          .eq('channel', finalChannel)
+          .maybeSingle();
 
-            if (agentName || allPlaybooksContent) {
-              useBasePersona = false;
-              playbookContext = `\n\n===== CONTEXTO DO AGENTE (PLAYBOOKS CONFIGURADOS) =====
-${agentName ? `Você é ${agentName}. Assume esta identidade completamente e não mencione ser uma IA da Luminnus.` : ''}
-${agentMode ? `Modo de operação: ${agentMode}` : ''}
-${agentLanguage ? `Idioma: ${agentLanguage}` : ''}
-
-REGRAS E INFORMAÇÕES DA EMPRESA (SIGA ESTRITAMENTE):
-${allPlaybooksContent}
-
-IMPORTANTE: Você DEVE usar as informações acima como sua única identidade e base de conhecimento.
-Quando perguntarem sobre produtos, promoções, preços, horários ou qualquer informação da empresa, RESPONDA usando os dados acima.
-NÃO diga "não tenho acesso" a informações que estão nos playbooks acima.
-NÃO se apresente como "Lia da Luminnus" ou "assistente genérico" — use APENAS o nome e contexto configurados acima.
-===== FIM DO CONTEXTO DO AGENTE =====`;
-
-              console.log(`[Chat] 📋 Playbook carregado do Supabase para tenant ${finalTenantId}: ${agentName || 'sem nome'}, ${playbooksList.length} playbook(s)`);
-            }
-          }
-        } catch (err: any) {
-          console.warn('[Chat] ⚠️ Erro ao carregar playbooks do Supabase:', err.message);
+        if (byChannel.error) {
+          console.warn(`[Chat] ⚠️ Erro ao buscar settings por canal (${finalChannel}):`, byChannel.error.message);
+        } else {
+          agentSettings = byChannel.data;
         }
+
+        if (!agentSettings) {
+          const fallbackSettings = await supabaseClient
+            .from('whatsapp_agent_settings')
+            .select('agent_name, profile_json, playbooks_json, knowledge_items_json, segment_key')
+            .eq('tenant_id', finalTenantId)
+            .maybeSingle();
+          if (fallbackSettings.error) {
+            console.warn('[Chat] ⚠️ Erro no fallback de settings do tenant:', fallbackSettings.error.message);
+          } else {
+            agentSettings = fallbackSettings.data;
+          }
+        }
+
+        const tenantProfileResult = await supabaseClient
+          .from('profiles')
+          .select('id, name, full_name, company_name, segment, email')
+          .eq('id', finalTenantId)
+          .maybeSingle();
+
+        if (tenantProfileResult.error) {
+          console.warn('[Chat] ⚠️ Erro ao buscar perfil do tenant:', tenantProfileResult.error.message);
+        }
+
+        const tenantProfile = tenantProfileResult.data || {};
+        const agentProfile = agentSettings?.profile_json || {};
+        const activePlaybooks = toArray(agentSettings?.playbooks_json)
+          .filter((p: any) => !!toText(p?.content) && (p?.active !== false) && (p?.enabled !== false));
+        const knowledgeItems = toArray(agentSettings?.knowledge_items_json)
+          .filter((k: any) => !!toText(k?.content || k?.text || k?.value));
+
+        const agentName = toText(agentSettings?.agent_name) || toText(agentProfile.agent_name) || 'Atendimento';
+        const companyName = toText(agentProfile.company_name) || toText(tenantProfile.company_name) || toText(tenantProfile.name);
+        const businessSegment = toText(agentProfile.business_segment) || toText(agentProfile.segment) || toText(tenantProfile.segment) || toText(agentSettings?.segment_key);
+        const language = toText(agentProfile.language) || 'pt-BR';
+        const tone = toText(agentProfile.tone) || toText(agentProfile.tone_of_voice) || 'profissional';
+        const primaryGoal = toText(agentProfile.primary_goal) || toText(agentProfile.objective);
+        const companyLocation = toText(agentProfile.company_location) || toText(agentProfile.location);
+        const companyPhone = toText(agentProfile.company_phone) || toText(agentProfile.phone);
+        const companyEmail = toText(agentProfile.company_email) || toText(tenantProfile.email);
+        const companyWebsite = toText(agentProfile.company_website) || toText(agentProfile.website);
+        const businessHours = toText(agentProfile.business_hours) || toText(agentProfile.working_hours);
+        const activeChannels = toText(agentProfile.active_channels) || finalChannel;
+
+        const kbText = toText(agentProfile.knowledge_base_content);
+        const faqText = toText(agentProfile.faq_content);
+        const productsText = toText(agentProfile.products_services_content);
+        const salesPolicyText = toText(agentProfile.sales_policy_content);
+        const supportPolicyText = toText(agentProfile.support_policy_content);
+
+        const autoPlaybooksBlock = activePlaybooks
+          .map((p: any, idx: number) => `Playbook ${idx + 1} - ${safeField(p?.name, `Sem nome ${idx + 1}`)}:\n${toText(p?.content)}`)
+          .join('\n\n');
+        if (autoPlaybooksBlock && !playbooksBlock) {
+          playbooksBlock = autoPlaybooksBlock;
+        }
+
+        const knowledgeBlock = knowledgeItems
+          .map((k: any, idx: number) => {
+            const label = safeField(k?.name || k?.title || k?.type, `Item ${idx + 1}`);
+            const content = toText(k?.content || k?.text || k?.value);
+            return `${label}: ${content}`;
+          })
+          .join('\n');
+
+        faqDocsProductsBlock = [
+          kbText ? `Base de conhecimento:\n${kbText}` : '',
+          knowledgeBlock ? `Conhecimento estruturado:\n${knowledgeBlock}` : '',
+          faqText ? `FAQ:\n${faqText}` : '',
+          productsText ? `Produtos e serviços:\n${productsText}` : '',
+          salesPolicyText ? `Políticas comerciais:\n${salesPolicyText}` : '',
+          supportPolicyText ? `Políticas de suporte:\n${supportPolicyText}` : ''
+        ].filter(Boolean).join('\n\n');
+
+        tenantMasterPrompt =
+          toText(agentProfile.master_prompt) ||
+          toText(agentProfile.prompt_mestre) ||
+          toText(agentProfile.tenant_master_prompt) ||
+          toText(agentProfile.system_prompt);
+
+        tenantStructuredBlock = [
+          `Nome do agente: ${safeField(agentName)}`,
+          `Nome da empresa: ${safeField(companyName)}`,
+          `Segmento: ${safeField(businessSegment)}`,
+          `Cidade/Região: ${safeField(companyLocation)}`,
+          `Telefone: ${safeField(companyPhone)}`,
+          `Email: ${safeField(companyEmail)}`,
+          `Site: ${safeField(companyWebsite)}`,
+          `Horário de funcionamento: ${safeField(businessHours)}`,
+          `Idioma principal: ${safeField(language)}`,
+          `Tom configurado: ${safeField(tone)}`,
+          `Objetivo principal: ${safeField(primaryGoal)}`,
+          `Canais ativos: ${safeField(activeChannels)}`
+        ].join('\n');
+
+        if (companyName || toText(agentSettings?.agent_name) || activePlaybooks.length > 0 || !!tenantMasterPrompt || !!faqDocsProductsBlock || !!playbooksBlock) {
+          hasTenantContext = true;
+          console.log(`[Chat] ✅ Contexto tenant carregado para ${finalTenantId} | channel=${finalChannel} | playbooks=${activePlaybooks.length}`);
+        } else {
+          console.log(`[Chat] ℹ️ Sem contexto de tenant suficiente para ${finalTenantId} (fallback base persona)`);
+        }
+      } catch (err: any) {
+        console.warn('[Chat] ⚠️ Erro ao carregar contexto completo do tenant:', err.message);
+      }
+
+      const globalTenantPolicy = `[POLÍTICA GLOBAL - MODO WIDGET TENANT]
+Quando houver contexto de tenant carregado, você atua EXCLUSIVAMENTE como agente oficial da empresa.
+Nunca se apresente como Luminnus.
+Nunca diga "nós da Luminnus" para o visitante final.
+Prioridade de fontes:
+1) Configuração da empresa atual.
+2) Playbooks ativos do tenant.
+3) Base de conhecimento do tenant.
+4) Produtos/serviços/regras comerciais do tenant.
+5) FAQ/documentos do tenant.
+Se faltar dado específico, não invente: peça apenas o mínimo necessário para avançar.`;
+
+      let operationalContext = context.systemInstruction || '';
+      if (hasTenantContext) {
+        operationalContext = operationalContext
+          .replace(LIA_FULL_PERSONALITY, '')
+          .replace(DASHBOARD_CONTROL_PROMPT, '')
+          .replace(basePersona, '')
+          .replace(/Você é LIA[, ]+assistente[^.\n]*Luminnus[^\n]*\n?/gi, '')
+          .trim();
       }
 
       const now = new Date();
-      const finalSystemInstruction = `${useBasePersona ? basePersona : ''}${playbookContext}\n\n${context.systemInstruction || ''}\n\n[Data atual do sistema: ${now.toISOString()}]\n${session.userLocation ? `[Localização Atual: ${session.userLocation}]` : ''}`;
-
+      const systemBlocks: string[] = [];
+      if (hasTenantContext) {
+        systemBlocks.push(globalTenantPolicy);
+        if (tenantMasterPrompt) systemBlocks.push(`[PROMPT MESTRE DO TENANT]\n${tenantMasterPrompt}`);
+        if (tenantStructuredBlock) systemBlocks.push(`[DADOS ESTRUTURADOS DA EMPRESA]\n${tenantStructuredBlock}`);
+        if (playbooksBlock) systemBlocks.push(`[PLAYBOOKS ATIVOS]\n${playbooksBlock}`);
+        if (faqDocsProductsBlock) systemBlocks.push(`[FAQ / DOCUMENTOS / PRODUTOS]\n${faqDocsProductsBlock}`);
+        if (operationalContext) systemBlocks.push(`[CONTEXTO OPERACIONAL (MEMÓRIA/HISTÓRICO)]\n${operationalContext}`);
+      } else {
+        systemBlocks.push(basePersona);
+        if (operationalContext) systemBlocks.push(operationalContext);
+      }
+      systemBlocks.push(`[Data atual do sistema: ${now.toISOString()}]`);
+      if (session.userLocation) {
+        systemBlocks.push(`[Localização Atual: ${session.userLocation}]`);
+      }
+      const finalSystemInstruction = systemBlocks.filter(Boolean).join('\n\n');
       const messages = [
         { role: "system" as const, content: finalSystemInstruction },
         ...historyMessages,
@@ -580,3 +690,4 @@ NÃO se apresente como "Lia da Luminnus" ou "assistente genérico" — use APENA
     }
   });
 }
+

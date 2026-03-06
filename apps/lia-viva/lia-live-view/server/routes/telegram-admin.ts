@@ -69,7 +69,7 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        const { data: linkData, error: linkError } = await supabase
+        const { data: linkData } = await supabase
             .from('user_integrations')
             .select('user_id')
             .eq('provider', 'telegram_manager')
@@ -80,12 +80,89 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
         if (linkData?.user_id) {
             console.log(`[Telegram Webhook] Received message from known manager: ${linkData.user_id}`);
 
-            // Forward the message to the LIA cognitive engine (lia-chat Edge Function)
+            // Resolve tenant real do usuário (fallback para user_id se não existir tenant_id no profile)
+            let resolvedTenantId = linkData.user_id;
+            try {
+                const { data: userProfile } = await supabase
+                    .from('profiles')
+                    .select('tenant_id')
+                    .eq('id', linkData.user_id)
+                    .maybeSingle();
+
+                if (userProfile?.tenant_id) {
+                    resolvedTenantId = userProfile.tenant_id;
+                }
+            } catch (profileErr: any) {
+                console.warn('[Telegram Webhook] Falha ao resolver tenant_id do perfil:', profileErr.message);
+            }
+
+            // Carregar contexto completo do tenant Telegram para injeção explícita no /api/chat
+            let telegramPlaybookRules = '';
+            try {
+                let agentSettings: any = null;
+                const byChannel = await supabase
+                    .from('whatsapp_agent_settings')
+                    .select('agent_name, profile_json, playbooks_json, knowledge_items_json')
+                    .eq('tenant_id', resolvedTenantId)
+                    .eq('channel', 'telegram')
+                    .maybeSingle();
+
+                if (byChannel.data) {
+                    agentSettings = byChannel.data;
+                } else {
+                    const fallbackSettings = await supabase
+                        .from('whatsapp_agent_settings')
+                        .select('agent_name, profile_json, playbooks_json, knowledge_items_json')
+                        .eq('tenant_id', resolvedTenantId)
+                        .maybeSingle();
+                    agentSettings = fallbackSettings.data;
+                }
+
+                if (agentSettings) {
+                    const profile = agentSettings.profile_json || {};
+                    const playbooks = Array.isArray(agentSettings.playbooks_json) ? agentSettings.playbooks_json : [];
+                    const knowledgeItems = Array.isArray(agentSettings.knowledge_items_json) ? agentSettings.knowledge_items_json : [];
+
+                    const playbooksText = playbooks
+                        .filter((p: any) => p?.content)
+                        .map((p: any, idx: number) => `Playbook ${idx + 1} - ${p?.name || 'Sem nome'}:\n${p.content}`)
+                        .join('\n\n');
+
+                    const knowledgeText = knowledgeItems
+                        .map((k: any, idx: number) => {
+                            const label = k?.name || k?.title || k?.type || `Item ${idx + 1}`;
+                            const content = k?.content || k?.text || k?.value || '';
+                            return content ? `${label}: ${content}` : '';
+                        })
+                        .filter(Boolean)
+                        .join('\n');
+
+                    telegramPlaybookRules = [
+                        'CONTEXTO OFICIAL DO CANAL TELEGRAM (E-MANAGER):',
+                        `AgentName: ${agentSettings.agent_name || profile.agent_name || 'Atendimento'}`,
+                        `CompanyName: ${profile.company_name || ''}`,
+                        `BusinessSegment: ${profile.business_segment || profile.segment || ''}`,
+                        `Tone: ${profile.tone || profile.tone_of_voice || ''}`,
+                        `PrimaryGoal: ${profile.primary_goal || profile.objective || ''}`,
+                        `Language: ${profile.language || 'pt-BR'}`,
+                        playbooksText ? `\nPLAYBOOKS:\n${playbooksText}` : '',
+                        knowledgeText ? `\nKNOWLEDGE:\n${knowledgeText}` : '',
+                        profile?.faq_content ? `\nFAQ:\n${profile.faq_content}` : '',
+                        profile?.products_services_content ? `\nPRODUTOS_SERVIÇOS:\n${profile.products_services_content}` : '',
+                        profile?.sales_policy_content ? `\nPOLÍTICAS_COMERCIAIS:\n${profile.sales_policy_content}` : '',
+                        profile?.support_policy_content ? `\nPOLÍTICAS_SUPORTE:\n${profile.support_policy_content}` : ''
+                    ].filter(Boolean).join('\n');
+                }
+            } catch (settingsErr: any) {
+                console.warn('[Telegram Webhook] Falha ao carregar settings Telegram do tenant:', settingsErr.message);
+            }
+
+            // Forward the message to the LIA cognitive engine
             try {
                 // Using internal route to unified memory and chat logic
                 const port = process.env.PORT || 3000;
                 const localApiUrl = `http://127.0.0.1:${port}/api/chat`;
-                const conversationId = `telegram_admin_${linkData.user_id}`;
+                const conversationId = `telegram_admin_${resolvedTenantId}_${linkData.user_id}`;
 
                 const liaResponse = await fetch(localApiUrl, {
                     method: 'POST',
@@ -96,7 +173,9 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
                         message: text,
                         conversationId: conversationId,
                         userId: linkData.user_id, // Identifica o admin dono
-                        tenantId: linkData.user_id, // Admins operam no próprio tenant
+                        tenantId: resolvedTenantId,
+                        channel: 'telegram',
+                        playbookRules: telegramPlaybookRules,
                         liaMode: 'DIAGNOSTIC',    // Permite uso de todos os super-comandos
                         admin_diagnostic_mode: true
                     })

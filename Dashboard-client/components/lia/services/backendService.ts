@@ -136,13 +136,16 @@ class BackendService {
     async sendChatMessage(
         message: string,
         conversationId: string,
-        personality: 'clara' | 'viva' | 'firme' = 'viva'
+        personality: 'clara' | 'viva' | 'firme' = 'viva',
+        channel: string = 'web_widget'
     ): Promise<ChatResponse | null> {
         try {
             console.log('📤 Enviando mensagem para backend (3000):', message.substring(0, 50));
 
             // Persistir mensagem do usuário antes de enviar (opcional, mas bom para UX)
             this.saveMessage(conversationId, 'user', message, 'text').catch(console.error);
+
+            const { tenantId, userId } = this.getAuthContext();
 
             // Rota no servidor 3000 é /chat diretamente
             const response = await fetch(`${BACKEND_URL}/chat`, {
@@ -152,8 +155,9 @@ class BackendService {
                     message,
                     conversationId,
                     personality,
-                    userId: this.getUserId(),
-                    tenantId: this.getUserId()
+                    userId: userId || this.getUserId(),
+                    tenantId: tenantId || this.getUserId(),
+                    channel
                 }),
             });
 
