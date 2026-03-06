@@ -6,6 +6,7 @@ import CustomSelect from '../ui/CustomSelect';
 interface WhatsAppConfigProps {
     onSave?: () => void;
     channel?: 'whatsapp' | 'telegram' | 'web_widget';
+    tenantId?: string;
 }
 
 const CHANNEL_OBJECTIVES: Record<string, { label: string; value: string }[]> = {
@@ -29,7 +30,7 @@ const CHANNEL_OBJECTIVES: Record<string, { label: string; value: string }[]> = {
     ]
 };
 
-const WhatsAppConfig: React.FC<WhatsAppConfigProps> = ({ onSave, channel = 'whatsapp' }) => {
+const WhatsAppConfig: React.FC<WhatsAppConfigProps> = ({ onSave, channel = 'whatsapp', tenantId }) => {
     const [config, setConfig] = useState({
         objective: 'vendas',
         tone: 'Consultivo',
@@ -243,20 +244,21 @@ REGRAS:
     useEffect(() => {
         const loadSettings = async () => {
             setIsLoading(true);
-            const { tenantId } = backendService.getAuthContext();
+            const { tenantId: fallbackTenantId } = backendService.getAuthContext();
+            const activeTenantId = tenantId || fallbackTenantId;
 
             try {
-                const settings = await backendService.getWhatsAppSettings(channel);
+                const settings = await backendService.getWhatsAppSettings(channel, activeTenantId || undefined);
                 if (settings && settings.profile_json) {
                     console.log(`✅ Settings loaded via Backend (channel: ${channel})`);
                     applySettings(settings);
                 } else {
                     console.warn('⚠️ Backend returned empty settings, trying Supabase direct...');
-                    await trySupabaseLoad(tenantId);
+                    await trySupabaseLoad(activeTenantId);
                 }
             } catch (error) {
                 console.error('❌ Error loading settings via Backend:', error);
-                await trySupabaseLoad(tenantId);
+                await trySupabaseLoad(activeTenantId);
             } finally {
                 setIsLoading(false);
             }
@@ -299,13 +301,13 @@ REGRAS:
         };
 
         loadSettings();
-    }, [channel]);
+    }, [channel, tenantId]);
 
     const handleSaveSettings = async () => {
         const success = await backendService.saveWhatsAppSettings({
             profile_json: config,
             playbooks_json: playbooks
-        }, channel);
+        }, channel, tenantId);
 
         if (success) {
             alert('Configurações salvas com sucesso!');
@@ -692,3 +694,4 @@ REGRAS:
 };
 
 export default WhatsAppConfig;
+

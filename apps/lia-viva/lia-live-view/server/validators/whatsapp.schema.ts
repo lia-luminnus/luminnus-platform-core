@@ -8,7 +8,8 @@ export const whatsappSchemas = {
     // GET /api/whatsapp/settings
     getSettings: z.object({
         query: z.object({
-            tenantId: z.string().uuid('Invalid tenantId format')
+            tenantId: z.string().uuid('Invalid tenantId format'),
+            channel: z.string().optional()
         })
     }),
 
@@ -16,9 +17,10 @@ export const whatsappSchemas = {
     saveSettings: z.object({
         body: z.object({
             tenant_id: z.string().uuid('Invalid tenant_id format'),
+            channel: z.string().optional(),
             profile_json: z.record(z.any()).optional(),
-            playbooks_json: z.record(z.any()).optional(),
-            knowledge_items_json: z.record(z.any()).optional(),
+            playbooks_json: z.array(z.any()).optional(),
+            knowledge_items_json: z.array(z.any()).optional(),
             segment_key: z.string().optional()
         })
     }),
@@ -105,3 +107,4 @@ export const whatsappSchemas = {
         })
     })
 };
+

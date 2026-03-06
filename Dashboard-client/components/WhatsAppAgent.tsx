@@ -358,9 +358,9 @@ const WhatsAppAgentContent: React.FC = () => {
                         transition={{ duration: 0.2 }}
                         className="h-full"
                     >
-                        {activeTab === 'config' && <WhatsAppConfig channel={activeChannel} onSave={() => showNotify('Configurações salvas com sucesso!', 'success')} />}
-                        {activeTab === 'inbox' && <WhatsAppInbox activeLeadId={selectedLeadId} />}
-                        {activeTab === 'kanban' && <WhatsAppKanban onOpenChat={(leadId) => {
+                        {activeTab === 'config' && <WhatsAppConfig channel={activeChannel} tenantId={tenantId || undefined} onSave={() => showNotify('Configurações salvas com sucesso!', 'success')} />}
+                        {activeTab === 'inbox' && <WhatsAppInbox activeLeadId={selectedLeadId} tenantId={tenantId || undefined} />}
+                        {activeTab === 'kanban' && <WhatsAppKanban tenantId={tenantId || undefined} onOpenChat={(leadId) => {
                             setSelectedLeadId(leadId);
                             setActiveTab('inbox');
                         }} />}
@@ -401,3 +401,4 @@ const WhatsAppAgent: React.FC = () => {
 };
 
 export default WhatsAppAgent;
+

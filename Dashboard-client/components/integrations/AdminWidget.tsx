@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useDashboardAuth } from '../../contexts/DashboardAuthContext';
@@ -10,6 +10,8 @@ const AdminWidget: React.FC = () => {
     const [enableVoice, setEnableVoice] = useState(false);
     const [agentName, setAgentName] = useState('Suporte LIA');
     const [devEmail, setDevEmail] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     const handleVoiceToggle = () => {
         const newValue = !enableVoice;
@@ -39,41 +41,93 @@ const AdminWidget: React.FC = () => {
     const displayName = agentName.trim() || 'Suporte LIA';
     const scriptCode = `<script src="${widgetHostUrl}" data-workspace-id="${workspaceId}" data-agent-name="${displayName}" ${enableVoice ? 'data-enable-voice="true"' : ''}></script>`;
 
-    const copyScript = async () => {
-        navigator.clipboard.writeText(scriptCode);
-        toast.success('Script copiado para a área de transferência!');
-
-        // Register web_widget as active in user_integrations
+    const saveWidgetIntegration = async () => {
         const userId = profile?.id || user?.id;
-        if (userId) {
-            try {
-                const { data: existing } = await supabase
+        if (!userId) return false;
+
+        try {
+            const { data: existing } = await supabase
+                .from('user_integrations')
+                .select('id')
+                .eq('user_id', userId)
+                .eq('provider', 'web_widget')
+                .maybeSingle();
+
+            if (existing) {
+                const { error } = await supabase
                     .from('user_integrations')
-                    .select('id')
+                    .update({ status: 'active', config: { agent_name: displayName, enable_voice: enableVoice } })
+                    .eq('id', existing.id);
+                if (error) throw error;
+            } else {
+                const { error } = await supabase
+                    .from('user_integrations')
+                    .insert({
+                        id: crypto.randomUUID(),
+                        user_id: userId,
+                        provider: 'web_widget',
+                        status: 'active',
+                        config: { agent_name: displayName, enable_voice: enableVoice }
+                    });
+                if (error) throw error;
+            }
+
+            return true;
+        } catch (err) {
+            console.warn('[AdminWidget] Erro ao registrar web_widget:', err);
+            return false;
+        }
+    };
+
+    const handleSaveWidgetSettings = async () => {
+        setIsSaving(true);
+        const ok = await saveWidgetIntegration();
+        setIsSaving(false);
+
+        if (ok) {
+            toast.success('Configurações do widget salvas!');
+        } else {
+            toast.error('Não foi possível salvar as configurações do widget.');
+        }
+    };
+
+    useEffect(() => {
+        const loadWidgetSettings = async () => {
+            const userId = profile?.id || user?.id;
+            if (!userId) {
+                setIsLoading(false);
+                return;
+            }
+
+            try {
+                const { data } = await supabase
+                    .from('user_integrations')
+                    .select('config')
                     .eq('user_id', userId)
                     .eq('provider', 'web_widget')
                     .maybeSingle();
 
-                if (existing) {
-                    await supabase
-                        .from('user_integrations')
-                        .update({ status: 'active', config: { agent_name: displayName, enable_voice: enableVoice } })
-                        .eq('id', existing.id);
-                } else {
-                    await supabase
-                        .from('user_integrations')
-                        .insert({
-                            id: crypto.randomUUID(),
-                            user_id: userId,
-                            provider: 'web_widget',
-                            status: 'active',
-                            config: { agent_name: displayName, enable_voice: enableVoice }
-                        });
+                const cfg = data?.config || {};
+                if (typeof cfg.agent_name === 'string' && cfg.agent_name.trim()) {
+                    setAgentName(cfg.agent_name);
+                }
+                if (typeof cfg.enable_voice === 'boolean') {
+                    setEnableVoice(cfg.enable_voice);
                 }
             } catch (err) {
-                console.warn('[AdminWidget] Erro ao registrar web_widget:', err);
+                console.warn('[AdminWidget] Erro ao carregar web_widget:', err);
+            } finally {
+                setIsLoading(false);
             }
-        }
+        };
+
+        loadWidgetSettings();
+    }, [profile?.id, user?.id]);
+
+    const copyScript = async () => {
+        navigator.clipboard.writeText(scriptCode);
+        toast.success('Script copiado para a área de transferência!');
+        await saveWidgetIntegration();
     };
 
     return (
@@ -141,6 +195,15 @@ const AdminWidget: React.FC = () => {
                             className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-brand-primary transition-colors text-sm"
                         />
                         <p className="text-[11px] text-gray-400 mt-2">O nome aparecerá no cabeçalho do chat e na mensagem de boas-vindas.</p>
+                        <div className="mt-4">
+                            <button
+                                onClick={handleSaveWidgetSettings}
+                                disabled={isSaving || isLoading}
+                                className="px-4 py-2 rounded-lg bg-brand-primary text-white text-xs font-bold hover:opacity-90 disabled:opacity-50"
+                            >
+                                {isSaving ? 'Salvando...' : 'Salvar Configurações'}
+                            </button>
+                        </div>
                     </div>
 
                     {/* Copiar Script */}
@@ -257,3 +320,4 @@ const AdminWidget: React.FC = () => {
 };
 
 export default AdminWidget;
+

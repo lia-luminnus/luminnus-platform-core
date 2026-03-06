@@ -7,6 +7,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import CustomSelect from '../ui/CustomSelect';
+import { getApiUrl } from '../../config/api';
+import { backendService } from '../lia/services/backendService';
 
 interface Lead {
     id: string;
@@ -83,30 +85,47 @@ const WhatsAppKanban: React.FC<WhatsAppKanbanProps> = ({ tenantId, onOpenChat, o
         });
     };
 
-    // Mock data para demonstração
     useEffect(() => {
-        // Simular carregamento de dados
-        setTimeout(() => {
-            setKanban({
-                NEW: [
-                    { id: '1', contact_name: 'João Silva', contact_phone: '+5511999999999', company_name: 'Tech Solutions', stage: 'NEW', urgency_score: 85, sentiment_score: 70, agent_mode: 'SDR', last_message_at: new Date().toISOString() },
-                    { id: '2', contact_name: 'Maria Santos', contact_phone: '+5511888888888', stage: 'NEW', urgency_score: 45, sentiment_score: 80, agent_mode: 'SDR', last_message_at: new Date().toISOString() },
-                ],
-                QUALIFIED_BY_LIA: [
-                    { id: '3', contact_name: 'Pedro Costa', contact_phone: '+5511777777777', company_name: 'Startup XYZ', stage: 'QUALIFIED_BY_LIA', urgency_score: 90, sentiment_score: 60, agent_mode: 'SDR', last_message_at: new Date().toISOString(), notes: 'Interessado no plano Pro' },
-                ],
-                WAITING_HUMAN: [
-                    { id: '4', contact_name: 'Ana Oliveira', contact_phone: '+5511666666666', stage: 'WAITING_HUMAN', urgency_score: 75, sentiment_score: 40, agent_mode: 'SDR', last_message_at: new Date().toISOString(), notes: 'Cliente irritado, precisa atenção' },
-                ],
-                SCHEDULED: [
-                    { id: '5', contact_name: 'Carlos Lima', contact_phone: '+5511555555555', company_name: 'Innovation Labs', stage: 'SCHEDULED', urgency_score: 60, sentiment_score: 85, agent_mode: 'SDR', last_message_at: new Date().toISOString(), notes: 'Reunião 15/01 às 14h' },
-                ],
-                WON: [],
-                LOST: []
-            });
-            setLoading(false);
-        }, 500);
-    }, [tenantId]);
+        const loadKanban = async () => {
+            if (!tenantId) {
+                setKanban({ NEW: [], QUALIFIED_BY_LIA: [], WAITING_HUMAN: [], SCHEDULED: [], WON: [], LOST: [] });
+                setLoading(false);
+                return;
+            }
+
+            setLoading(true);
+            try {
+                const { headers } = backendService.getAuthContext();
+                const response = await fetch(`${getApiUrl()}/api/whatsapp/kanban?tenantId=${tenantId}&mode=${agentMode}`, {
+                    method: 'GET',
+                    headers
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Kanban request failed: ${response.status}`);
+                }
+
+                const payload = await response.json();
+                const data = payload?.data?.kanban || {};
+
+                setKanban({
+                    NEW: Array.isArray(data.NEW) ? data.NEW : [],
+                    QUALIFIED_BY_LIA: Array.isArray(data.QUALIFIED_BY_LIA) ? data.QUALIFIED_BY_LIA : [],
+                    WAITING_HUMAN: Array.isArray(data.WAITING_HUMAN) ? data.WAITING_HUMAN : [],
+                    SCHEDULED: Array.isArray(data.SCHEDULED) ? data.SCHEDULED : [],
+                    WON: Array.isArray(data.WON) ? data.WON : [],
+                    LOST: Array.isArray(data.LOST) ? data.LOST : []
+                });
+            } catch (error) {
+                console.error('[WhatsAppKanban] Erro ao carregar kanban:', error);
+                setKanban({ NEW: [], QUALIFIED_BY_LIA: [], WAITING_HUMAN: [], SCHEDULED: [], WON: [], LOST: [] });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadKanban();
+    }, [tenantId, agentMode]);
 
     const handleDragStart = (e: React.DragEvent, lead: Lead) => {
         setDraggedLead(lead);
@@ -136,14 +155,29 @@ const WhatsAppKanban: React.FC<WhatsAppKanbanProps> = ({ tenantId, onOpenChat, o
             return updated;
         });
 
-        // TODO: Fazer chamada à API para persistir
-        // await fetch(`/api/whatsapp/leads/${draggedLead.id}/move`, {
-        //     method: 'POST',
-        //     headers: { 'Content-Type': 'application/json' },
-        //     body: JSON.stringify({ stage: targetStage })
-        // });
+        try {
+            const { headers } = backendService.getAuthContext();
+            const response = await fetch(`${getApiUrl()}/api/whatsapp/leads/${draggedLead.id}/move`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ stage: targetStage })
+            });
 
-        setDraggedLead(null);
+            if (!response.ok) {
+                throw new Error(`Move lead failed: ${response.status}`);
+            }
+        } catch (error) {
+            console.error('[WhatsAppKanban] Erro ao mover lead:', error);
+            // Reverter mudança local se falhar
+            setKanban(prev => {
+                const reverted = { ...prev };
+                reverted[newStage] = prev[newStage].filter(l => l.id !== draggedLead.id);
+                reverted[oldStage] = [...prev[oldStage], { ...draggedLead, stage: oldStage }];
+                return reverted;
+            });
+        } finally {
+            setDraggedLead(null);
+        }
     };
 
     const getUrgencyColor = (score: number) => {
@@ -430,3 +464,4 @@ const WhatsAppKanban: React.FC<WhatsAppKanbanProps> = ({ tenantId, onOpenChat, o
 };
 
 export default WhatsAppKanban;
+

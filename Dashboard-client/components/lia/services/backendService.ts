@@ -614,10 +614,11 @@ class BackendService {
     /**
      * Busca configurações do Agente por canal
      */
-    async getWhatsAppSettings(channel: string = 'whatsapp'): Promise<any | null> {
+    async getWhatsAppSettings(channel: string = 'whatsapp', tenantIdOverride?: string): Promise<any | null> {
         try {
             const { tenantId, headers } = this.getAuthContext();
-            const response = await fetch(`${BACKEND_URL}/api/whatsapp/settings?tenantId=${tenantId}&channel=${channel}`, {
+            const activeTenantId = tenantIdOverride || tenantId;
+            const response = await fetch(`${BACKEND_URL}/api/whatsapp/settings?tenantId=${activeTenantId}&channel=${channel}`, {
                 method: 'GET',
                 headers
             });
@@ -633,15 +634,16 @@ class BackendService {
      * Salva configurações do Agente por canal
      * v15.1: Fallback direto via Supabase se o backend falhar
      */
-    async saveWhatsAppSettings(settings: any, channel: string = 'whatsapp'): Promise<boolean> {
+    async saveWhatsAppSettings(settings: any, channel: string = 'whatsapp', tenantIdOverride?: string): Promise<boolean> {
         const { tenantId, headers } = this.getAuthContext();
+        const activeTenantId = tenantIdOverride || tenantId;
 
         // 1. Tentar via backend primeiro
         try {
             const response = await fetch(`${BACKEND_URL}/api/whatsapp/settings`, {
                 method: 'POST',
                 headers,
-                body: JSON.stringify({ ...settings, tenant_id: tenantId, channel })
+                body: JSON.stringify({ ...settings, tenant_id: activeTenantId, channel })
             });
             if (response.ok) return true;
             console.warn('⚠️ Backend save failed (' + response.status + '), trying Supabase direct...');
@@ -652,12 +654,12 @@ class BackendService {
         // 2. Fallback: salvar direto via Supabase
         try {
             const { supabase: sbClient } = await import('../../../lib/supabase');
-            if (!sbClient || !tenantId) return false;
+            if (!sbClient || !activeTenantId) return false;
 
             const { error } = await sbClient
                 .from('whatsapp_agent_settings')
                 .upsert({
-                    tenant_id: tenantId,
+                    tenant_id: activeTenantId,
                     channel,
                     profile_json: settings.profile_json || {},
                     playbooks_json: settings.playbooks_json || [],
@@ -755,10 +757,11 @@ class BackendService {
     /**
      * Lista conversas do WhatsApp do tenant
      */
-    async listWhatsAppConversations(): Promise<any[]> {
+    async listWhatsAppConversations(tenantIdOverride?: string): Promise<any[]> {
         try {
             const { tenantId, headers } = this.getAuthContext();
-            const response = await fetch(`${BACKEND_URL}/api/whatsapp/conversations?tenantId=${tenantId}`, {
+            const activeTenantId = tenantIdOverride || tenantId;
+            const response = await fetch(`${BACKEND_URL}/api/whatsapp/conversations?tenantId=${activeTenantId}`, {
                 method: 'GET',
                 headers
             });
@@ -773,13 +776,14 @@ class BackendService {
     /**
      * Envia mensagem via WhatsApp e salva no banco
      */
-    async sendWhatsAppMessage(to: string, text: string, conversationId: string): Promise<boolean> {
+    async sendWhatsAppMessage(to: string, text: string, conversationId: string, tenantIdOverride?: string): Promise<boolean> {
         try {
             const { tenantId, headers } = this.getAuthContext();
+            const activeTenantId = tenantIdOverride || tenantId;
             const response = await fetch(`${BACKEND_URL}/api/whatsapp/send`, {
                 method: 'POST',
                 headers,
-                body: JSON.stringify({ tenantId, to, text, conversationId })
+                body: JSON.stringify({ tenantId: activeTenantId, to, text, conversationId })
             });
             return response.ok;
         } catch (error) {
@@ -827,4 +831,5 @@ class BackendService {
 
 // Exportar instância única (singleton)
 export const backendService = new BackendService();
+
 

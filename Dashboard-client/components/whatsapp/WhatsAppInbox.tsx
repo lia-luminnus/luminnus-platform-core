@@ -4,9 +4,10 @@ import { socketService } from '../lia/services/socketService';
 
 interface WhatsAppInboxProps {
     activeLeadId?: string | null;
+    tenantId?: string;
 }
 
-const WhatsAppInbox: React.FC<WhatsAppInboxProps> = ({ activeLeadId }) => {
+const WhatsAppInbox: React.FC<WhatsAppInboxProps> = ({ activeLeadId, tenantId }) => {
     const [selectedConv, setSelectedConv] = useState<any>(null);
     const [copilotMode, setCopilotMode] = useState(false);
     const [filter, setFilter] = useState(() => localStorage.getItem('whatsapp_inbox_filter') || 'Todos');
@@ -27,10 +28,10 @@ const WhatsAppInbox: React.FC<WhatsAppInboxProps> = ({ activeLeadId }) => {
     }, [activeLeadId, conversations]);
 
     const loadConversations = useCallback(async () => {
-        const data = await backendService.listWhatsAppConversations();
+        const data = await backendService.listWhatsAppConversations(tenantId);
         setConversations(data || []);
         setLoading(false);
-    }, []);
+    }, [tenantId]);
 
     const loadMessages = useCallback(async (convId: string) => {
         const result = await backendService.getWhatsAppConversation(convId);
@@ -78,7 +79,7 @@ const WhatsAppInbox: React.FC<WhatsAppInboxProps> = ({ activeLeadId }) => {
         const msgText = newMessage;
         setNewMessage('');
 
-        const success = await backendService.sendWhatsAppMessage(to, msgText, selectedConv.id);
+        const success = await backendService.sendWhatsAppMessage(to, msgText, selectedConv.id, tenantId);
         if (success) {
             // A mensagem será atualizada via socket ou reload
             loadMessages(selectedConv.id);
@@ -282,3 +283,4 @@ const WhatsAppInbox: React.FC<WhatsAppInboxProps> = ({ activeLeadId }) => {
 };
 
 export default WhatsAppInbox;
+
