@@ -45,10 +45,34 @@ class BackendService {
                     headers['Authorization'] = `Bearer ${authData.access_token}`;
                 }
                 userId = authData.user?.id || null;
-                tenantId = userId; // Por padrão usamos o mesmo ID para tenant
+                tenantId =
+                    authData.user?.tenant_id ||
+                    authData.user?.user_metadata?.tenant_id ||
+                    authData.user?.app_metadata?.tenant_id ||
+                    authData.profile?.tenant_id ||
+                    null;
             } catch (e) {
                 console.warn('[BackendService] Falha ao recuperar contexto de autenticação');
             }
+        }
+
+        // Fallback adicional: cache do perfil carregado pelo DashboardAuthContext
+        if (!tenantId && userId) {
+            try {
+                const cacheKey = `profile_cache_${userId}`;
+                const cachedRaw = localStorage.getItem(cacheKey);
+                if (cachedRaw) {
+                    const cached = JSON.parse(cachedRaw);
+                    tenantId = cached?.data?.tenant_id || null;
+                }
+            } catch (e) {
+                console.warn('[BackendService] Falha ao recuperar tenant_id do cache de perfil');
+            }
+        }
+
+        // Último fallback compatível
+        if (!tenantId) {
+            tenantId = userId;
         }
 
         return { userId, tenantId, headers };
@@ -803,3 +827,4 @@ class BackendService {
 
 // Exportar instância única (singleton)
 export const backendService = new BackendService();
+

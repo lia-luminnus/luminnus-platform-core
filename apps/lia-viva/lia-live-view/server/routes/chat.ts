@@ -113,6 +113,55 @@ export function setupChatRoutes(app: Express, openai: OpenAI) {
           }
         }
 
+        // Compatibilidade: dados antigos podem ter sido salvos em user_id em vez de tenant_id.
+        // Se não achou por tenant, tenta resolver um membro do tenant e buscar settings nesse user_id.
+        if (!agentSettings) {
+          const tenantMember = await supabaseClient
+            .from('tenant_members')
+            .select('user_id')
+            .eq('tenant_id', finalTenantId)
+            .limit(1)
+            .maybeSingle();
+
+          if (tenantMember.error) {
+            console.warn('[Chat] ⚠️ Erro ao buscar tenant_members para fallback de settings:', tenantMember.error.message);
+          }
+
+          const legacyOwnerUserId = tenantMember.data?.user_id;
+          if (legacyOwnerUserId && legacyOwnerUserId !== finalTenantId) {
+            const legacyByChannel = await supabaseClient
+              .from('whatsapp_agent_settings')
+              .select('agent_name, profile_json, playbooks_json, knowledge_items_json, segment_key')
+              .eq('tenant_id', legacyOwnerUserId)
+              .eq('channel', finalChannel)
+              .maybeSingle();
+
+            if (legacyByChannel.error) {
+              console.warn(`[Chat] ⚠️ Erro no fallback legado por canal (${finalChannel}):`, legacyByChannel.error.message);
+            } else {
+              agentSettings = legacyByChannel.data;
+            }
+
+            if (!agentSettings) {
+              const legacyAnyChannel = await supabaseClient
+                .from('whatsapp_agent_settings')
+                .select('agent_name, profile_json, playbooks_json, knowledge_items_json, segment_key')
+                .eq('tenant_id', legacyOwnerUserId)
+                .maybeSingle();
+
+              if (legacyAnyChannel.error) {
+                console.warn('[Chat] ⚠️ Erro no fallback legado sem canal:', legacyAnyChannel.error.message);
+              } else {
+                agentSettings = legacyAnyChannel.data;
+              }
+            }
+
+            if (agentSettings) {
+              console.log(`[Chat] ✅ Fallback legado aplicado: settings encontrados em user_id ${legacyOwnerUserId} para tenant ${finalTenantId}`);
+            }
+          }
+        }
+
         const tenantProfileResult = await supabaseClient
           .from('profiles')
           .select('id, name, full_name, company_name, segment, email')
